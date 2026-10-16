@@ -1,17 +1,33 @@
 """Descarga las fuentes rápidas de Madrid en raw/:
 agenda municipal (2 conjuntos de datos abiertos), recintos con schema.org Event y el sitemap de esMadrid."""
-import json, os, re, sys, html, subprocess
+import json, os, re, sys, html, subprocess, time
 
 RAW = os.environ.get('BUREO_RAW', 'raw')
 os.makedirs(RAW, exist_ok=True)
 
 
+UAS = ['BureoBot/0.1 (+https://github.com/jonruizz89/bureo)', 'curl/8.5.0',
+       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36']
+
+
 def curl(url, out):
-    r = subprocess.run(['curl', '-sSL', '-m', '120', '--retry', '3', '-A', 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)',
-                        '-o', os.path.join(RAW, out), '-w', '%{http_code}', url], capture_output=True, text=True)
-    print(out, r.stdout, r.stderr.strip()[:200])
-    if r.stdout != '200':
-        raise SystemExit(f'fallo al descargar {url}')
+    """Descarga con reintentos. Si falla, se queda la copia anterior (si la hay) y se avisa sin parar el resto."""
+    dest = os.path.join(RAW, out)
+    for i in range(6):
+        tmp = dest + '.part'
+        r = subprocess.run(['curl', '-sSL', '-m', '180', '-A', UAS[i % len(UAS)], '-o', tmp, '-w', '%{http_code}', url],
+                           capture_output=True, text=True)
+        if r.stdout == '200' and os.path.getsize(tmp) > 0:
+            os.replace(tmp, dest)
+            print(out, 'ok')
+            return True
+        print(out, 'intento', i + 1, 'respuesta', r.stdout or r.stderr.strip()[:120], flush=True)
+        time.sleep(20 * (i + 1))
+    if os.path.exists(dest):
+        print('aviso: no se pudo actualizar', out, '- se usa la copia anterior', file=sys.stderr)
+        return True
+    print('aviso: no se pudo descargar', out, file=sys.stderr)
+    return False
 
 
 def jsonld_events(path):
@@ -54,12 +70,11 @@ def jsonld_events(path):
 base = 'https://datos.madrid.es/egob/catalogo/'
 curl(base + '300107-0-agenda-actividades-eventos.json', '300107-0-agenda-actividades-eventos.json')
 curl(base + '206974-0-agenda-eventos-culturales-100.json', '206974-0-agenda-eventos-culturales-100.json')
-curl('https://www.esmadrid.com/sitemap.xml', 'sm.xml')
+if not curl('https://www.esmadrid.com/sitemap.xml', 'sm.xml'):
+    raise SystemExit('sin sitemap de esMadrid no se puede seguir')
 for name, url in (('ifema', 'https://www.ifema.es/'), ('rjb', 'https://rjb.csic.es/agenda/')):
-    try:
-        curl(url, name + '.html')
+    if curl(url, name + '.html'):
         evs = jsonld_events(os.path.join(RAW, name + '.html'))
-        json.dump(evs, open(os.path.join(RAW, name + '.json'), 'w'), ensure_ascii=False)
+        if evs:
+            json.dump(evs, open(os.path.join(RAW, name + '.json'), 'w'), ensure_ascii=False)
         print(name, len(evs), 'eventos')
-    except SystemExit as e:
-        print('aviso:', e, file=sys.stderr)  # un recinto caído no para el resto

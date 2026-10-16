@@ -30,9 +30,13 @@ jobs:
       - name: Recuperar la caché de fichas de esMadrid
         uses: actions/cache/restore@v4
         with:
-          path: engine/raw/esmadrid.jsonl
-          key: esmadrid-${{ github.run_id }}
-          restore-keys: esmadrid-
+          path: |
+            engine/raw/esmadrid.jsonl
+            engine/raw/*.json
+          key: raw-${{ github.run_id }}
+          restore-keys: |
+            raw-
+            esmadrid-
 
       - name: Descargar fuentes rápidas
         run: python3 src/fetch_sources.py
@@ -44,8 +48,10 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: engine/raw/esmadrid.jsonl
-          key: esmadrid-${{ github.run_id }}
+          path: |
+            engine/raw/esmadrid.jsonl
+            engine/raw/*.json
+          key: raw-${{ github.run_id }}
 
       - name: Unificar, quitar duplicados y categorizar
         run: python3 src/pipeline.py

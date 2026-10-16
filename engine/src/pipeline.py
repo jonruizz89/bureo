@@ -220,6 +220,9 @@ def categorias(base, titulo, desc='', publico=''):
 def madrid():
     evs = []
     for fn in ('300107-0-agenda-actividades-eventos.json', '206974-0-agenda-eventos-culturales-100.json'):
+        if not os.path.exists(os.path.join(RAW, fn)):
+            print('aviso: falta', fn)
+            continue
         for e in json.load(open(os.path.join(RAW, fn)))['@graph']:
             tipo = e.get('@type', '').split('/')[-1]
             base = MADRID_TIPO.get(tipo, [])
