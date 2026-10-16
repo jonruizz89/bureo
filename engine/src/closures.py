@@ -87,6 +87,7 @@ TOOL = {
                 'end': {'type': ['string', 'null']}}}}}}}}}}
 
 SPENT = {'in': 0, 'out': 0}
+PROMPT_VERSION = 'v2'  # cambiarlo vuelve a extraer todos los avisos
 
 
 def extract(title, text):
@@ -96,8 +97,10 @@ def extract(title, text):
               "a la gente de qué calles estarán cortadas. Reglas: un elemento por motivo y franja coherente; si el aviso tiene varias "
               "fases o días con horarios distintos, usa varios rangos. Para cortes recurrentes sin fecha de fin (peatonalizaciones de "
               "fin de semana), usa from=hoy y to=hoy+90 días con weekdays. Para obras de larga duración sin fechas claras, from=hoy y "
-              "to=hoy+60 días. No inventes calles ni horas que no estén en el texto. Si el aviso no describe ningún corte concreto, "
-              "devuelve una lista vacía.")
+              "to=hoy+60 días. Si un corte va de un día a otro (p. ej. desde el viernes a las 23 h hasta el lunes a las 6 h), añade "
+              "también los días intermedios completos (sábado y domingo todo el día). Si el corte depende de fechas que el aviso no da "
+              "(por ejemplo, 'los días de partido'), devuelve ranges vacío: no pongas la fecha de hoy. No inventes calles ni horas que no "
+              "estén en el texto. Si el aviso no describe ningún corte concreto, devuelve una lista vacía.")
     body = {'model': MODEL, 'max_tokens': 4000, 'system': system,
             'tools': [TOOL], 'tool_choice': {'type': 'tool', 'name': 'guardar_cortes'},
             'messages': [{'role': 'user', 'content': f'Aviso: {title}\n\n{text}'}]}
@@ -144,7 +147,7 @@ new_cache, rows = {}, []
 for title, u in links:
     page = get(u) if index else None
     text = main_text(page) if page else (cache.get(u) or {}).get('text', '')
-    h = hashlib.md5(text.encode()).hexdigest()
+    h = hashlib.md5((PROMPT_VERSION + text).encode()).hexdigest()
     prev = cache.get(u)
     if prev and prev.get('hash') == h and prev.get('items') is not None:
         items = prev['items']
