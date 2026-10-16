@@ -86,7 +86,7 @@ def call_model(batch):
 
 
 def save(batch, result):
-    """Tres escrituras por lote: eventos (upsert parcial), borrado de categorías y categorías nuevas."""
+    """Guarda un lote: un PATCH por evento y las categorías del lote en dos escrituras."""
     by_id = {r.get('id'): r for r in result if isinstance(r, dict)}
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     rows, cat_rows = [], []
@@ -97,14 +97,15 @@ def save(batch, result):
         cs = [c for c in dict.fromkeys(r.get('cats') or []) if c in valid][:4] or ['sin_categoria']
         topics = [str(t).strip()[:80] for t in (r.get('topics') or []) if str(t).strip()][:5]
         series = r.get('series') or None
-        rows.append({'id': e['id'], 'ext_key': e['ext_key'], 'city_id': e['city_id'], 'title': e['title'],
-                     'starts_on': e['starts_on'], 'ends_on': e['ends_on'],
-                     'topics': topics, 'series': str(series)[:160] if series else None,
+        rows.append({'id': e['id'], 'topics': topics, 'series': str(series)[:160] if series else None,
                      'ai_unique': bool(r.get('unique')), 'ai_hash': e['_hash'], 'ai_model': MODEL, 'ai_at': now})
         cat_rows += [{'event_id': e['id'], 'category_id': c} for c in cs]
     if not rows:
         return 0
-    sb('POST', 'events?on_conflict=id', rows, 'resolution=merge-duplicates,return=minimal')
+    for r in rows:  # PATCH por evento (la columna id es identity y no admite upsert con id explícito)
+        rid = r.pop('id')
+        sb('PATCH', f'events?id=eq.{rid}', r, 'return=minimal')
+        r['id'] = rid
     sb('DELETE', 'event_categories?event_id=in.(' + ','.join(str(r['id']) for r in rows) + ')')
     sb('POST', 'event_categories?on_conflict=event_id,category_id', cat_rows, 'resolution=merge-duplicates,return=minimal')
     return len(rows)
@@ -128,13 +129,17 @@ print(f'{len(pending)} eventos por clasificar con {MODEL}')
 
 batches = [pending[i:i + BATCH] for i in range(0, len(pending), BATCH)]
 total, usage = 0, {'input_tokens': 0, 'output_tokens': 0, 'cache_read_input_tokens': 0}
+def work(b):
+    res, u = call_model(b)
+    return save(b, res), u
+
+
 with cf.ThreadPoolExecutor(max_workers=6) as pool:
-    futs = {pool.submit(call_model, b): b for b in batches}
+    futs = {pool.submit(work, b): b for b in batches}
     for f in cf.as_completed(futs):
-        b = futs[f]
         try:
-            res, u = f.result()
-            total += save(b, res)
+            n, u = f.result()
+            total += n
             for k in usage:
                 usage[k] += u.get(k) or 0
             print(f'  {total}/{len(pending)}', flush=True)
