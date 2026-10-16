@@ -129,6 +129,26 @@ table.cov th, table.cov td { text-align: left; padding: 8px 6px; border-bottom: 
 table.cov td.n, table.cov th.n { text-align: right }
 .tablewrap { overflow-x: auto }
 @media (prefers-reduced-motion: no-preference) { .card { transition: box-shadow .15s } .card:hover { box-shadow: 0 2px 10px rgba(18,24,43,.08) } }
+
+.segtabs { display: flex; gap: 4px; background: var(--surface); padding: 4px; border-radius: 12px }
+.segtabs button { flex: 1; min-height: 40px; border: 0; border-radius: 9px; background: none; font-weight: 600; font-size: 14px; color: var(--quiet); cursor: pointer }
+.segtabs button[aria-selected="true"] { background: var(--strong); color: var(--strong-ink) }
+.segtabs .n:empty { display: none }
+.segtabs .n { font-size: 11.5px; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--chip); color: var(--quiet) }
+.bottomnav { display: none }
+.mob-only { display: none }
+@media (max-width: 760px) {
+  nav.tabs { display: none }
+  .top .wrap { padding-block: 10px 10px }
+  .bottomnav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 4px max(8px, env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px)); justify-content: space-around }
+  .bottomnav button { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; min-height: 52px; border: 0; background: none; color: var(--quiet); font-size: 11px; font-weight: 500; cursor: pointer }
+  .bottomnav button[aria-current="page"] { color: var(--accent); font-weight: 600 }
+  .bottomnav .dot { position: absolute; top: 6px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent) }
+  main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) }
+  .mob-only { display: inline-flex }
+}
+@media (min-width: 761px) { .segtabs { display: none } }
 </style>
 
 </head>
@@ -152,6 +172,10 @@ table.cov td.n, table.cov th.n { text-align: right }
 
 <main class="wrap">
   <section class="view" id="v-parati">
+    <div class="segtabs" role="tablist" aria-label="Recomendaciones">
+      <button role="tab" data-goto="parati" aria-selected="true">Para ti</button>
+      <button role="tab" data-goto="unicos" aria-selected="false">Únicos en Madrid<span class="n n-unicos"></span></button>
+    </div>
     <h1 id="pt-h"></h1>
     <p class="lead" id="pt-lead"></p>
     <div class="seg" role="group" aria-label="Cuándo">
@@ -186,6 +210,10 @@ table.cov td.n, table.cov th.n { text-align: right }
   </section>
 
   <section class="view" id="v-unicos" hidden>
+    <div class="segtabs" role="tablist" aria-label="Recomendaciones">
+      <button role="tab" data-goto="parati" aria-selected="false">Para ti</button>
+      <button role="tab" data-goto="unicos" aria-selected="true">Únicos en Madrid<span class="n n-unicos"></span></button>
+    </div>
     <h1>Únicos en Madrid</h1>
     <p class="lead">Citas de ciudad que pasan una vez al año. Salen aunque no encajen con tus intereses.</p>
     <div id="un-list" class="view"></div>
@@ -218,7 +246,8 @@ table.cov td.n, table.cov th.n { text-align: right }
   </section>
 
   <section class="view" id="v-intereses" hidden>
-    <h1>Mis intereses</h1>
+    <h1>Perfil</h1>
+    <h2 style="margin:0">Mis intereses</h2>
     <p class="lead">Toca una categoría para marcarla como interesante, otra vez para no verla nunca, y una tercera para dejarla como estaba. El número es cuántos eventos hay ahora mismo.</p>
     <div class="panel">
       <div class="legend"><span>■ Me interesa</span><span style="color:var(--accent-text)">▢ No me muestres</span><span>Sin marcar</span></div>
@@ -247,15 +276,25 @@ table.cov td.n, table.cov th.n { text-align: right }
       </div>
     </div>
     <div class="seg"><button class="btn ghost" id="in-reset">Probar con un perfil de ejemplo</button><button class="btn ghost" id="in-clear">Empezar de cero</button></div>
+      <button class="btn ghost" data-goto="fuentes" style="align-self:flex-start">Fuentes y cobertura ›</button>
   </section>
 
   <section class="view" id="v-fuentes" hidden>
+    <button class="btn ghost mob-only" data-goto="intereses" style="align-self:flex-start">‹ Volver al perfil</button>
     <h1>Fuentes y cobertura</h1>
     <p class="lead" id="fu-lead"></p>
     <div class="panel"><div class="tablewrap"><table class="cov" id="fu-table"></table></div></div>
     <div class="panel" id="fu-notes"></div>
   </section>
 </main>
+
+<nav class="bottomnav" aria-label="Secciones">
+    <button data-goto="parati" data-bnav="parati"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6L3.3 9.2l6.1-.6z"/></svg><span>Para ti</span></button>
+    <button data-goto="explorar" data-bnav="explorar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span>Explorar</span></button>
+    <button data-goto="calle" data-bnav="calle"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21l3-18"/><path d="M19 21l-3-18"/><path d="M12 5v2"/><path d="M12 11v2"/><path d="M12 17v2"/></svg><span>Calle</span><i class="dot" id="b-calle" hidden></i></button>
+    <button data-goto="agenda" data-bnav="agenda"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>Agenda</span><i class="dot" id="b-agenda" hidden></i></button>
+    <button data-goto="intereses" data-bnav="intereses"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Perfil</span></button>
+</nav>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
@@ -557,9 +596,12 @@ function startApp(DATA, TAX, sync) {
   }
   function renderAll() {
     $('stamp').textContent = 'Madrid · ' + META.eventos.toLocaleString('es-ES') + ' eventos';
+    document.querySelectorAll('.n-unicos').forEach(n => { n.textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || ''; });
     $('n-unicos').textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || '';
     renderAgenda();
     $('n-calle').textContent = streets.length ? (cutsOn(today).filter(x => x.mine).length || '') : '';
+    $('b-calle').hidden = !(streets.length && cutsOn(today).some(x => x.mine));
+    $('b-agenda').hidden = !saved.length;
     ({ parati: renderParaTi, calle: renderCalle, unicos: renderUnicos, explorar: renderExplorar, agenda: () => { }, intereses: renderIntereses, fuentes: renderFuentes })[state.tab]();
   }
 
@@ -568,6 +610,8 @@ function startApp(DATA, TAX, sync) {
   function go(t) {
     state.tab = t;
     tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === t); });
+    const nav = (t === 'unicos') ? 'parati' : (t === 'fuentes') ? 'intereses' : t;
+    document.querySelectorAll('[data-bnav]').forEach(b => { if (b.dataset.bnav === nav) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
     store.set('tab', t);
     renderAll(); window.scrollTo(0, 0);
   }
