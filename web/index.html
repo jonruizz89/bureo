@@ -486,7 +486,7 @@ function startApp(DATA, TAX, sync) {
       <div class="when">${esc(when)}</div>
       <h3 class="title" style="padding-right:0">${esc(c.title)}</h3>
       ${c.summary ? `<p class="meta" style="margin:0">${esc(c.summary)}</p>` : ''}
-      ${(c.lines || []).length ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l, c.kind) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
+      ${((c.lines || []).length || (c.stations || []).length) ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l, c.kind) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
       <div class="tags">${sts.slice(0, 10).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}${sts.length > 10 ? `<span class="street">y ${sts.length - 10} más</span>` : ''}</div>
       ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">Ver el aviso ${TRANS.includes(c.kind) ? 'del Consorcio de Transportes' : 'del Ayuntamiento'} ↗</a></div>` : ''}
     </article>`;
