@@ -53,7 +53,23 @@ Para cada evento devuelve:
 - "series": si el evento forma parte claramente de un ciclo o serie (un ciclo de un director en un centro, un festival, una temporada), su nombre corto, p. ej. "Ciclo Hitchcock en el C.S. José de Espronceda"; si no, null.
 - "unique": true solo si es una cita de ciudad singular, de las que pasan como mucho una vez al año y atraen a mucha gente (fiestas tradicionales, grandes carreras populares, festivales de referencia, noches especiales de museos); false en la programación habitual.
 
-Responde SOLO con un array JSON, un objeto por evento, en el mismo orden: [{{"id": 123, "cats": [...], "topics": [...], "series": null, "unique": false}}]"""
+Entrega el resultado llamando a la herramienta guardar_clasificacion con un elemento por evento."""
+
+TOOL = {
+    'name': 'guardar_clasificacion',
+    'description': 'Guarda la clasificación de todos los eventos del lote.',
+    'input_schema': {
+        'type': 'object',
+        'properties': {'items': {'type': 'array', 'items': {
+            'type': 'object',
+            'properties': {
+                'id': {'type': 'integer'},
+                'cats': {'type': 'array', 'items': {'type': 'string'}},
+                'topics': {'type': 'array', 'items': {'type': 'string'}},
+                'series': {'type': ['string', 'null']},
+                'unique': {'type': 'boolean'}},
+            'required': ['id', 'cats', 'topics', 'series', 'unique']}}},
+        'required': ['items']}}
 
 
 def call_model(batch):
@@ -61,8 +77,9 @@ def call_model(batch):
               'fechas': f"{e['starts_on']}–{e['ends_on']}", 'precio': e.get('price_text'),
               'descripcion': (e.get('description') or '')[:350],
               'pistas_de_la_fuente': [c['category_id'] for c in e.get('event_categories') or []]} for e in batch]
-    body = {'model': MODEL, 'max_tokens': 4000,
+    body = {'model': MODEL, 'max_tokens': 6000,
             'system': [{'type': 'text', 'text': SYSTEM, 'cache_control': {'type': 'ephemeral'}}],
+            'tools': [TOOL], 'tool_choice': {'type': 'tool', 'name': 'guardar_clasificacion'},
             'messages': [{'role': 'user', 'content': json.dumps(items, ensure_ascii=False)}]}
     for attempt in range(8):
         req = urllib.request.Request('https://api.anthropic.com/v1/messages', method='POST', data=json.dumps(body).encode())
@@ -72,8 +89,12 @@ def call_model(batch):
         try:
             with urllib.request.urlopen(req, timeout=180) as r:
                 res = json.loads(r.read().decode())
-            txt = ''.join(b.get('text', '') for b in res.get('content', []) if b.get('type') == 'text')
-            out = json.loads(txt[txt.index('['): txt.rindex(']') + 1])
+            blocks = [b for b in res.get('content', []) if b.get('type') == 'tool_use']
+            if not blocks:
+                raise ValueError('sin llamada a la herramienta (stop_reason=%s)' % res.get('stop_reason'))
+            out = blocks[0]['input'].get('items')
+            if not isinstance(out, list):
+                raise ValueError('formato inesperado')
             return out, res.get('usage', {})
         except urllib.error.HTTPError as e:
             msg = e.read().decode()[:200]
