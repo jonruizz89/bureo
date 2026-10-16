@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="es">
+<head>
+<title>Bureo Madrid</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Los planes de Madrid que van contigo: eventos, exposiciones, carreras y citas únicas de la ciudad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: una columna de móvil (máx. 640px) con cabecera fija, pestañas y tarjetas de evento; mismo sistema visual que el prototipo */
+:root {
+  --bg: #EEF0F3; --surface: #FFFFFF; --ink: #12182B; --quiet: #4B5366; --line: #DDE1E8;
+  --accent: #D9461F; --accent-ink: #FFFFFF; --accent-soft: #FCE7DF; --accent-text: #A8361A;
+  --ok: #1F7A4D; --ok-soft: #E3F2EA; --chip: #EEF0F3; --strong: #12182B; --strong-ink: #FFFFFF;
+  --f-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --f-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0F1320; --surface: #181E2E; --ink: #E8EBF2; --quiet: #A3ABBD; --line: #2A3247;
+  --accent: #F0683F; --accent-ink: #160B06; --accent-soft: #3A1F17; --accent-text: #FF9C7C;
+  --ok: #4CC08A; --ok-soft: #173326; --chip: #232A3C; --strong: #E8EBF2; --strong-ink: #0F1320; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0F1320; --surface: #181E2E; --ink: #E8EBF2; --quiet: #A3ABBD; --line: #2A3247;
+  --accent: #F0683F; --accent-ink: #160B06; --accent-soft: #3A1F17; --accent-text: #FF9C7C;
+  --ok: #4CC08A; --ok-soft: #173326; --chip: #232A3C; --strong: #E8EBF2; --strong-ink: #0F1320; color-scheme: dark }
+
+* { box-sizing: border-box }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px) }
+body { margin: 0; font-size: 15px }
+img { max-width: 100% }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45 }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface) }
+a { color: inherit }
+button { font: inherit; color: inherit }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.wrap { max-width: 640px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line) }
+.top .wrap { padding-block: 12px 0; display: flex; flex-direction: column; gap: 10px }
+.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px }
+.brand b { font-family: var(--f-display); font-size: 22px; letter-spacing: -0.02em; font-weight: 700 }
+.brand span { font-size: 12.5px; color: var(--quiet); text-align: right }
+nav.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none }
+nav.tabs button { flex: 0 0 auto; border: 0; background: none; padding: 10px 10px 12px; font-weight: 500; font-size: 14px; color: var(--quiet); border-bottom: 3px solid transparent; cursor: pointer; min-height: 44px }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600 }
+nav.tabs .n:empty { display: none }
+nav.tabs .n { font-size: 11.5px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; background: var(--chip); color: var(--quiet) }
+
+main { padding-block: 16px 64px }
+.view { display: flex; flex-direction: column; gap: 12px }
+h1 { font-family: var(--f-display); font-weight: 600; font-size: 26px; letter-spacing: -0.02em; margin: 4px 0 0; text-wrap: balance }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8px 0 0 }
+.lead { margin: 0; color: var(--quiet); font-size: 14px }
+
+.seg { display: flex; gap: 6px; flex-wrap: wrap }
+.pill { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0 12px; height: 36px; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px }
+.pill[aria-pressed="true"] { background: var(--strong); color: var(--strong-ink); border-color: var(--strong) }
+
+.card { background: var(--surface); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; position: relative }
+.card .row1 { display: flex; gap: 12px; align-items: flex-start }
+.date { flex: 0 0 52px; text-align: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text); padding: 6px 0; font-variant-numeric: tabular-nums }
+.date .d { display: block; font-family: var(--f-display); font-size: 22px; font-weight: 700; line-height: 1 }
+.date .m { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px }
+.date.range { background: var(--chip); color: var(--quiet) }
+.date.range .d { font-size: 13px; line-height: 1.15; font-family: var(--f-body) }
+.body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px }
+.title { font-family: var(--f-display); font-size: 16.5px; font-weight: 600; line-height: 1.25; margin: 0; padding-right: 40px; overflow-wrap: anywhere }
+.title button { all: unset; cursor: pointer }
+.title button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px }
+.meta { font-size: 13px; color: var(--quiet); overflow-wrap: anywhere }
+.why { font-size: 13px; background: var(--ok-soft); color: var(--ok); border-radius: 8px; padding: 6px 10px; font-weight: 500 }
+.tags { display: flex; gap: 6px; flex-wrap: wrap }
+.tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--quiet) }
+.tag.free { background: var(--ok-soft); color: var(--ok) }
+.tag.uni { background: var(--accent-soft); color: var(--accent-text) }
+.save { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border: 0; border-radius: 10px; background: none; cursor: pointer; color: var(--quiet); display: flex; align-items: center; justify-content: center }
+.save[aria-pressed="true"] { color: var(--accent) }
+.more { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px }
+.more p { margin: 0 }
+.links { display: flex; gap: 8px; flex-wrap: wrap }
+.links a { font-size: 13px; font-weight: 600; color: var(--accent-text); text-decoration: none; padding: 6px 10px; border-radius: 8px; background: var(--accent-soft) }
+.empty { background: var(--surface); border-radius: 14px; padding: 18px; color: var(--quiet); font-size: 14px }
+.btn { height: 44px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 14.5px; cursor: pointer; padding: 0 16px }
+.btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line) }
+
+.search { height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 0 12px; font: 400 15px var(--f-body); width: 100% }
+select.search { appearance: auto }
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+@media (max-width: 420px) { .filters { grid-template-columns: 1fr } }
+
+.panel { background: var(--surface); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px }
+.grp { border-top: 1px solid var(--line) }
+.grp:first-of-type { border-top: 0 }
+.grp > button { width: 100%; min-height: 48px; border: 0; background: none; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; padding: 4px 0 }
+.grp > button .nm { flex: 1; font-weight: 600 }
+.grp > button .ct { font-size: 12px; color: var(--quiet) }
+.grp > button .ct.on { color: var(--ok) }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; padding-bottom: 14px }
+.chip { height: 38px; padding: 0 12px; border-radius: 999px; border: 1px solid transparent; background: var(--chip); font-size: 13px; cursor: pointer }
+.chip[data-v="1"] { background: var(--strong); color: var(--strong-ink) }
+.chip[data-v="2"] { background: var(--surface); color: var(--accent-text); border: 1px dashed var(--accent-text); text-decoration: line-through }
+.chip .k { font-size: 11px; opacity: 0.7; margin-left: 4px }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--quiet) }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; min-height: 40px }
+.toggle input { width: 22px; height: 22px; accent-color: var(--accent); flex-shrink: 0 }
+.note { font-size: 12.5px; color: var(--quiet); margin: 0 }
+
+table.cov { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums }
+table.cov th, table.cov td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line) }
+table.cov td.n, table.cov th.n { text-align: right }
+.tablewrap { overflow-x: auto }
+@media (prefers-reduced-motion: no-preference) { .card { transition: box-shadow .15s } .card:hover { box-shadow: 0 2px 10px rgba(18,24,43,.08) } }
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><b>bureo</b><span id="stamp"></span></div>
+    <nav class="tabs" role="tablist" aria-label="Secciones">
+      <button role="tab" id="t-parati" aria-selected="true">Para ti</button>
+      <button role="tab" id="t-unicos" aria-selected="false">Únicos<span class="n" id="n-unicos"></span></button>
+      <button role="tab" id="t-explorar" aria-selected="false">Explorar</button>
+      <button role="tab" id="t-agenda" aria-selected="false">Agenda<span class="n" id="n-agenda"></span></button>
+      <button role="tab" id="t-intereses" aria-selected="false">Intereses</button>
+      <button role="tab" id="t-fuentes" aria-selected="false">Fuentes</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="view" id="v-parati">
+    <h1 id="pt-h"></h1>
+    <p class="lead" id="pt-lead"></p>
+    <div class="seg" role="group" aria-label="Cuándo">
+      <button class="pill" data-when="semana">Esta semana</button>
+      <button class="pill" data-when="finde">Este finde</button>
+      <button class="pill" data-when="mes">Próximos 30 días</button>
+    </div>
+    <div class="seg" role="group" aria-label="Filtros rápidos">
+      <button class="pill" id="pt-free" aria-pressed="false">Solo gratis</button>
+    </div>
+    <div id="pt-list" class="view"></div>
+    <button class="btn ghost" id="pt-more" hidden>Ver más</button>
+  </section>
+
+  <section class="view" id="v-unicos" hidden>
+    <h1>Únicos en Madrid</h1>
+    <p class="lead">Citas de ciudad que pasan una vez al año. Salen aunque no encajen con tus intereses.</p>
+    <div id="un-list" class="view"></div>
+  </section>
+
+  <section class="view" id="v-explorar" hidden>
+    <h1>Explorar</h1>
+    <label for="ex-q" class="note">Buscar por título, lugar o barrio</label>
+    <input class="search" id="ex-q" type="search" placeholder="Ej.: fotografía, Matadero, Usera">
+    <div class="filters">
+      <select class="search" id="ex-grp" aria-label="Grupo de categorías"></select>
+      <select class="search" id="ex-when" aria-label="Fechas">
+        <option value="semana">Esta semana</option>
+        <option value="finde">Este finde</option>
+        <option value="mes" selected>Próximos 30 días</option>
+        <option value="todo">Todo lo disponible</option>
+      </select>
+    </div>
+    <div class="seg"><button class="pill" id="ex-free" aria-pressed="false">Solo gratis</button></div>
+    <p class="note" id="ex-count"></p>
+    <div id="ex-list" class="view"></div>
+    <button class="btn ghost" id="ex-more" hidden>Ver más</button>
+  </section>
+
+  <section class="view" id="v-agenda" hidden>
+    <h1>Mi agenda</h1>
+    <p class="lead">Lo que has guardado, por fecha.</p>
+    <div id="ag-list" class="view"></div>
+  </section>
+
+  <section class="view" id="v-intereses" hidden>
+    <h1>Mis intereses</h1>
+    <p class="lead">Toca una categoría para marcarla como interesante, otra vez para no verla nunca, y una tercera para dejarla como estaba. El número es cuántos eventos hay ahora mismo.</p>
+    <div class="panel">
+      <div class="legend"><span>■ Me interesa</span><span style="color:var(--accent-text)">▢ No me muestres</span><span>Sin marcar</span></div>
+      <input class="search" id="in-q" type="search" placeholder="Buscar categoría" aria-label="Buscar categoría">
+      <div id="in-groups"></div>
+    </div>
+    <div class="panel">
+      <h2 style="margin:0">Con quién y cómo</h2>
+      <label class="toggle" for="o-ninos">Voy con niños (muestra planes familiares e infantiles)<input type="checkbox" id="o-ninos"></label>
+      <label class="toggle" for="o-perro">Voy con mi perro (sube planes con mascotas)<input type="checkbox" id="o-perro"></label>
+    </div>
+    <div class="panel" id="account">
+      <h2 style="margin:0">Tu cuenta</h2>
+      <div id="acc-out">
+        <p class="note">Sin cuenta, tus intereses y tu agenda se guardan solo en este navegador. Entra con tu email para tenerlos en todos tus dispositivos.</p>
+        <form id="acc-form" class="seg" style="margin-top:8px">
+          <label for="acc-email" class="note" style="width:100%">Email</label>
+          <input class="search" id="acc-email" type="email" autocomplete="email" required placeholder="tu@email.com" style="flex:1;min-width:200px">
+          <button class="btn" type="submit">Enviarme el enlace</button>
+        </form>
+        <p class="note" id="acc-msg" role="status"></p>
+      </div>
+      <div id="acc-in" hidden>
+        <p class="note">Has entrado como <b id="acc-who"></b>. Tus intereses y tu agenda se guardan en tu cuenta.</p>
+        <div class="seg" style="margin-top:8px"><button class="btn ghost" id="acc-logout">Cerrar sesión</button></div>
+      </div>
+    </div>
+    <div class="seg"><button class="btn ghost" id="in-reset">Probar con un perfil de ejemplo</button><button class="btn ghost" id="in-clear">Empezar de cero</button></div>
+  </section>
+
+  <section class="view" id="v-fuentes" hidden>
+    <h1>Fuentes y cobertura</h1>
+    <p class="lead" id="fu-lead"></p>
+    <div class="panel"><div class="tablewrap"><table class="cov" id="fu-table"></table></div></div>
+    <div class="panel" id="fu-notes"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script>
+function startApp(DATA, TAX, sync) {
+  const EV = DATA.eventos;
+  const META = DATA.meta;
+  const LABEL = {}, GROUP_OF = {}, GROUP_NAME = {};
+  TAX.forEach(g => { GROUP_NAME[g.id] = g.name; g.items.forEach(it => { LABEL[it.id] = it.label; GROUP_OF[it.id] = g.id; }); });
+  const GENERIC = { 'g:musica': 'Música', 'g:cine': 'Cine', 'g:arte': 'Exposiciones', 'g:escena': 'Artes escénicas', 'g:gastro': 'Gastronomía', 'g:deporte': 'Deporte', 'g:naturaleza': 'Naturaleza' };
+  const groupOf = c => c.startsWith('g:') ? ({ 'g:musica': 'musica', 'g:cine': 'cine', 'g:arte': 'arte', 'g:escena': 'escena', 'g:gastro': 'gastro', 'g:deporte': 'deporte', 'g:naturaleza': 'naturaleza' })[c] : GROUP_OF[c];
+  const labelOf = c => LABEL[c] || GENERIC[c] || 'Otros';
+
+  // ---------- almacenamiento local (con tolerancia a fallos)
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('bureo.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('bureo.' + k, JSON.stringify(v)); } catch (e) { } if (sync) sync(k, v); }
+  };
+  const SAMPLE = { pintura: 1, expo_hist: 1, arqueo_cat: 1, fotografia: 1, museos: 1, visitas: 1, historia: 1, cine_clasico: 1,
+    preestrenos: 1, documental: 1, teatro: 1, conf: 1, libros: 1, divulgacion: 1, astronomia: 1, catas: 1, tradiciones: 1,
+    padel: 1, carreras_perro: 1, jardines: 1, reggaeton: 2, electronica: 2, infantil: 2, cuentacuentos: 2, titeres: 2 };
+  let prefs = store.get('prefs', null) || {};
+  let opts = store.get('opts', { ninos: false, perro: false });
+  let saved = store.get('saved', []);
+  let state = { tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
+
+  // ---------- fechas
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const DIA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  function range(when) {
+    const s = today;
+    if (when === 'semana') { const dow = (s.getDay() + 6) % 7; return [s, addDays(s, 6 - dow)]; }
+    if (when === 'finde') { const dow = (s.getDay() + 6) % 7; const sat = dow >= 5 ? (dow === 6 ? addDays(s, -1) : s) : addDays(s, 5 - dow); return [dow >= 5 ? s : sat, addDays(sat, 1)]; }
+    if (when === 'mes') return [s, addDays(s, 30)];
+    return [s, addDays(s, 400)];
+  }
+  // cuándo cae el evento dentro de [a,b]: próxima sesión o tramo en curso
+  function occurs(e, a, b) {
+    const ini = parse(e.inicio), fin = parse(e.fin);
+    if (fin < a || ini > b) return null;
+    if (e.sesiones.length > 1) {
+      const s = e.sesiones.map(parse).find(x => x >= a && x <= b);
+      return s ? { date: s, ongoing: false } : null;
+    }
+    if (+ini === +fin) return { date: ini, ongoing: false };
+    return { date: ini < a ? a : ini, ongoing: ini < a, ini, fin };
+  }
+  const isFamily = e => e.cats.some(c => c === 'infantil' || c === 'cuentacuentos' || c === 'titeres' || c === 'talleres_familia');
+  const isPet = e => e.cats.some(c => groupOf(c) === 'mascotas');
+
+  // ---------- puntuación
+  function score(e) {
+    let s = 0; const hits = [];
+    const likedGroups = new Set(Object.keys(prefs).filter(k => prefs[k] === 1).map(k => GROUP_OF[k]));
+    for (const c of e.cats) {
+      if (prefs[c] === 2) return { s: -1, hits: [] };
+      if (prefs[c] === 1) { s += 3; hits.push(labelOf(c)); }
+      else if (c.startsWith('g:') && likedGroups.has(groupOf(c))) { s += 1.2; hits.push(labelOf(c)); }
+      else if (likedGroups.has(groupOf(c))) { s += 0.4; }
+    }
+    if (isFamily(e) && !opts.ninos) return { s: -1, hits: [] };
+    if (opts.perro && isPet(e)) { s += 2; hits.push('vas con tu perro'); }
+    if (s > 0) {
+      if (e.destacado) s += 0.6;
+      if (e.fuentes.length > 1) s += 0.4;
+      if (e.unico) s += 1;
+    }
+    return { s, hits: [...new Set(hits)] };
+  }
+
+  // ---------- render de tarjetas
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  function dateBox(e, occ) {
+    if (occ && occ.ongoing) {
+      const f = parse(e.fin);
+      return `<div class="date range" aria-label="En curso hasta el ${f.getDate()} de ${MES[f.getMonth()]}"><span class="d">Hasta<br>${f.getDate()} ${MES[f.getMonth()]}</span></div>`;
+    }
+    const d = occ ? occ.date : parse(e.inicio);
+    return `<div class="date"><span class="d">${d.getDate()}</span><span class="m">${MES[d.getMonth()]}</span></div>`;
+  }
+  function whenText(e, occ) {
+    const d = occ ? occ.date : parse(e.inicio);
+    const ini = parse(e.inicio), fin = parse(e.fin);
+    let t = DIA[d.getDay()] + ' ' + d.getDate() + ' ' + MES[d.getMonth()];
+    if (+ini !== +fin && e.sesiones.length <= 1) t = (occ && occ.ongoing ? 'En curso' : 'Desde ' + t) + ', hasta el ' + fin.getDate() + ' ' + MES[fin.getMonth()];
+    else if (e.sesiones.length > 1) t += ' · ' + e.sesiones.length + ' sesiones';
+    const h = e.hora && e.hora.length < 40 ? e.hora : null;
+    return t + (h ? ' · ' + h : '');
+  }
+  function card(e, opt) {
+    opt = opt || {};
+    const occ = opt.occ || occurs(e, today, addDays(today, 400));
+    const isSaved = saved.includes(e.id);
+    const open = !!state.open[e.id];
+    const cats = e.cats.filter(c => c !== 'sin_categoria').slice(0, 3).map(labelOf);
+    const price = e.gratis ? '<span class="tag free">Gratis</span>' : (e.precio && e.precio.length < 40 ? `<span class="tag">${esc(e.precio)}</span>` : '');
+    const why = opt.why && opt.why.length ? `<div class="why">Te encaja: ${esc(opt.why.slice(0, 3).join(' · '))}</div>` : '';
+    const more = open ? `<div class="more" id="m-${e.id}">
+        ${e.descripcion ? `<p>${esc(e.descripcion)}</p>` : '<p class="note">La fuente no trae descripción.</p>'}
+        ${e.hora && e.hora.length >= 40 ? `<p class="note">${esc(e.hora)}</p>` : ''}
+        ${e.precio && e.precio.length >= 40 ? `<p class="note">${esc(e.precio)}</p>` : ''}
+        ${e.distrito ? `<p class="note">Distrito: ${esc(e.distrito)}</p>` : ''}
+        <div class="links">${e.fuentes.map(f => f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">Ver en ${esc(f.nombre)} ↗</a>` : '').join('')}
+        ${e.web_organizador ? `<a href="${esc(e.web_organizador)}" target="_blank" rel="noopener">Web del organizador ↗</a>` : ''}</div>
+        <p class="note">Fuentes: ${e.fuentes.map(f => esc(f.nombre)).join(', ')}</p>
+      </div>` : '';
+    return `<article class="card">
+      <div class="row1">${dateBox(e, occ)}
+        <div class="body">
+          <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
+          <div class="meta">${esc(whenText(e, occ))}</div>
+          <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}</div>
+        </div></div>
+      <div class="tags">${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${cats.map(c => `<span class="tag">${esc(c)}</span>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
+      ${why}${more}
+      <button class="save" data-save="${e.id}" aria-pressed="${isSaved}" aria-label="${isSaved ? 'Quitar de mi agenda' : 'Guardar en mi agenda'}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+      </button>
+    </article>`;
+  }
+
+  // ---------- vistas
+  const $ = id => document.getElementById(id);
+  function renderParaTi() {
+    const [a, b] = range(state.when);
+    if (!Object.values(prefs).some(v => v === 1)) {
+      const items = [];
+      for (const e of EV) {
+        if (state.free && !e.gratis) continue;
+        if (isFamily(e) && !opts.ninos) continue;
+        const occ = occurs(e, a, b); if (!occ) continue;
+        const s = (e.unico ? 3 : 0) + (e.destacado ? 2 : 0) + (e.fuentes.length > 1 ? 1 : 0);
+        if (s > 0) items.push({ e, occ, s });
+      }
+      items.sort((x, y) => y.s - x.s || x.occ.date - y.occ.date);
+      $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
+      $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
+      $('pt-list').innerHTML = `<button class="btn" data-goto="intereses">Elegir mis intereses</button>` +
+        items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
+      $('pt-more').hidden = items.length <= state.ptShown;
+      document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
+      $('pt-free').setAttribute('aria-pressed', state.free);
+      return;
+    }
+    const items = [];
+    for (const e of EV) {
+      if (state.free && !e.gratis) continue;
+      const occ = occurs(e, a, b); if (!occ) continue;
+      const sc = score(e); if (sc.s < 1.5) continue;
+      items.push({ e, occ, sc });
+    }
+    items.sort((x, y) => (y.sc.s - x.sc.s) || (x.occ.date - y.occ.date));
+    const top = items.slice(0, state.ptShown);
+    const dated = top.filter(x => !x.occ.ongoing).sort((x, y) => x.occ.date - y.occ.date || y.sc.s - x.sc.s);
+    const going = top.filter(x => x.occ.ongoing).sort((x, y) => parse(x.e.fin) - parse(y.e.fin));
+    const label = { semana: 'esta semana', finde: 'este finde', mes: 'los próximos 30 días' }[state.when];
+    $('pt-h').textContent = items.length ? `${items.length} planes para ti ${label}` : `Nada para ti ${label}`;
+    $('pt-lead').textContent = items.length ? `Los ${top.length} que mejor encajan con tus intereses. Toca el título para ver más.` : 'Prueba con un rango más amplio o marca más intereses.';
+    const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
+      (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
+    $('pt-list').innerHTML = html || '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>';
+    $('pt-more').hidden = items.length <= state.ptShown;
+    document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
+    $('pt-free').setAttribute('aria-pressed', state.free);
+  }
+  function renderUnicos() {
+    const list = EV.filter(e => e.unico && parse(e.fin) >= today).sort((a, b) => a.inicio.localeCompare(b.inicio));
+    $('un-list').innerHTML = list.map(e => card(e)).join('') || '<div class="empty">No hay planes únicos en las próximas semanas.</div>';
+  }
+  function renderExplorar() {
+    const q = $('ex-q').value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const g = $('ex-grp').value, [a, b] = range($('ex-when').value);
+    const free = $('ex-free').getAttribute('aria-pressed') === 'true';
+    const res = [];
+    for (const e of EV) {
+      if (free && !e.gratis) continue;
+      if (g && !e.cats.some(c => groupOf(c) === g)) continue;
+      const occ = occurs(e, a, b); if (!occ) continue;
+      if (q) { const h = (e.titulo + ' ' + (e.lugar || '') + ' ' + (e.distrito || '') + ' ' + e.cats.map(labelOf).join(' ')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); if (!h.includes(q)) continue; }
+      res.push({ e, occ });
+    }
+    res.sort((x, y) => x.occ.date - y.occ.date);
+    $('ex-count').textContent = res.length + ' eventos';
+    $('ex-list').innerHTML = res.slice(0, state.exShown).map(x => card(x.e, { occ: x.occ })).join('') || '<div class="empty">Ningún evento con esos filtros.</div>';
+    $('ex-more').hidden = res.length <= state.exShown;
+  }
+  function renderAgenda() {
+    const list = EV.filter(e => saved.includes(e.id)).sort((a, b) => a.inicio.localeCompare(b.inicio));
+    $('ag-list').innerHTML = list.map(e => card(e)).join('') || '<div class="empty">Aún no has guardado nada. Toca el marcador de cualquier evento para traerlo aquí.</div>';
+    $('n-agenda').textContent = saved.length || '';
+  }
+  const counts = {};
+  EV.forEach(e => { if (parse(e.fin) >= today) e.cats.forEach(c => { counts[c] = (counts[c] || 0) + 1; }); });
+  function renderIntereses() {
+    const q = $('in-q').value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const n = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    $('in-groups').innerHTML = TAX.map(g => {
+      const items = g.items.filter(it => !q || n(it.label).includes(q) || n(g.name).includes(q));
+      if (!items.length) return '';
+      const on = g.items.filter(it => prefs[it.id] === 1).length, off = g.items.filter(it => prefs[it.id] === 2).length;
+      const open = q || state.groupsOpen[g.id];
+      const ct = [g.items.length + ' categorías', on ? on + ' te interesan' : '', off ? off + ' ocultas' : ''].filter(Boolean).join(' · ');
+      return `<div class="grp"><button data-grp="${g.id}" aria-expanded="${!!open}"><span class="nm">${esc(g.name)}</span><span class="ct ${on ? 'on' : ''}">${ct}</span><span aria-hidden="true">${open ? '▴' : '▾'}</span></button>
+        ${open ? `<div class="chips">${items.map(it => `<button class="chip" data-cat="${it.id}" data-v="${prefs[it.id] || 0}" aria-label="${esc(it.label)}: ${['sin marcar', 'me interesa', 'no me muestres'][prefs[it.id] || 0]}">${esc(it.label)}<span class="k">${counts[it.id] || 0}</span></button>`).join('')}</div>` : ''}</div>`;
+    }).join('');
+    $('o-ninos').checked = !!opts.ninos; $('o-perro').checked = !!opts.perro;
+  }
+  function renderFuentes() {
+    const m = META;
+    const per = {};
+    EV.forEach(e => e.fuentes.forEach(f => { per[f.nombre] = (per[f.nombre] || 0) + 1; }));
+    $('fu-lead').textContent = `${m.eventos.toLocaleString('es-ES')} eventos vigentes de ${m.fuentes.length} fuentes. Última actualización: ${m.generado}.`;
+    const nm = { 'RJB': 'Real Jardín Botánico' };
+    $('fu-table').innerHTML = '<thead><tr><th>Fuente</th><th class="n">Eventos</th><th>Cómo se lee</th><th>Licencia o uso</th></tr></thead><tbody>' +
+      m.fuentes.map(f => `<tr><td>${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(nm[f.name] || f.name)}</a>` : esc(nm[f.name] || f.name)}</td><td class="n">${(per[f.name] || 0).toLocaleString('es-ES')}</td><td>${esc(f.method || '')}</td><td>${esc(f.license || '')}</td></tr>`).join('') + '</tbody>';
+    $('fu-notes').innerHTML = `<h2 style="margin:0">Cómo se ha montado</h2>
+      <p class="note">Las sesiones de un mismo evento se agrupan en una sola tarjeta. Si el mismo evento aparece en varias fuentes se une en uno y se conservan todos los enlaces: ahora hay ${m.multifuente} eventos con más de una fuente.</p>
+      <p class="note">Las categorías se asignan con reglas sobre el tipo que da cada fuente y palabras del título. ${m.sin_categoria} eventos (${Math.round(100 * m.sin_categoria / Math.max(1, m.eventos))} %) se quedan sin categoría.</p>
+      <p class="note">Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, licencia CC BY 4.0) y de esMadrid.com. Cada tarjeta enlaza a su fuente original.</p>`;
+  }
+  function renderAll() {
+    $('stamp').textContent = 'Madrid · ' + META.eventos.toLocaleString('es-ES') + ' eventos';
+    $('n-unicos').textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || '';
+    renderAgenda();
+    ({ parati: renderParaTi, unicos: renderUnicos, explorar: renderExplorar, agenda: () => { }, intereses: renderIntereses, fuentes: renderFuentes })[state.tab]();
+  }
+
+  // ---------- eventos de interfaz
+  const tabs = ['parati', 'unicos', 'explorar', 'agenda', 'intereses', 'fuentes'];
+  function go(t) {
+    state.tab = t;
+    tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === t); });
+    store.set('tab', t);
+    renderAll(); window.scrollTo(0, 0);
+  }
+  tabs.forEach(t => $('t-' + t).addEventListener('click', () => go(t)));
+  document.querySelectorAll('[data-when]').forEach(b => b.addEventListener('click', () => { state.when = b.dataset.when; state.ptShown = 12; renderParaTi(); }));
+  $('pt-free').addEventListener('click', () => { state.free = !state.free; renderParaTi(); });
+  $('pt-more').addEventListener('click', () => { state.ptShown += 12; renderParaTi(); });
+  $('ex-more').addEventListener('click', () => { state.exShown += 20; renderExplorar(); });
+  ['ex-q', 'ex-grp', 'ex-when'].forEach(id => $(id).addEventListener('input', () => { state.exShown = 20; renderExplorar(); }));
+  $('ex-free').addEventListener('click', e => { const b = e.currentTarget; b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); state.exShown = 20; renderExplorar(); });
+  $('ex-grp').innerHTML = '<option value="">Todas las categorías</option>' + TAX.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  $('in-q').addEventListener('input', renderIntereses);
+  $('o-ninos').addEventListener('change', e => { opts.ninos = e.target.checked; store.set('opts', opts); });
+  $('o-perro').addEventListener('change', e => { opts.perro = e.target.checked; store.set('opts', opts); });
+  $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
+  $('in-clear').addEventListener('click', () => { prefs = {}; store.set('prefs', prefs); renderIntereses(); });
+  document.addEventListener('click', ev => {
+    const gt = ev.target.closest('[data-goto]');
+    if (gt) { go(gt.dataset.goto); return; }
+    const s = ev.target.closest('[data-save]');
+    if (s) { const id = s.dataset.save; saved = saved.includes(id) ? saved.filter(x => x !== id) : saved.concat(id); store.set('saved', saved); renderAll(); return; }
+    const o = ev.target.closest('[data-open]');
+    if (o) { const id = o.dataset.open; state.open[id] = !state.open[id]; renderAll(); const el = document.querySelector(`[data-open="${id}"]`); if (el) el.focus(); return; }
+    const g = ev.target.closest('[data-grp]');
+    if (g) { state.groupsOpen[g.dataset.grp] = !state.groupsOpen[g.dataset.grp]; renderIntereses(); return; }
+    const c = ev.target.closest('[data-cat]');
+    if (c) { const id = c.dataset.cat; prefs[id] = ((prefs[id] || 0) + 1) % 3; if (!prefs[id]) delete prefs[id]; store.set('prefs', prefs); renderIntereses(); const el = document.querySelector(`[data-cat="${id}"]`); if (el) el.focus(); }
+  });
+  const t0 = store.get('tab', 'parati');
+  go(tabs.includes(t0) ? t0 : 'parati');
+  return {
+    get: () => ({ prefs, opts, saved }),
+    set(p) { if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved;
+      store.set('prefs', prefs); store.set('opts', opts); store.set('saved', saved); renderAll(); }
+  };
+}
+bootBureo(startApp);
+</script>
+
+</body>
+</html>

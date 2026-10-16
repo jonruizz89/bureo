@@ -1,0 +1,57 @@
+name: Actualización nocturna
+
+on:
+  schedule:
+    - cron: "17 2 * * *"   # 04:17 en Madrid en horario de verano, 03:17 en invierno
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    defaults:
+      run:
+        working-directory: engine
+    env:
+      BUREO_RAW: raw
+      BUREO_OUT: out
+      BUREO_FETCH_MINUTES: "270"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Recuperar la caché de fichas de esMadrid
+        uses: actions/cache/restore@v4
+        with:
+          path: engine/raw/esmadrid.jsonl
+          key: esmadrid-${{ github.run_id }}
+          restore-keys: esmadrid-
+
+      - name: Descargar fuentes rápidas
+        run: python3 src/fetch_sources.py
+
+      - name: Descargar fichas nuevas o cambiadas de esMadrid
+        run: python3 src/fetch_esmadrid.py
+
+      - name: Guardar la caché de fichas
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: engine/raw/esmadrid.jsonl
+          key: esmadrid-${{ github.run_id }}
+
+      - name: Unificar, quitar duplicados y categorizar
+        run: python3 src/pipeline.py
+
+      - name: Cargar en Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+        run: python3 src/load_supabase.py

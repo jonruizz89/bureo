@@ -1,0 +1,5 @@
+engine/raw/
+engine/out/
+__pycache__/
+*.env
+.env*

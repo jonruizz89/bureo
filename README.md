@@ -1,0 +1,32 @@
+# Bureo
+
+Los planes de tu ciudad que van contigo. Bureo reúne la agenda de Madrid (Ayuntamiento, esMadrid y grandes recintos),
+une los duplicados, clasifica cada evento en 152 categorías y te enseña lo que encaja con tus intereses.
+
+Nació en 2013 como **Everent**, un proyecto fin de carrera.
+
+## Partes
+
+- `web/`: la aplicación web (HTML y JavaScript, sin compilación). Lee los eventos de Supabase y guarda
+  intereses y agenda en la cuenta de cada usuario. Se publica con GitHub Pages.
+- `engine/`: el motor de datos en Python, sin dependencias externas.
+  1. `src/fetch_sources.py` descarga la agenda municipal, el sitemap de esMadrid e IFEMA y el Real Jardín Botánico.
+  2. `src/fetch_esmadrid.py` descarga solo las fichas de esMadrid nuevas o cambiadas, a una cada 10 s.
+  3. `src/pipeline.py` lo unifica, junta sesiones, une duplicados entre fuentes, categoriza y marca los planes únicos.
+  4. `src/load_supabase.py` lo carga en Supabase (actualiza por clave, se puede repetir sin duplicar).
+- `.github/workflows/nightly.yml`: ejecuta el motor cada noche.
+
+## Secretos del repositorio
+
+En *Settings → Secrets and variables → Actions*:
+
+- `SUPABASE_URL`: la URL del proyecto.
+- `SUPABASE_SECRET`: una clave secreta de Supabase (`sb_secret_…`) solo para el motor.
+
+La clave publicable de `web/config.js` es pública por diseño: las políticas de seguridad por filas solo permiten
+leer el catálogo y que cada usuario gestione sus propios datos.
+
+## Licencias de los datos
+
+Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, CC BY 4.0). De esMadrid y de los
+recintos se guarda lo mínimo para mostrar el evento y siempre se enlaza a la ficha original.

@@ -1,0 +1,706 @@
+[
+ {
+  "id": "arte",
+  "name": "Arte y exposiciones",
+  "items": [
+   {
+    "id": "pintura",
+    "label": "Pintura"
+   },
+   {
+    "id": "fotografia",
+    "label": "Fotografía"
+   },
+   {
+    "id": "escultura",
+    "label": "Escultura"
+   },
+   {
+    "id": "contemporaneo",
+    "label": "Arte contemporáneo"
+   },
+   {
+    "id": "urbano",
+    "label": "Arte urbano y grafiti"
+   },
+   {
+    "id": "ilustracion",
+    "label": "Ilustración y cómic"
+   },
+   {
+    "id": "diseno",
+    "label": "Diseño y arquitectura"
+   },
+   {
+    "id": "expo_hist",
+    "label": "Expos de historia y arqueología"
+   },
+   {
+    "id": "expo_ciencia",
+    "label": "Expos de ciencia y técnica"
+   },
+   {
+    "id": "galerias",
+    "label": "Galerías e inauguraciones"
+   },
+   {
+    "id": "ferias_arte",
+    "label": "Ferias de arte"
+   },
+   {
+    "id": "artesania",
+    "label": "Artesanía"
+   }
+  ]
+ },
+ {
+  "id": "patrimonio",
+  "name": "Museos y patrimonio",
+  "items": [
+   {
+    "id": "museos",
+    "label": "Museos"
+   },
+   {
+    "id": "visitas",
+    "label": "Visitas guiadas"
+   },
+   {
+    "id": "rutas",
+    "label": "Rutas por la ciudad"
+   },
+   {
+    "id": "monumentos",
+    "label": "Monumentos y puertas abiertas"
+   },
+   {
+    "id": "historia",
+    "label": "Historia"
+   },
+   {
+    "id": "homenajes",
+    "label": "Conmemoraciones y homenajes"
+   }
+  ]
+ },
+ {
+  "id": "cine",
+  "name": "Cine y audiovisual",
+  "items": [
+   {
+    "id": "estrenos",
+    "label": "Estrenos"
+   },
+   {
+    "id": "cine_clasico",
+    "label": "Cine clásico y ciclos"
+   },
+   {
+    "id": "vose",
+    "label": "Cine de autor y VOSE"
+   },
+   {
+    "id": "documental",
+    "label": "Documental"
+   },
+   {
+    "id": "preestrenos",
+    "label": "Preestrenos y coloquios"
+   },
+   {
+    "id": "festivales_cine",
+    "label": "Festivales de cine"
+   },
+   {
+    "id": "cortos",
+    "label": "Cortometrajes"
+   },
+   {
+    "id": "animacion",
+    "label": "Animación"
+   },
+   {
+    "id": "aire_libre",
+    "label": "Cine de verano"
+   }
+  ]
+ },
+ {
+  "id": "escena",
+  "name": "Artes escénicas",
+  "items": [
+   {
+    "id": "teatro",
+    "label": "Teatro"
+   },
+   {
+    "id": "microteatro",
+    "label": "Microteatro"
+   },
+   {
+    "id": "musicales",
+    "label": "Musicales"
+   },
+   {
+    "id": "opera",
+    "label": "Ópera"
+   },
+   {
+    "id": "zarzuela",
+    "label": "Zarzuela"
+   },
+   {
+    "id": "danza",
+    "label": "Danza"
+   },
+   {
+    "id": "ballet",
+    "label": "Ballet"
+   },
+   {
+    "id": "monologos",
+    "label": "Monólogos y comedia"
+   },
+   {
+    "id": "improv",
+    "label": "Improvisación"
+   },
+   {
+    "id": "circo",
+    "label": "Circo y magia"
+   },
+   {
+    "id": "performance",
+    "label": "Performance"
+   },
+   {
+    "id": "calle",
+    "label": "Artes de calle"
+   }
+  ]
+ },
+ {
+  "id": "musica",
+  "name": "Música",
+  "items": [
+   {
+    "id": "clasica",
+    "label": "Clásica"
+   },
+   {
+    "id": "antigua",
+    "label": "Música antigua y barroca"
+   },
+   {
+    "id": "jazz",
+    "label": "Jazz, soul y funk"
+   },
+   {
+    "id": "rock",
+    "label": "Rock"
+   },
+   {
+    "id": "pop",
+    "label": "Pop"
+   },
+   {
+    "id": "indie",
+    "label": "Indie"
+   },
+   {
+    "id": "metal",
+    "label": "Metal y punk"
+   },
+   {
+    "id": "electronica",
+    "label": "Electrónica"
+   },
+   {
+    "id": "hiphop",
+    "label": "Hip hop y urbana"
+   },
+   {
+    "id": "reggaeton",
+    "label": "Reguetón"
+   },
+   {
+    "id": "flamenco",
+    "label": "Flamenco"
+   },
+   {
+    "id": "latina",
+    "label": "Latina y española"
+   },
+   {
+    "id": "cantautor",
+    "label": "Cantautor y folk"
+   },
+   {
+    "id": "mundo",
+    "label": "Folclore y músicas del mundo"
+   },
+   {
+    "id": "coros",
+    "label": "Coros y góspel"
+   },
+   {
+    "id": "bandas",
+    "label": "Bandas sinfónicas"
+   },
+   {
+    "id": "festivales_musica",
+    "label": "Festivales"
+   },
+   {
+    "id": "salas",
+    "label": "Salas pequeñas"
+   }
+  ]
+ },
+ {
+  "id": "letras",
+  "name": "Letras y pensamiento",
+  "items": [
+   {
+    "id": "libros",
+    "label": "Presentaciones de libros"
+   },
+   {
+    "id": "firmas",
+    "label": "Firmas de autores"
+   },
+   {
+    "id": "poesia",
+    "label": "Recitales de poesía"
+   },
+   {
+    "id": "clubes",
+    "label": "Clubes de lectura"
+   },
+   {
+    "id": "conf",
+    "label": "Conferencias y coloquios"
+   },
+   {
+    "id": "debates",
+    "label": "Debates"
+   },
+   {
+    "id": "ferias_libro",
+    "label": "Ferias del libro"
+   },
+   {
+    "id": "bertsos",
+    "label": "Bertsolarismo"
+   }
+  ]
+ },
+ {
+  "id": "ciencia",
+  "name": "Ciencia y tecnología",
+  "items": [
+   {
+    "id": "divulgacion",
+    "label": "Divulgación científica"
+   },
+   {
+    "id": "arqueo_cat",
+    "label": "Arqueología"
+   },
+   {
+    "id": "astronomia",
+    "label": "Astronomía"
+   },
+   {
+    "id": "tecnologia",
+    "label": "Tecnología e IA"
+   },
+   {
+    "id": "digital",
+    "label": "Competencias digitales"
+   },
+   {
+    "id": "congresos",
+    "label": "Congresos y jornadas"
+   }
+  ]
+ },
+ {
+  "id": "gastro",
+  "name": "Gastronomía y bebida",
+  "items": [
+   {
+    "id": "catas",
+    "label": "Catas de vino"
+   },
+   {
+    "id": "cerveza",
+    "label": "Cerveza artesana"
+   },
+   {
+    "id": "cafe",
+    "label": "Café y té"
+   },
+   {
+    "id": "mercados_gastro",
+    "label": "Mercados gastronómicos"
+   },
+   {
+    "id": "tapas",
+    "label": "Rutas de tapas"
+   },
+   {
+    "id": "jornadas_gastro",
+    "label": "Jornadas de temporada"
+   },
+   {
+    "id": "cocina",
+    "label": "Cursos de cocina"
+   },
+   {
+    "id": "festivales_gastro",
+    "label": "Festivales gastronómicos"
+   },
+   {
+    "id": "popups",
+    "label": "Pop-ups y aperturas"
+   },
+   {
+    "id": "foodtrucks",
+    "label": "Food trucks"
+   }
+  ]
+ },
+ {
+  "id": "aprender",
+  "name": "Aprender y hacer",
+  "items": [
+   {
+    "id": "talleres",
+    "label": "Talleres"
+   },
+   {
+    "id": "cursos",
+    "label": "Cursos"
+   },
+   {
+    "id": "manualidades",
+    "label": "Manualidades y DIY"
+   },
+   {
+    "id": "idiomas",
+    "label": "Idiomas e intercambios"
+   },
+   {
+    "id": "foto_taller",
+    "label": "Talleres de fotografía"
+   },
+   {
+    "id": "escritura",
+    "label": "Escritura creativa"
+   },
+   {
+    "id": "networking",
+    "label": "Networking profesional"
+   }
+  ]
+ },
+ {
+  "id": "naturaleza",
+  "name": "Naturaleza y aire libre",
+  "items": [
+   {
+    "id": "senderismo",
+    "label": "Senderismo"
+   },
+   {
+    "id": "itinerarios",
+    "label": "Itinerarios ambientales"
+   },
+   {
+    "id": "jardines",
+    "label": "Jardines y botánica"
+   },
+   {
+    "id": "aves",
+    "label": "Observación de aves"
+   },
+   {
+    "id": "excursiones",
+    "label": "Excursiones"
+   },
+   {
+    "id": "huertos",
+    "label": "Huertos urbanos"
+   }
+  ]
+ },
+ {
+  "id": "ciudad",
+  "name": "Fiestas y vida en la ciudad",
+  "items": [
+   {
+    "id": "fiestas",
+    "label": "Fiestas populares y de barrio"
+   },
+   {
+    "id": "tradiciones",
+    "label": "Tradiciones únicas"
+   },
+   {
+    "id": "ferias",
+    "label": "Ferias"
+   },
+   {
+    "id": "mercadillos",
+    "label": "Mercadillos y rastros"
+   },
+   {
+    "id": "concursos",
+    "label": "Concursos y certámenes"
+   },
+   {
+    "id": "desfiles",
+    "label": "Desfiles y cabalgatas"
+   },
+   {
+    "id": "noche",
+    "label": "Vida nocturna"
+   },
+   {
+    "id": "toros",
+    "label": "Toros"
+   },
+   {
+    "id": "religiosas",
+    "label": "Procesiones y fiestas religiosas"
+   },
+   {
+    "id": "lgtbi",
+    "label": "LGTBI"
+   },
+   {
+    "id": "online",
+    "label": "Actividades en línea"
+   }
+  ]
+ },
+ {
+  "id": "deporte",
+  "name": "Deporte y carreras",
+  "items": [
+   {
+    "id": "carreras",
+    "label": "Carreras populares y 10K"
+   },
+   {
+    "id": "maratones",
+    "label": "Medias y maratones"
+   },
+   {
+    "id": "trail",
+    "label": "Trail y montaña"
+   },
+   {
+    "id": "solidarias",
+    "label": "Carreras solidarias"
+   },
+   {
+    "id": "tematicas",
+    "label": "Carreras temáticas y nocturnas"
+   },
+   {
+    "id": "bici",
+    "label": "Ciclismo y marchas"
+   },
+   {
+    "id": "triatlon",
+    "label": "Triatlón"
+   },
+   {
+    "id": "natacion",
+    "label": "Natación en aguas abiertas"
+   },
+   {
+    "id": "padel",
+    "label": "Pádel"
+   },
+   {
+    "id": "tenis",
+    "label": "Tenis"
+   },
+   {
+    "id": "golf",
+    "label": "Golf"
+   },
+   {
+    "id": "skate",
+    "label": "Skate"
+   },
+   {
+    "id": "hipica",
+    "label": "Hípica"
+   },
+   {
+    "id": "motor",
+    "label": "Motor"
+   },
+   {
+    "id": "futbol",
+    "label": "Fútbol"
+   },
+   {
+    "id": "baloncesto",
+    "label": "Baloncesto"
+   },
+   {
+    "id": "otros_partidos",
+    "label": "Otros deportes de equipo"
+   },
+   {
+    "id": "deporte_municipal",
+    "label": "Deporte municipal"
+   },
+   {
+    "id": "bienestar",
+    "label": "Yoga y bienestar"
+   },
+   {
+    "id": "esports",
+    "label": "eSports"
+   }
+  ]
+ },
+ {
+  "id": "mascotas",
+  "name": "Mascotas",
+  "items": [
+   {
+    "id": "carreras_perro",
+    "label": "Carreras y paseos con perro"
+   },
+   {
+    "id": "salones_mascota",
+    "label": "Ferias y salones de mascotas"
+   },
+   {
+    "id": "adopcion",
+    "label": "Adopción y protectoras"
+   },
+   {
+    "id": "concursos_caninos",
+    "label": "Concursos y exhibiciones"
+   },
+   {
+    "id": "educacion_canina",
+    "label": "Educación canina y talleres"
+   },
+   {
+    "id": "quedadas_perro",
+    "label": "Quedadas de perros"
+   },
+   {
+    "id": "petfriendly",
+    "label": "Planes que admiten perros"
+   }
+  ]
+ },
+ {
+  "id": "ferias",
+  "name": "Ferias, salones y convenciones",
+  "items": [
+   {
+    "id": "ferias_consumo",
+    "label": "Ferias de consumo"
+   },
+   {
+    "id": "comic",
+    "label": "Cómic, manga y anime"
+   },
+   {
+    "id": "videojuegos",
+    "label": "Videojuegos"
+   },
+   {
+    "id": "coleccionismo",
+    "label": "Coleccionismo"
+   },
+   {
+    "id": "moda",
+    "label": "Moda y belleza"
+   },
+   {
+    "id": "hogar",
+    "label": "Hogar y decoración"
+   },
+   {
+    "id": "salones_motor",
+    "label": "Salones del motor"
+   },
+   {
+    "id": "profesionales",
+    "label": "Ferias profesionales abiertas"
+   }
+  ]
+ },
+ {
+  "id": "familia",
+  "name": "Familia",
+  "items": [
+   {
+    "id": "infantil",
+    "label": "Actividades infantiles"
+   },
+   {
+    "id": "cuentacuentos",
+    "label": "Cuentacuentos"
+   },
+   {
+    "id": "titeres",
+    "label": "Títeres y marionetas"
+   },
+   {
+    "id": "talleres_familia",
+    "label": "Talleres en familia"
+   },
+   {
+    "id": "jovenes",
+    "label": "Planes para adolescentes"
+   }
+  ]
+ },
+ {
+  "id": "comunidad",
+  "name": "Comunidad y causas",
+  "items": [
+   {
+    "id": "solidarios",
+    "label": "Eventos solidarios"
+   },
+   {
+    "id": "beneficos",
+    "label": "Mercadillos benéficos"
+   },
+   {
+    "id": "voluntariado",
+    "label": "Voluntariado"
+   },
+   {
+    "id": "vecinal",
+    "label": "Asociaciones de barrio"
+   },
+   {
+    "id": "mayores",
+    "label": "Para mayores"
+   },
+   {
+    "id": "accesibles",
+    "label": "Accesibles"
+   },
+   {
+    "id": "encuentros",
+    "label": "Encuentros y quedadas"
+   }
+  ]
+ }
+]
