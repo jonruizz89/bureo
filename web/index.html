@@ -432,7 +432,15 @@ function startApp(DATA, TAX, sync) {
   const STRIP = /^(calle|c\/|avenida|av\.?|avda\.?|paseo|plaza|pza\.?|glorieta|ronda|carretera|camino|travesia|costanilla|cuesta)( de(l| la| los| las)?)? /;
   const streetKey = t => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim().replace(STRIP, '').replace(/^(de|del|la|el) /, '');
   const lineKey = t => { const m = String(t || '').toUpperCase().replace(/LÍNEA|LINEA/g, 'L').replace(/\s+/g, '').match(/^(L|ML|C|R|N)?(\d{0,3}[A-Z]?)$/); return m ? (m[1] || '') + m[2] : null; };
-  const lineMine = l => { const k = lineKey(l); if (!k) return false; return streets.some(m => { const q = lineKey(m); return q && (q === k || ('L' + q) === k || q === k.replace(/^L/, '')); }); };
+  const lineMine = (l, kind) => {
+    const k = lineKey(l); if (!k) return false;
+    return streets.some(m => {
+      const q = lineKey(m); if (!q) return false;
+      if (kind === 'autobus') return q === k;                 // autobús: número exacto (27, N16, C03)
+      if (kind === 'cercanias') return q === k;               // Cercanías: C5, C9…
+      return q === k || ('L' + q) === k;                      // Metro: L6 o 6
+    });
+  };
   const isMine = st => { const k = streetKey(st); return k.length >= 3 && streets.some(m => { const q = streetKey(m); return q.length >= 3 && (k.includes(q) || q.includes(k)); }); };
   const iso = d => (d.getDay() + 6) % 7 + 1;
   function activeOn(c, d) {
@@ -457,7 +465,7 @@ function startApp(DATA, TAX, sync) {
   const KORDER = { metro: 0, cercanias: 0, metro_ligero: 0, autobus: 3, evento: 0, manifestacion: 1, partido: 1, recurrente: 2, otro: 3, obras: 4 };
   function cutsOn(d) {
     return CLOSURES.map(c => ({ c, r: activeOn(c, d) })).filter(x => x.r)
-      .map(x => Object.assign(x, { mine: (x.c.streets || []).some(isMine) || (x.c.stations || []).some(isMine) || (x.c.lines || []).some(lineMine) }))
+      .map(x => Object.assign(x, { mine: (x.c.streets || []).some(isMine) || (x.c.stations || []).some(isMine) || (x.c.lines || []).some(l => lineMine(l, x.c.kind)) }))
       .sort((a, b) => (b.mine - a.mine) || (KORDER[a.c.kind] ?? 5) - (KORDER[b.c.kind] ?? 5) || String(a.r.start || '00').localeCompare(String(b.r.start || '00')));
   }
   const TRANS = ['metro', 'cercanias', 'autobus', 'metro_ligero'];
@@ -478,7 +486,7 @@ function startApp(DATA, TAX, sync) {
       <div class="when">${esc(when)}</div>
       <h3 class="title" style="padding-right:0">${esc(c.title)}</h3>
       ${c.summary ? `<p class="meta" style="margin:0">${esc(c.summary)}</p>` : ''}
-      ${(c.lines || []).length ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
+      ${(c.lines || []).length ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l, c.kind) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
       <div class="tags">${sts.slice(0, 10).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}${sts.length > 10 ? `<span class="street">y ${sts.length - 10} más</span>` : ''}</div>
       ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">Ver el aviso ${TRANS.includes(c.kind) ? 'del Consorcio de Transportes' : 'del Ayuntamiento'} ↗</a></div>` : ''}
     </article>`;

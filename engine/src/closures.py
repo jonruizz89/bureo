@@ -216,6 +216,9 @@ for title, u, src in links:
     for c in items or []:
         kind = c.get('kind') if c.get('kind') in ('evento', 'obras', 'recurrente', 'partido', 'manifestacion', 'otro',
                                                    'metro', 'cercanias', 'autobus', 'metro_ligero') else 'otro'
+        if src == 'crtm':  # el tipo lo decide la sección del Consorcio, no el motivo (obras, manifestación…)
+            kind = ('metro_ligero' if '/avisos-metro-ligero/' in u else 'metro' if '/avisos-metro/' in u else
+                    'cercanias' if '/avisos-cercanias/' in u else 'autobus')
         rows.append({'city_id': 'madrid', 'title': (c.get('title') or title)[:200], 'kind': kind,
                      'summary': c.get('summary'), 'district': c.get('district'),
                      'streets': [s for s in c.get('streets') or [] if s][:30], 'ranges': c.get('ranges') or [],
