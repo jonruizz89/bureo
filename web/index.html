@@ -51,6 +51,8 @@ button.serie.link { background: none; padding: 0; align-self: flex-start }
 .cut.mine { border-left-color: var(--accent) }
 .cut .when { font-family: var(--f-display); font-weight: 600; font-size: 15px }
 .street { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--quiet) }
+.line { font-family: var(--f-display); font-weight: 700; font-size: 12px; min-width: 28px; text-align: center; padding: 2px 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12) }
+.line.hit { outline: 2px solid var(--accent); outline-offset: 1px }
 .street.hit { background: var(--accent-soft); color: var(--accent-text); font-weight: 600 }
 .banner { display: flex; flex-direction: column; gap: 4px; background: var(--strong); color: var(--strong-ink); border-radius: 14px; padding: 14px; border: 0; text-align: left; cursor: pointer; font: inherit }
 .banner b { font-family: var(--f-display); font-size: 16px }
@@ -192,21 +194,22 @@ table.cov td.n, table.cov th.n { text-align: right }
 
   <section class="view" id="v-calle" hidden>
     <h1>Antes de salir</h1>
-    <p class="lead">Calles cortadas por carreras, procesiones, partidos, obras y peatonalizaciones, según los avisos del Ayuntamiento.</p>
+    <p class="lead">Calles cortadas y cierres de Metro, Cercanías y autobuses, según los avisos del Ayuntamiento y del Consorcio de Transportes.</p>
+    <div class="seg" role="group" aria-label="Tipo" id="ca-kinds"></div>
     <div class="seg" role="group" aria-label="Día" id="ca-days"></div>
     <div class="panel">
-      <h2 style="margin:0">Mis calles</h2>
-      <p class="note">Añade tu calle y las que usas a menudo. Te avisamos cuando algún corte las nombre.</p>
+      <h2 style="margin:0">Mis calles y líneas</h2>
+      <p class="note">Añade tu calle, las que usas a menudo, tus líneas (L6, C5, 27…) o estaciones. Te avisamos cuando algún aviso las nombre.</p>
       <form id="ca-form" class="seg">
         <label for="ca-street" class="sr">Calle</label>
-        <input class="search" id="ca-street" placeholder="Ej.: Castellana, Serrano, Arturo Soria" style="flex:1;min-width:180px" autocomplete="off">
+        <input class="search" id="ca-street" placeholder="Ej.: Castellana, L6, Sol, C5" style="flex:1;min-width:180px" autocomplete="off">
         <button class="btn" type="submit">Añadir</button>
       </form>
       <div class="seg" id="ca-mine"></div>
     </div>
     <p class="note" id="ca-count"></p>
     <div id="ca-list" class="view"></div>
-    <p class="note">Fuente: avisos de "Principales incidencias en la ciudad" del Ayuntamiento de Madrid, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
+    <p class="note">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
   </section>
 
   <section class="view" id="v-unicos" hidden>
@@ -322,7 +325,7 @@ function startApp(DATA, TAX, sync) {
   let saved = store.get('saved', []);
   let streets = store.get('streets', []);
   const CLOSURES = DATA.closures || [];
-  let state = { caDay: null, filter: null, tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
+  let state = { caKind: 'todo', caDay: null, filter: null, tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
 
   // ---------- fechas
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -428,6 +431,8 @@ function startApp(DATA, TAX, sync) {
   // ---------- cortes de calle
   const STRIP = /^(calle|c\/|avenida|av\.?|avda\.?|paseo|plaza|pza\.?|glorieta|ronda|carretera|camino|travesia|costanilla|cuesta)( de(l| la| los| las)?)? /;
   const streetKey = t => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim().replace(STRIP, '').replace(/^(de|del|la|el) /, '');
+  const lineKey = t => { const m = String(t || '').toUpperCase().replace(/LÍNEA|LINEA/g, 'L').replace(/\s+/g, '').match(/^(L|ML|C|R|N)?(\d{0,3}[A-Z]?)$/); return m ? (m[1] || '') + m[2] : null; };
+  const lineMine = l => { const k = lineKey(l); if (!k) return false; return streets.some(m => { const q = lineKey(m); return q && (q === k || ('L' + q) === k || q === k.replace(/^L/, '')); }); };
   const isMine = st => { const k = streetKey(st); return k.length >= 3 && streets.some(m => { const q = streetKey(m); return q.length >= 3 && (k.includes(q) || q.includes(k)); }); };
   const iso = d => (d.getDay() + 6) % 7 + 1;
   function activeOn(c, d) {
@@ -449,24 +454,33 @@ function startApp(DATA, TAX, sync) {
     if (+sun > +addDays(today, 1)) out.push({ id: 'dom', label: 'Domingo ' + sun.getDate(), d: sun });
     return out;
   }
-  const KORDER = { evento: 0, manifestacion: 1, partido: 1, recurrente: 2, otro: 3, obras: 4 };
+  const KORDER = { metro: 0, cercanias: 0, metro_ligero: 0, autobus: 3, evento: 0, manifestacion: 1, partido: 1, recurrente: 2, otro: 3, obras: 4 };
   function cutsOn(d) {
     return CLOSURES.map(c => ({ c, r: activeOn(c, d) })).filter(x => x.r)
-      .map(x => Object.assign(x, { mine: (x.c.streets || []).some(isMine) }))
+      .map(x => Object.assign(x, { mine: (x.c.streets || []).some(isMine) || (x.c.stations || []).some(isMine) || (x.c.lines || []).some(lineMine) }))
       .sort((a, b) => (b.mine - a.mine) || (KORDER[a.c.kind] ?? 5) - (KORDER[b.c.kind] ?? 5) || String(a.r.start || '00').localeCompare(String(b.r.start || '00')));
   }
-  const KIND = { evento: 'Evento', obras: 'Obras', recurrente: 'Fin de semana', partido: 'Partido', manifestacion: 'Manifestación', otro: 'Aviso' };
+  const TRANS = ['metro', 'cercanias', 'autobus', 'metro_ligero'];
+  const KIND = { metro: 'Metro', cercanias: 'Cercanías', autobus: 'Autobús EMT', metro_ligero: 'Metro Ligero', evento: 'Evento', obras: 'Obras', recurrente: 'Fin de semana', partido: 'Partido', manifestacion: 'Manifestación', otro: 'Aviso' };
+  const METRO = { L1: '#30A3DC', L2: '#E0292F', L3: '#FFE114', L4: '#814109', L5: '#96BF0D', L6: '#9A9999', L7: '#FA9F35', L8: '#F373B7', L9: '#990D66', L10: '#1B0C80', L11: '#136926', L12: '#999933', R: '#FFFFFF' };
+  function lineStyle(l, kind) {
+    const k = lineKey(l) || '';
+    const bg = METRO[k] || (k.startsWith('C') ? '#E5211B' : k.startsWith('ML') ? '#3A86C8' : '#1E5BA8');
+    const light = ['#FFE114', '#96BF0D', '#FA9F35', '#FFFFFF', '#F373B7'].includes(bg);
+    return `background:${bg};color:${light ? '#12182B' : '#FFFFFF'}`;
+  }
   function cutCard(x) {
     const c = x.c, r = x.r;
     const when = r.start ? `${r.start}${r.end ? '–' + r.end : ''}` : 'Todo el día';
     const sts = (c.streets || []).slice().sort((a, b) => isMine(b) - isMine(a));
     return `<article class="card cut ${x.mine ? 'mine' : ''}">
-      <div class="tags"><span class="tag ${x.mine ? 'uni' : ''}">${x.mine ? 'Afecta a tus calles' : esc(KIND[c.kind] || 'Aviso')}</span>${c.district ? `<span class="tag">${esc(c.district)}</span>` : ''}</div>
+      <div class="tags"><span class="tag ${x.mine ? 'uni' : ''}">${x.mine ? 'Te afecta' : esc(KIND[c.kind] || 'Aviso')}</span>${x.mine ? `<span class="tag">${esc(KIND[c.kind] || 'Aviso')}</span>` : ''}${c.district ? `<span class="tag">${esc(c.district)}</span>` : ''}</div>
       <div class="when">${esc(when)}</div>
       <h3 class="title" style="padding-right:0">${esc(c.title)}</h3>
       ${c.summary ? `<p class="meta" style="margin:0">${esc(c.summary)}</p>` : ''}
+      ${(c.lines || []).length ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
       <div class="tags">${sts.slice(0, 10).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}${sts.length > 10 ? `<span class="street">y ${sts.length - 10} más</span>` : ''}</div>
-      ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">Ver el aviso del Ayuntamiento ↗</a></div>` : ''}
+      ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">Ver el aviso ${TRANS.includes(c.kind) ? 'del Consorcio de Transportes' : 'del Ayuntamiento'} ↗</a></div>` : ''}
     </article>`;
   }
   function renderCalle() {
@@ -474,9 +488,11 @@ function startApp(DATA, TAX, sync) {
     if (!state.caDay || !days.some(x => x.id === state.caDay)) state.caDay = 'hoy';
     $('ca-days').innerHTML = days.map(x => `<button class="pill" data-caday="${x.id}" aria-pressed="${x.id === state.caDay}">${esc(x.label)}</button>`).join('');
     const d = days.find(x => x.id === state.caDay).d;
-    const list = cutsOn(d);
+    const kinds = [['todo', 'Todo'], ['calles', 'Calles'], ['transporte', 'Metro, tren y bus']];
+    $('ca-kinds').innerHTML = kinds.map(k => `<button class="pill" data-cakind="${k[0]}" aria-pressed="${state.caKind === k[0]}">${k[1]}</button>`).join('');
+    const list = cutsOn(d).filter(x => state.caKind === 'todo' || (state.caKind === 'transporte') === TRANS.includes(x.c.kind));
     const mine = list.filter(x => x.mine).length;
-    $('ca-count').textContent = list.length ? `${list.length} cortes ${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}` + (streets.length ? ` · ${mine} en tus calles` : '') : '';
+    $('ca-count').textContent = list.length ? `${list.length} avisos ${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}` + (streets.length ? ` · ${mine} te afectan` : '') : '';
     $('ca-list').innerHTML = list.map(cutCard).join('') || '<div class="empty">No hay cortes anunciados para ese día.</div>';
     $('ca-mine').innerHTML = streets.map((st, i) => `<button class="filterchip" data-rmstreet="${i}" aria-label="Quitar ${esc(st)}">${esc(st)} <span aria-hidden="true">✕</span></button>`).join('') || '<span class="note">Aún no has añadido ninguna.</span>';
   }
@@ -484,7 +500,7 @@ function startApp(DATA, TAX, sync) {
     if (!streets.length) return '';
     for (const x of caDays()) {
       const n = cutsOn(x.d).filter(y => y.mine).length;
-      if (n) return `<button class="banner" data-goto="calle" data-caday-go="${x.id}"><b>${x.label}: ${n} ${n === 1 ? 'corte' : 'cortes'} en tus calles</b><span>Toca para ver qué calles y a qué horas.</span></button>`;
+      if (n) return `<button class="banner" data-goto="calle" data-caday-go="${x.id}"><b>${x.label}: ${n} ${n === 1 ? 'aviso' : 'avisos'} en tus calles o líneas</b><span>Toca para ver qué calles y a qué horas.</span></button>`;
     }
     return '';
   }
@@ -643,6 +659,8 @@ function startApp(DATA, TAX, sync) {
   $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
   $('in-clear').addEventListener('click', () => { prefs = {}; store.set('prefs', prefs); renderIntereses(); });
   document.addEventListener('click', ev => {
+    const ck = ev.target.closest('[data-cakind]');
+    if (ck) { state.caKind = ck.dataset.cakind; renderCalle(); return; }
     const cd = ev.target.closest('[data-caday]');
     if (cd) { state.caDay = cd.dataset.caday; renderCalle(); return; }
     const cg = ev.target.closest('[data-caday-go]');

@@ -56,7 +56,7 @@
   }
 
   async function loadClosures() {
-    const r = await sb.from('closures').select('title,kind,summary,streets,district,ranges,source_url').eq('city_id', C.city);
+    const r = await sb.from('closures').select('title,kind,summary,streets,lines,stations,district,ranges,source_url,source_name').eq('city_id', C.city);
     if (r.error) { console.warn('cortes', r.error); return []; }
     return r.data;
   }

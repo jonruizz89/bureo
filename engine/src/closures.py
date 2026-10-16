@@ -69,10 +69,15 @@ TOOL = {
     'name': 'guardar_cortes',
     'description': 'Guarda los cortes de calle descritos en el aviso.',
     'input_schema': {'type': 'object', 'required': ['cortes'], 'properties': {'cortes': {'type': 'array', 'items': {
-        'type': 'object', 'required': ['title', 'kind', 'streets', 'ranges', 'summary'],
+        'type': 'object', 'required': ['title', 'kind', 'streets', 'lines', 'stations', 'ranges', 'summary'],
         'properties': {
             'title': {'type': 'string', 'description': 'Título corto del motivo, p. ej. "Carrera de la Ciencia"'},
-            'kind': {'type': 'string', 'enum': ['evento', 'obras', 'recurrente', 'partido', 'manifestacion', 'otro']},
+            'kind': {'type': 'string', 'enum': ['evento', 'obras', 'recurrente', 'partido', 'manifestacion', 'otro',
+                                                'metro', 'cercanias', 'autobus', 'metro_ligero'],
+                     'description': 'metro/cercanias/autobus/metro_ligero para cierres o desvíos de transporte público'},
+            'lines': {'type': 'array', 'items': {'type': 'string'},
+                      'description': 'Líneas afectadas con su forma corta: "L6", "L10", "R", "C9", "ML1", o el número de autobús EMT ("27", "N16")'},
+            'stations': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Estaciones cerradas o sin parada (p. ej. "Sol")'},
             'summary': {'type': 'string', 'description': 'Una o dos frases en castellano para el usuario: qué se corta y cuándo'},
             'district': {'type': ['string', 'null']},
             'streets': {'type': 'array', 'items': {'type': 'string'},
@@ -87,14 +92,18 @@ TOOL = {
                 'end': {'type': ['string', 'null']}}}}}}}}}}
 
 SPENT = {'in': 0, 'out': 0}
-PROMPT_VERSION = 'v2'  # cambiarlo vuelve a extraer todos los avisos
+URLNOW = ['']
+PROMPT_VERSION = 'v3'  # cambiarlo vuelve a extraer todos los avisos
 
 
 def extract(title, text):
     today = dt.date.today()
     system = (f"Hoy es {today.isoformat()} ({['lunes','martes','miércoles','jueves','viernes','sábado','domingo'][today.weekday()]}). "
-              "Lees avisos oficiales de cortes de tráfico del Ayuntamiento de Madrid y los conviertes en datos para una app que avisa "
-              "a la gente de qué calles estarán cortadas. Reglas: un elemento por motivo y franja coherente; si el aviso tiene varias "
+              "Lees avisos oficiales de cortes de tráfico del Ayuntamiento de Madrid y avisos de servicio del Consorcio de Transportes "
+              "(Metro, Cercanías, EMT, Metro Ligero) y los conviertes en datos para una app que avisa a la gente de qué calles, líneas y "
+              "estaciones estarán cortadas. Para avisos de transporte, rellena lines y stations y deja streets solo si el aviso nombra calles. "
+              "La fecha que aparece al principio de la dirección del aviso (DD_MM_AAAA) suele ser la de inicio. Si un cierre de transporte "
+              "no tiene fecha de fin, usa to=hoy+14 días y di en el resumen que es hasta nuevo aviso. Reglas: un elemento por motivo y franja coherente; si el aviso tiene varias "
               "fases o días con horarios distintos, usa varios rangos. Para cortes recurrentes sin fecha de fin (peatonalizaciones de "
               "fin de semana), usa from=hoy y to=hoy+90 días con weekdays. Para obras de larga duración sin fechas claras, from=hoy y "
               "to=hoy+60 días. Si un corte va de un día a otro (p. ej. desde el viernes a las 23 h hasta el lunes a las 6 h), añade "
@@ -103,7 +112,7 @@ def extract(title, text):
               "estén en el texto. Si el aviso no describe ningún corte concreto, devuelve una lista vacía.")
     body = {'model': MODEL, 'max_tokens': 4000, 'system': system,
             'tools': [TOOL], 'tool_choice': {'type': 'tool', 'name': 'guardar_cortes'},
-            'messages': [{'role': 'user', 'content': f'Aviso: {title}\n\n{text}'}]}
+            'messages': [{'role': 'user', 'content': f'Aviso: {title}\nDirección: {URLNOW[0]}\n\n{text}'}]}
     for attempt in range(3):
         if (SPENT['in'] * 0.10 + SPENT['out'] * 0.50) / 1e6 >= MAX_USD:
             raise RuntimeError('tope de gasto alcanzado')
@@ -125,11 +134,45 @@ def extract(title, text):
     return None
 
 
+CRTM = 'https://www.crtm.es'
+CRTM_INDEX = CRTM + '/comunicacion/actualidad-del-servicio/avisos/?lang=es'
+CRTM_KEEP = ('avisos-metro', 'avisos-cercanias', 'avisos-emt', 'avisos-metro-ligero', 'informacion-actualizada')
+
+
+def crtm_text(page, title):
+    t = re.sub(r'<script.*?</script>|<style.*?</style>', ' ', page, flags=re.S | re.I)
+    t = re.sub(r'<(br|/p|/li|/tr|/h\d)[^>]*>', '\n', t, flags=re.I)
+    t = html.unescape(re.sub(r'<[^>]+>', ' ', t))
+    t = re.sub(r'[ \t]+', ' ', t)
+    i = t.rfind(title)
+    t = t[i:] if i >= 0 else t
+    m = re.search(r'Vo?lver a\s+Avisos|No se han encontrado ficheros|© CRTM', t)
+    if m:
+        t = t[:m.start()]
+    t = t.replace('-->', ' ')
+    return re.sub(r'\n\s*\n+', '\n', t).strip()[:6000]
+
+
+def crtm_links():
+    page = get(CRTM_INDEX)
+    if not page:
+        return None
+    out, seen = [], set()
+    for u, t in re.findall(r'<a[^>]+href="(/comunicacion/actualidad-del-servicio/avisos/[^"]+)"[^>]*>(.*?)</a>', page, re.S):
+        t = re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', t))).strip()
+        u = html.unescape(u)
+        if not t or t == 'Ver más' or u in seen or not any('/' + k + '/' in u for k in CRTM_KEEP):
+            continue
+        seen.add(u)
+        out.append((t, CRTM + u, 'crtm'))
+    return out
+
+
 cache = json.load(open(CACHE)) if os.path.exists(CACHE) else {}
 index = get(INDEX)
 if not index:
     print('aviso: no se pudo leer el índice de incidencias; se reutiliza lo anterior')
-    links = [(v['title'], u) for u, v in cache.items()]
+    links = [(v['title'], u, v.get('src', 'ayto')) for u, v in cache.items() if v.get('src', 'ayto') == 'ayto']
 else:
     links, seen = [], set()
     for u, t in re.findall(r'<a[^>]+href="([^"]*vgnextoid=[^"]*)"[^>]*>\s*([^<]{15,200})</a>', index):
@@ -140,13 +183,22 @@ else:
             continue
         if re.search(r'corte|incidencia|plan de movilidad|manifestaci', t, re.I):
             seen.add(t)
-            links.append((t, u))
-print(len(links), 'avisos')
+            links.append((t, u, 'ayto'))
+cl = crtm_links()
+if cl is None:
+    print('aviso: no se pudo leer el Consorcio de Transportes; se reutiliza lo anterior')
+    cl = [(v['title'], u, 'crtm') for u, v in cache.items() if v.get('src') == 'crtm']
+links += cl
+print(len(links), 'avisos', f'({len(cl)} de transporte)')
 
 new_cache, rows = {}, []
-for title, u in links:
-    page = get(u) if index else None
-    text = main_text(page) if page else (cache.get(u) or {}).get('text', '')
+for title, u, src in links:
+    URLNOW[0] = u
+    fresh = get(u) if (index if src == 'ayto' else cl) else None
+    if fresh:
+        text = main_text(fresh) if src == 'ayto' else crtm_text(fresh, title)
+    else:
+        text = (cache.get(u) or {}).get('text', '')
     h = hashlib.md5((PROMPT_VERSION + text).encode()).hexdigest()
     prev = cache.get(u)
     if prev and prev.get('hash') == h and prev.get('items') is not None:
@@ -160,13 +212,17 @@ for title, u in links:
         print(f'  IA: {title[:70]} → {len(items or [])} cortes')
     else:
         items = (prev or {}).get('items')
-    new_cache[u] = {'title': title, 'text': text, 'hash': h, 'items': items}
+    new_cache[u] = {'title': title, 'text': text, 'hash': h, 'items': items, 'src': src}
     for c in items or []:
-        kind = c.get('kind') if c.get('kind') in ('evento', 'obras', 'recurrente', 'partido', 'manifestacion', 'otro') else 'otro'
+        kind = c.get('kind') if c.get('kind') in ('evento', 'obras', 'recurrente', 'partido', 'manifestacion', 'otro',
+                                                   'metro', 'cercanias', 'autobus', 'metro_ligero') else 'otro'
         rows.append({'city_id': 'madrid', 'title': (c.get('title') or title)[:200], 'kind': kind,
                      'summary': c.get('summary'), 'district': c.get('district'),
                      'streets': [s for s in c.get('streets') or [] if s][:30], 'ranges': c.get('ranges') or [],
-                     'source_url': u, 'source_name': 'Ayuntamiento de Madrid · ' + title[:120]})
+                     'lines': [str(x).strip()[:20] for x in c.get('lines') or [] if str(x).strip()][:20],
+                     'stations': [str(x).strip()[:80] for x in c.get('stations') or [] if str(x).strip()][:30],
+                     'source_url': u,
+                     'source_name': ('Consorcio de Transportes · ' if src == 'crtm' else 'Ayuntamiento de Madrid · ') + title[:120]})
 json.dump(new_cache, open(CACHE, 'w'), ensure_ascii=False)
 
 # solo los que siguen vigentes
