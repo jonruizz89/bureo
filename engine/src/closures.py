@@ -57,9 +57,12 @@ def sb(method, path, body=None, prefer=None):
         req.add_header(k, v)
     if prefer:
         req.add_header('Prefer', prefer)
-    with urllib.request.urlopen(req, timeout=120) as r:
-        t = r.read().decode()
-        return json.loads(t) if t else None
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            t = r.read().decode()
+            return json.loads(t) if t else None
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f'Supabase {method} {path}: {e.code} {e.read().decode()[:400]}')
 
 
 TOOL = {
@@ -156,7 +159,8 @@ for title, u in links:
         items = (prev or {}).get('items')
     new_cache[u] = {'title': title, 'text': text, 'hash': h, 'items': items}
     for c in items or []:
-        rows.append({'city_id': 'madrid', 'title': c.get('title') or title, 'kind': c.get('kind') or 'otro',
+        kind = c.get('kind') if c.get('kind') in ('evento', 'obras', 'recurrente', 'partido', 'manifestacion', 'otro') else 'otro'
+        rows.append({'city_id': 'madrid', 'title': (c.get('title') or title)[:200], 'kind': kind,
                      'summary': c.get('summary'), 'district': c.get('district'),
                      'streets': [s for s in c.get('streets') or [] if s][:30], 'ranges': c.get('ranges') or [],
                      'source_url': u, 'source_name': 'Ayuntamiento de Madrid · ' + title[:120]})

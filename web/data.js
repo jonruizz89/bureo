@@ -55,6 +55,12 @@
     })).map((e) => { if (!e.sesiones.length) e.sesiones = [e.inicio]; return e; });
   }
 
+  async function loadClosures() {
+    const r = await sb.from('closures').select('title,kind,summary,streets,district,ranges,source_url').eq('city_id', C.city);
+    if (r.error) { console.warn('cortes', r.error); return []; }
+    return r.data;
+  }
+
   async function loadSources() {
     const r = await sb.from('sources').select('name,url,method,license,last_run_at').eq('city_id', C.city).order('id');
     if (r.error) throw r.error;
@@ -80,12 +86,14 @@
       if (ids.length) del = del.not('event_id', 'in', '(' + ids.join(',') + ')');
       await del;
       if (ids.length) await sb.from('saved_events').upsert(ids.map((id) => ({ user_id: uid, event_id: id })), { ignoreDuplicates: true });
+    } else if (k === 'streets') {
+      await sb.from('profiles').update({ my_streets: v }).eq('id', uid);
     } else if (k === 'opts') {
       await sb.from('profiles').update({ with_kids: !!v.ninos, with_dog: !!v.perro }).eq('id', uid);
     }
   }
   function sync(k, v) {
-    if (!user || !['prefs', 'saved', 'opts'].includes(k)) return;
+    if (!user || !['prefs', 'saved', 'opts', 'streets'].includes(k)) return;
     clearTimeout(timers[k]);
     timers[k] = setTimeout(() => pushKey(k, v).catch((e) => console.warn('sync', k, e)), 400);
   }
@@ -95,18 +103,19 @@
     const [i, s, p] = await Promise.all([
       sb.from('user_interests').select('category_id,value').eq('user_id', uid),
       sb.from('saved_events').select('event_id').eq('user_id', uid),
-      sb.from('profiles').select('with_kids,with_dog').eq('id', uid).maybeSingle()
+      sb.from('profiles').select('with_kids,with_dog,my_streets').eq('id', uid).maybeSingle()
     ]);
     const remote = {
       prefs: Object.fromEntries((i.data || []).map((r) => [r.category_id, r.value])),
       saved: (s.data || []).map((r) => 'e' + r.event_id),
-      opts: { ninos: !!(p.data && p.data.with_kids), perro: !!(p.data && p.data.with_dog) }
+      opts: { ninos: !!(p.data && p.data.with_kids), perro: !!(p.data && p.data.with_dog) },
+      streets: (p.data && p.data.my_streets) || []
     };
     const local = app.get();
-    const remoteEmpty = !Object.keys(remote.prefs).length && !remote.saved.length;
+    const remoteEmpty = !Object.keys(remote.prefs).length && !remote.saved.length && !remote.streets.length;
     if (remoteEmpty && (Object.keys(local.prefs).length || local.saved.length)) {
       // primera vez en este dispositivo con cuenta nueva: subimos lo que ya tenías
-      await pushKey('prefs', local.prefs); await pushKey('saved', local.saved); await pushKey('opts', local.opts);
+      await pushKey('prefs', local.prefs); await pushKey('saved', local.saved); await pushKey('opts', local.opts); await pushKey('streets', local.streets || []);
     } else {
       app.set(remote);
     }
@@ -140,7 +149,7 @@
   window.bootBureo = async function (startApp) {
     $('pt-h').textContent = 'Cargando planes…';
     try {
-      const [tax, evs, srcs] = await Promise.all([loadTaxonomy(), loadEvents(), loadSources()]);
+      const [tax, evs, srcs, cuts] = await Promise.all([loadTaxonomy(), loadEvents(), loadSources(), loadClosures()]);
       const last = srcs.map((s) => s.last_run_at).filter(Boolean).sort().pop();
       const meta = {
         eventos: evs.length,
@@ -149,7 +158,7 @@
         sin_categoria: evs.filter((e) => !e.cats.length || (e.cats.length === 1 && e.cats[0] === 'sin_categoria')).length,
         generado: last ? new Date(last).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' }) : 'sin datos'
       };
-      app = startApp({ eventos: evs, meta }, tax, sync);
+      app = startApp({ eventos: evs, meta, closures: cuts }, tax, sync);
       wireAccount();
     } catch (e) {
       console.error(e);

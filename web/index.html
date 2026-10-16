@@ -47,6 +47,13 @@ button.link { border: 0; font: inherit; cursor: pointer; text-align: left }
 button.tag.link { font-size: 11.5px; font-weight: 600; font-family: var(--f-body) }
 button.tag.link:hover { outline: 1px solid currentColor }
 button.serie.link { background: none; padding: 0; align-self: flex-start }
+.cut { border-left: 4px solid var(--line) }
+.cut.mine { border-left-color: var(--accent) }
+.cut .when { font-family: var(--f-display); font-weight: 600; font-size: 15px }
+.street { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--quiet) }
+.street.hit { background: var(--accent-soft); color: var(--accent-text); font-weight: 600 }
+.banner { display: flex; flex-direction: column; gap: 4px; background: var(--strong); color: var(--strong-ink); border-radius: 14px; padding: 14px; border: 0; text-align: left; cursor: pointer; font: inherit }
+.banner b { font-family: var(--f-display); font-size: 16px }
 .filterchip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--strong); color: var(--strong-ink); font-size: 13.5px; border: 0; cursor: pointer }
 .serie { font-size: 12.5px; font-weight: 600; color: var(--accent-text) }
 .tag.tema { background: var(--accent-soft); color: var(--accent-text) }
@@ -133,6 +140,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <input class="search" id="q-global" type="search" placeholder="Buscar evento, lugar, persona o tema" autocomplete="off">
     <nav class="tabs" role="tablist" aria-label="Secciones">
       <button role="tab" id="t-parati" aria-selected="true">Para ti</button>
+      <button role="tab" id="t-calle" aria-selected="false">Calle<span class="n" id="n-calle"></span></button>
       <button role="tab" id="t-unicos" aria-selected="false">Únicos<span class="n" id="n-unicos"></span></button>
       <button role="tab" id="t-explorar" aria-selected="false">Explorar</button>
       <button role="tab" id="t-agenda" aria-selected="false">Agenda<span class="n" id="n-agenda"></span></button>
@@ -156,6 +164,25 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div id="pt-list" class="view"></div>
     <button class="btn ghost" id="pt-more" hidden>Ver más</button>
+  </section>
+
+  <section class="view" id="v-calle" hidden>
+    <h1>Antes de salir</h1>
+    <p class="lead">Calles cortadas por carreras, procesiones, partidos, obras y peatonalizaciones, según los avisos del Ayuntamiento.</p>
+    <div class="seg" role="group" aria-label="Día" id="ca-days"></div>
+    <div class="panel">
+      <h2 style="margin:0">Mis calles</h2>
+      <p class="note">Añade tu calle y las que usas a menudo. Te avisamos cuando algún corte las nombre.</p>
+      <form id="ca-form" class="seg">
+        <label for="ca-street" class="sr">Calle</label>
+        <input class="search" id="ca-street" placeholder="Ej.: Castellana, Serrano, Arturo Soria" style="flex:1;min-width:180px" autocomplete="off">
+        <button class="btn" type="submit">Añadir</button>
+      </form>
+      <div class="seg" id="ca-mine"></div>
+    </div>
+    <p class="note" id="ca-count"></p>
+    <div id="ca-list" class="view"></div>
+    <p class="note">Fuente: avisos de "Principales incidencias en la ciudad" del Ayuntamiento de Madrid, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
   </section>
 
   <section class="view" id="v-unicos" hidden>
@@ -254,7 +281,9 @@ function startApp(DATA, TAX, sync) {
   let prefs = store.get('prefs', null) || {};
   let opts = store.get('opts', { ninos: false, perro: false });
   let saved = store.get('saved', []);
-  let state = { filter: null, tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
+  let streets = store.get('streets', []);
+  const CLOSURES = DATA.closures || [];
+  let state = { caDay: null, filter: null, tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
 
   // ---------- fechas
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -356,6 +385,70 @@ function startApp(DATA, TAX, sync) {
     </article>`;
   }
 
+
+  // ---------- cortes de calle
+  const STRIP = /^(calle|c\/|avenida|av\.?|avda\.?|paseo|plaza|pza\.?|glorieta|ronda|carretera|camino|travesia|costanilla|cuesta)( de(l| la| los| las)?)? /;
+  const streetKey = t => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim().replace(STRIP, '').replace(/^(de|del|la|el) /, '');
+  const isMine = st => { const k = streetKey(st); return k.length >= 3 && streets.some(m => { const q = streetKey(m); return q.length >= 3 && (k.includes(q) || q.includes(k)); }); };
+  const iso = d => (d.getDay() + 6) % 7 + 1;
+  function activeOn(c, d) {
+    const ds = ymd(d);
+    for (const r of c.ranges || []) {
+      if (!r.from || !r.to || ds < r.from || ds > r.to) continue;
+      if (r.weekdays && r.weekdays.length && !r.weekdays.includes(iso(d))) continue;
+      if (r.last_sunday && !(iso(d) === 7 && addDays(d, 7).getMonth() !== d.getMonth())) continue;
+      return r;
+    }
+    return null;
+  }
+  function caDays() {
+    const out = [{ id: 'hoy', label: 'Hoy', d: today }, { id: 'manana', label: 'Mañana', d: addDays(today, 1) }];
+    const dow = iso(today);
+    const sat = dow <= 6 ? addDays(today, 6 - dow) : addDays(today, 6);
+    const sun = dow === 7 ? today : addDays(today, 7 - dow);
+    if (+sat > +addDays(today, 1)) out.push({ id: 'sab', label: 'Sábado ' + sat.getDate(), d: sat });
+    if (+sun > +addDays(today, 1)) out.push({ id: 'dom', label: 'Domingo ' + sun.getDate(), d: sun });
+    return out;
+  }
+  function cutsOn(d) {
+    return CLOSURES.map(c => ({ c, r: activeOn(c, d) })).filter(x => x.r)
+      .map(x => Object.assign(x, { mine: (x.c.streets || []).some(isMine) }))
+      .sort((a, b) => (b.mine - a.mine) || String(a.r.start || '00').localeCompare(String(b.r.start || '00')));
+  }
+  const KIND = { evento: 'Evento', obras: 'Obras', recurrente: 'Fin de semana', partido: 'Partido', manifestacion: 'Manifestación', otro: 'Aviso' };
+  function cutCard(x) {
+    const c = x.c, r = x.r;
+    const when = r.start ? `${r.start}${r.end ? '–' + r.end : ''}` : 'Todo el día';
+    const sts = (c.streets || []).slice().sort((a, b) => isMine(b) - isMine(a));
+    return `<article class="card cut ${x.mine ? 'mine' : ''}">
+      <div class="tags"><span class="tag ${x.mine ? 'uni' : ''}">${x.mine ? 'Afecta a tus calles' : esc(KIND[c.kind] || 'Aviso')}</span>${c.district ? `<span class="tag">${esc(c.district)}</span>` : ''}</div>
+      <div class="when">${esc(when)}</div>
+      <h3 class="title" style="padding-right:0">${esc(c.title)}</h3>
+      ${c.summary ? `<p class="meta" style="margin:0">${esc(c.summary)}</p>` : ''}
+      <div class="tags">${sts.slice(0, 10).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}${sts.length > 10 ? `<span class="street">y ${sts.length - 10} más</span>` : ''}</div>
+      ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">Ver el aviso del Ayuntamiento ↗</a></div>` : ''}
+    </article>`;
+  }
+  function renderCalle() {
+    const days = caDays();
+    if (!state.caDay || !days.some(x => x.id === state.caDay)) state.caDay = days.find(x => x.id === 'dom') ? (iso(today) >= 5 ? 'sab' : 'hoy') : 'hoy';
+    $('ca-days').innerHTML = days.map(x => `<button class="pill" data-caday="${x.id}" aria-pressed="${x.id === state.caDay}">${esc(x.label)}</button>`).join('');
+    const d = days.find(x => x.id === state.caDay).d;
+    const list = cutsOn(d);
+    const mine = list.filter(x => x.mine).length;
+    $('ca-count').textContent = list.length ? `${list.length} cortes ${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}` + (streets.length ? ` · ${mine} en tus calles` : '') : '';
+    $('ca-list').innerHTML = list.map(cutCard).join('') || '<div class="empty">No hay cortes anunciados para ese día.</div>';
+    $('ca-mine').innerHTML = streets.map((st, i) => `<button class="filterchip" data-rmstreet="${i}" aria-label="Quitar ${esc(st)}">${esc(st)} <span aria-hidden="true">✕</span></button>`).join('') || '<span class="note">Aún no has añadido ninguna.</span>';
+  }
+  function streetBanner() {
+    if (!streets.length) return '';
+    for (const x of caDays()) {
+      const n = cutsOn(x.d).filter(y => y.mine).length;
+      if (n) return `<button class="banner" data-goto="calle" data-caday-go="${x.id}"><b>${x.label}: ${n} ${n === 1 ? 'corte' : 'cortes'} en tus calles</b><span>Toca para ver qué calles y a qué horas.</span></button>`;
+    }
+    return '';
+  }
+
   // ---------- vistas
   const $ = id => document.getElementById(id);
   function renderParaTi() {
@@ -372,7 +465,7 @@ function startApp(DATA, TAX, sync) {
       items.sort((x, y) => y.s - x.s || x.occ.date - y.occ.date);
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
-      $('pt-list').innerHTML = `<button class="btn" data-goto="intereses">Elegir mis intereses</button>` +
+      $('pt-list').innerHTML = streetBanner() + `<button class="btn" data-goto="intereses">Elegir mis intereses</button>` +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -395,7 +488,7 @@ function startApp(DATA, TAX, sync) {
     $('pt-lead').textContent = items.length ? `Los ${top.length} que mejor encajan con tus intereses. Toca el título para ver más.` : 'Prueba con un rango más amplio o marca más intereses.';
     const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
       (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
-    $('pt-list').innerHTML = html || '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>';
+    $('pt-list').innerHTML = streetBanner() + (html || '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
     $('pt-free').setAttribute('aria-pressed', state.free);
@@ -465,11 +558,12 @@ function startApp(DATA, TAX, sync) {
     $('stamp').textContent = 'Madrid · ' + META.eventos.toLocaleString('es-ES') + ' eventos';
     $('n-unicos').textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || '';
     renderAgenda();
-    ({ parati: renderParaTi, unicos: renderUnicos, explorar: renderExplorar, agenda: () => { }, intereses: renderIntereses, fuentes: renderFuentes })[state.tab]();
+    $('n-calle').textContent = streets.length ? (cutsOn(today).filter(x => x.mine).length || '') : '';
+    ({ parati: renderParaTi, calle: renderCalle, unicos: renderUnicos, explorar: renderExplorar, agenda: () => { }, intereses: renderIntereses, fuentes: renderFuentes })[state.tab]();
   }
 
   // ---------- eventos de interfaz
-  const tabs = ['parati', 'unicos', 'explorar', 'agenda', 'intereses', 'fuentes'];
+  const tabs = ['parati', 'calle', 'unicos', 'explorar', 'agenda', 'intereses', 'fuentes'];
   function go(t) {
     state.tab = t;
     tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === t); });
@@ -485,6 +579,12 @@ function startApp(DATA, TAX, sync) {
   $('ex-free').addEventListener('click', e => { const b = e.currentTarget; b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); state.exShown = 20; renderExplorar(); });
   $('ex-grp').innerHTML = '<option value="">Todas las categorías</option>' + TAX.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
   $('in-q').addEventListener('input', renderIntereses);
+  $('ca-form').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const v = $('ca-street').value.trim();
+    if (v && !streets.some(x => streetKey(x) === streetKey(v))) { streets = streets.concat(v); store.set('streets', streets); }
+    $('ca-street').value = ''; renderAll();
+  });
   $('q-global').addEventListener('input', () => {
     $('ex-q').value = $('q-global').value;
     if ($('q-global').value.trim()) $('ex-when').value = 'todo';
@@ -498,6 +598,12 @@ function startApp(DATA, TAX, sync) {
   $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
   $('in-clear').addEventListener('click', () => { prefs = {}; store.set('prefs', prefs); renderIntereses(); });
   document.addEventListener('click', ev => {
+    const cd = ev.target.closest('[data-caday]');
+    if (cd) { state.caDay = cd.dataset.caday; renderCalle(); return; }
+    const cg = ev.target.closest('[data-caday-go]');
+    if (cg) { state.caDay = cg.dataset.cadayGo; go('calle'); return; }
+    const rm = ev.target.closest('[data-rmstreet]');
+    if (rm) { streets = streets.filter((_, i) => i !== Number(rm.dataset.rmstreet)); store.set('streets', streets); renderAll(); return; }
     const ff = ev.target.closest('[data-f-cat], [data-f-tema], [data-f-serie]');
     if (ff) {
       const kind = ff.dataset.fCat ? 'cat' : ff.dataset.fTema ? 'tema' : 'serie';
@@ -524,8 +630,8 @@ function startApp(DATA, TAX, sync) {
   const t0 = store.get('tab', 'parati');
   go(tabs.includes(t0) ? t0 : 'parati');
   return {
-    get: () => ({ prefs, opts, saved }),
-    set(p) { if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved;
+    get: () => ({ prefs, opts, saved, streets }),
+    set(p) { if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) { streets = p.streets; store.set('streets', streets); }
       store.set('prefs', prefs); store.set('opts', opts); store.set('saved', saved); renderAll(); }
   };
 }
