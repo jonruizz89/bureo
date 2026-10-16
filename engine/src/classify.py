@@ -172,3 +172,35 @@ with cf.ThreadPoolExecutor(max_workers=int(os.environ.get('BUREO_AI_WORKERS', '2
             print('  lote fallido:', ex, flush=True)
 cost = usage['input_tokens'] / 1e6 * 0.10 + usage['cache_read_input_tokens'] / 1e6 * 0.01 + usage['output_tokens'] / 1e6 * 0.50
 print(f'Clasificados {total}. Tokens: {usage}. Coste aproximado: {cost:.3f} USD')
+
+
+# ---------- ciclos: mismo recinto + misma persona en varios eventos próximos
+# El modelo ve cada lote por separado y no puede saber que hay otras películas del mismo director en el mismo
+# centro; esto lo detecta mirando todos los eventos a la vez.
+evs, offset = [], 0
+while True:
+    page = sb('GET', f'events?select=id,title,starts_on,topics,series,venue_id,venues(name)&ends_on=gte.{today}&venue_id=not.is.null&order=id&limit=1000&offset={offset}')
+    evs += page
+    if len(page) < 1000:
+        break
+    offset += 1000
+groups = {}
+for e in evs:
+    for t in (e.get('topics') or [])[:2]:  # los primeros temas suelen ser la persona principal
+        groups.setdefault((e['venue_id'], t), []).append(e)
+ciclos = 0
+for (vid, t), g in groups.items():
+    if len(g) < 2 or len(t.split()) < 2:  # al menos dos eventos y un nombre propio de dos palabras
+        continue
+    if any(t.lower() in x['title'].lower() for x in g):  # el tema es el propio título, no una persona
+        continue
+    days = sorted(dt.date.fromisoformat(x['starts_on']) for x in g)
+    if (days[-1] - days[0]).days > 90:
+        continue
+    name = f"Ciclo {t} en {(g[0].get('venues') or {}).get('name', 'el mismo centro')}"[:160]
+    for x in g:
+        if not x.get('series'):
+            sb('PATCH', f"events?id=eq.{x['id']}", {'series': name}, 'return=minimal')
+            x['series'] = name
+            ciclos += 1
+print(f'Ciclos detectados por recinto y persona: {ciclos} eventos asignados')
