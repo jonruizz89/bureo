@@ -410,10 +410,11 @@ function startApp(DATA, TAX, sync) {
     if (+sun > +addDays(today, 1)) out.push({ id: 'dom', label: 'Domingo ' + sun.getDate(), d: sun });
     return out;
   }
+  const KORDER = { evento: 0, manifestacion: 1, partido: 1, recurrente: 2, otro: 3, obras: 4 };
   function cutsOn(d) {
     return CLOSURES.map(c => ({ c, r: activeOn(c, d) })).filter(x => x.r)
       .map(x => Object.assign(x, { mine: (x.c.streets || []).some(isMine) }))
-      .sort((a, b) => (b.mine - a.mine) || String(a.r.start || '00').localeCompare(String(b.r.start || '00')));
+      .sort((a, b) => (b.mine - a.mine) || (KORDER[a.c.kind] ?? 5) - (KORDER[b.c.kind] ?? 5) || String(a.r.start || '00').localeCompare(String(b.r.start || '00')));
   }
   const KIND = { evento: 'Evento', obras: 'Obras', recurrente: 'Fin de semana', partido: 'Partido', manifestacion: 'Manifestación', otro: 'Aviso' };
   function cutCard(x) {
@@ -431,7 +432,7 @@ function startApp(DATA, TAX, sync) {
   }
   function renderCalle() {
     const days = caDays();
-    if (!state.caDay || !days.some(x => x.id === state.caDay)) state.caDay = days.find(x => x.id === 'dom') ? (iso(today) >= 5 ? 'sab' : 'hoy') : 'hoy';
+    if (!state.caDay || !days.some(x => x.id === state.caDay)) state.caDay = 'hoy';
     $('ca-days').innerHTML = days.map(x => `<button class="pill" data-caday="${x.id}" aria-pressed="${x.id === state.caDay}">${esc(x.label)}</button>`).join('');
     const d = days.find(x => x.id === state.caDay).d;
     const list = cutsOn(d);
