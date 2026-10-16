@@ -72,6 +72,18 @@ TOOL = {
         'required': ['items']}}
 
 
+import threading
+SPENT = {'input_tokens': 0, 'output_tokens': 0, 'cache_read_input_tokens': 0, 'cache_creation_input_tokens': 0, 'calls': 0}
+LOCK = threading.Lock()
+MAX_USD = float(os.environ.get('BUREO_AI_MAX_USD', '0.50'))
+
+
+def spent_usd():
+    # Precios de Claude Haiku 5.5 (USD por millón de tokens): entrada 0,10; salida 0,50; lectura de caché 0,01; escritura 0,125
+    return (SPENT['input_tokens'] * 0.10 + SPENT['output_tokens'] * 0.50 +
+            SPENT['cache_read_input_tokens'] * 0.01 + SPENT['cache_creation_input_tokens'] * 0.125) / 1e6
+
+
 def call_model(batch):
     items = [{'id': e['id'], 'titulo': e['title'], 'lugar': (e.get('venues') or {}).get('name'),
               'fechas': f"{e['starts_on']}–{e['ends_on']}", 'precio': e.get('price_text'),
@@ -81,7 +93,9 @@ def call_model(batch):
             'system': [{'type': 'text', 'text': SYSTEM, 'cache_control': {'type': 'ephemeral'}}],
             'tools': [TOOL], 'tool_choice': {'type': 'tool', 'name': 'guardar_clasificacion'},
             'messages': [{'role': 'user', 'content': json.dumps(items, ensure_ascii=False)}]}
-    for attempt in range(8):
+    for attempt in range(3):
+        if spent_usd() >= MAX_USD:
+            raise RuntimeError(f'tope de gasto alcanzado ({MAX_USD:.2f} USD): se para para no gastar de más')
         req = urllib.request.Request('https://api.anthropic.com/v1/messages', method='POST', data=json.dumps(body).encode())
         req.add_header('x-api-key', AKEY)
         req.add_header('anthropic-version', '2023-06-01')
@@ -89,6 +103,10 @@ def call_model(batch):
         try:
             with urllib.request.urlopen(req, timeout=180) as r:
                 res = json.loads(r.read().decode())
+            with LOCK:  # se cuenta todo lo consumido, aunque luego la respuesta no sirva
+                SPENT['calls'] += 1
+                for k in ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'):
+                    SPENT[k] += (res.get('usage') or {}).get(k) or 0
             blocks = [b for b in res.get('content', []) if b.get('type') == 'tool_use']
             if not blocks:
                 raise ValueError('sin llamada a la herramienta (stop_reason=%s)' % res.get('stop_reason'))
@@ -170,8 +188,7 @@ with cf.ThreadPoolExecutor(max_workers=int(os.environ.get('BUREO_AI_WORKERS', '2
             print(f'  {total}/{len(pending)} ({time.strftime("%H:%M:%S")})', flush=True)
         except Exception as ex:
             print('  lote fallido:', ex, flush=True)
-cost = usage['input_tokens'] / 1e6 * 0.10 + usage['cache_read_input_tokens'] / 1e6 * 0.01 + usage['output_tokens'] / 1e6 * 0.50
-print(f'Clasificados {total}. Tokens: {usage}. Coste aproximado: {cost:.3f} USD')
+print(f'Clasificados {total}. Llamadas a la API: {SPENT["calls"]}. Tokens: {SPENT}. Coste real aproximado: {spent_usd():.3f} USD (tope {MAX_USD:.2f})')
 
 
 # ---------- ciclos: mismo recinto + misma persona en varios eventos próximos
