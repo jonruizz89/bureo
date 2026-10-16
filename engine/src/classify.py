@@ -179,7 +179,7 @@ print(f'Clasificados {total}. Tokens: {usage}. Coste aproximado: {cost:.3f} USD'
 # centro; esto lo detecta mirando todos los eventos a la vez.
 evs, offset = [], 0
 while True:
-    page = sb('GET', f'events?select=id,title,starts_on,topics,series,venue_id,venues(name)&ends_on=gte.{today}&venue_id=not.is.null&order=id&limit=1000&offset={offset}')
+    page = sb('GET', f'events?select=id,title,starts_on,topics,series,venue_id,venues(name),event_categories(categories(group_id))&ends_on=gte.{today}&venue_id=not.is.null&order=id&limit=1000&offset={offset}')
     evs += page
     if len(page) < 1000:
         break
@@ -194,6 +194,12 @@ for (vid, t), g in groups.items():
         continue
     if any(t.lower() in x['title'].lower() for x in g):  # el tema es el propio título, no una persona
         continue
+    venue = ((g[0].get('venues') or {}).get('name') or '').lower()
+    if t.lower() in venue or any(w in t.lower() for w in ('museo', 'teatro', 'centro', 'parque', 'biblioteca')):
+        continue  # el tema es el propio recinto
+    cultural = {'cine', 'escena', 'musica', 'letras', 'arte', 'patrimonio', 'ciencia'}
+    if not all(any((c.get('categories') or {}).get('group_id') in cultural for c in x.get('event_categories') or []) for x in g):
+        continue  # partidos de un mismo equipo no son un ciclo
     days = sorted(dt.date.fromisoformat(x['starts_on']) for x in g)
     if (days[-1] - days[0]).days > 90:
         continue
