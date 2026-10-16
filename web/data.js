@@ -23,7 +23,7 @@
   async function loadEvents() {
     const today = ymd(new Date());
     const cols = 'id,title,description,starts_on,ends_on,time_text,district,price_text,is_free,image_url,organizer_url,' +
-      'is_unique,is_featured,venues(name),event_sessions(on_date),event_categories(category_id),event_sources(url,sources(name))';
+      'is_unique,is_featured,ai_unique,topics,series,venues(name),event_sessions(on_date),event_categories(category_id),event_sources(url,sources(name))';
     const out = [];
     for (let from = 0; ; from += 1000) {
       const r = await sb.from('events').select(cols).eq('city_id', C.city).gte('ends_on', today)
@@ -45,7 +45,9 @@
       gratis: e.is_free,
       imagen: e.image_url,
       web_organizador: e.organizer_url,
-      unico: e.is_unique,
+      unico: e.is_unique || e.ai_unique,
+      temas: e.topics || [],
+      serie: e.series,
       destacado: e.is_featured,
       sesiones: (e.event_sessions || []).map((s) => s.on_date).sort(),
       cats: (e.event_categories || []).map((c) => c.category_id),

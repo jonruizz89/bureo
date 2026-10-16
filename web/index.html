@@ -40,6 +40,11 @@ button { font: inherit; color: inherit }
 header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line) }
 .top .wrap { padding-block: 12px 0; display: flex; flex-direction: column; gap: 10px }
 .brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0) }
+#q-global { height: 40px; font-size: 14.5px }
+.card { cursor: pointer }
+.serie { font-size: 12.5px; font-weight: 600; color: var(--accent-text) }
+.tag.tema { background: var(--accent-soft); color: var(--accent-text) }
 .brand b { font-family: var(--f-display); font-size: 22px; letter-spacing: -0.02em; font-weight: 700 }
 .brand span { font-size: 12.5px; color: var(--quiet); text-align: right }
 nav.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none }
@@ -119,6 +124,8 @@ table.cov td.n, table.cov th.n { text-align: right }
 <header class="top">
   <div class="wrap">
     <div class="brand"><b>bureo</b><span id="stamp"></span></div>
+    <label for="q-global" class="sr">Buscar un evento</label>
+    <input class="search" id="q-global" type="search" placeholder="Buscar evento, lugar, persona o tema" autocomplete="off">
     <nav class="tabs" role="tablist" aria-label="Secciones">
       <button role="tab" id="t-parati" aria-selected="true">Para ti</button>
       <button role="tab" id="t-unicos" aria-selected="false">Únicos<span class="n" id="n-unicos"></span></button>
@@ -154,8 +161,8 @@ table.cov td.n, table.cov th.n { text-align: right }
 
   <section class="view" id="v-explorar" hidden>
     <h1>Explorar</h1>
-    <label for="ex-q" class="note">Buscar por título, lugar o barrio</label>
-    <input class="search" id="ex-q" type="search" placeholder="Ej.: fotografía, Matadero, Usera">
+    <label for="ex-q" class="sr">Buscar</label>
+    <input class="search" id="ex-q" type="search" placeholder="Ej.: Hitchcock, Matadero, Usera" hidden>
     <div class="filters">
       <select class="search" id="ex-grp" aria-label="Grupo de categorías"></select>
       <select class="search" id="ex-when" aria-label="Fechas">
@@ -333,8 +340,9 @@ function startApp(DATA, TAX, sync) {
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
           <div class="meta">${esc(whenText(e, occ))}</div>
           <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}</div>
+          ${e.serie ? `<div class="serie">${esc(e.serie)}</div>` : ''}
         </div></div>
-      <div class="tags">${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${cats.map(c => `<span class="tag">${esc(c)}</span>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
+      <div class="tags">${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${(e.temas || []).slice(0, 2).map(t => `<span class="tag tema">${esc(t)}</span>`).join('')}${cats.map(c => `<span class="tag">${esc(c)}</span>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
       ${why}${more}
       <button class="save" data-save="${e.id}" aria-pressed="${isSaved}" aria-label="${isSaved ? 'Quitar de mi agenda' : 'Guardar en mi agenda'}">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
@@ -399,7 +407,7 @@ function startApp(DATA, TAX, sync) {
       if (free && !e.gratis) continue;
       if (g && !e.cats.some(c => groupOf(c) === g)) continue;
       const occ = occurs(e, a, b); if (!occ) continue;
-      if (q) { const h = (e.titulo + ' ' + (e.lugar || '') + ' ' + (e.distrito || '') + ' ' + e.cats.map(labelOf).join(' ')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); if (!h.includes(q)) continue; }
+      if (q) { const h = (e.titulo + ' ' + (e.lugar || '') + ' ' + (e.distrito || '') + ' ' + (e.serie || '') + ' ' + (e.temas || []).join(' ') + ' ' + e.cats.map(labelOf).join(' ') + ' ' + (e.descripcion || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); if (!h.includes(q)) continue; }
       res.push({ e, occ });
     }
     res.sort((x, y) => x.occ.date - y.occ.date);
@@ -465,6 +473,14 @@ function startApp(DATA, TAX, sync) {
   $('ex-free').addEventListener('click', e => { const b = e.currentTarget; b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); state.exShown = 20; renderExplorar(); });
   $('ex-grp').innerHTML = '<option value="">Todas las categorías</option>' + TAX.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
   $('in-q').addEventListener('input', renderIntereses);
+  $('q-global').addEventListener('input', () => {
+    $('ex-q').value = $('q-global').value;
+    if ($('q-global').value.trim()) $('ex-when').value = 'todo';
+    state.exShown = 20;
+    if (state.tab !== 'explorar') go('explorar'); else renderExplorar();
+    $('q-global').focus();
+  });
+  $('ex-q').addEventListener('input', () => { $('q-global').value = $('ex-q').value; });
   $('o-ninos').addEventListener('change', e => { opts.ninos = e.target.checked; store.set('opts', opts); });
   $('o-perro').addEventListener('change', e => { opts.perro = e.target.checked; store.set('opts', opts); });
   $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
@@ -474,7 +490,11 @@ function startApp(DATA, TAX, sync) {
     if (gt) { go(gt.dataset.goto); return; }
     const s = ev.target.closest('[data-save]');
     if (s) { const id = s.dataset.save; saved = saved.includes(id) ? saved.filter(x => x !== id) : saved.concat(id); store.set('saved', saved); renderAll(); return; }
-    const o = ev.target.closest('[data-open]');
+    let o = ev.target.closest('[data-open]');
+    if (!o) {
+      const c = ev.target.closest('.card');
+      if (c && !ev.target.closest('a, button, .more')) o = c.querySelector('[data-open]');
+    }
     if (o) { const id = o.dataset.open; state.open[id] = !state.open[id]; renderAll(); const el = document.querySelector(`[data-open="${id}"]`); if (el) el.focus(); return; }
     const g = ev.target.closest('[data-grp]');
     if (g) { state.groupsOpen[g.dataset.grp] = !state.groupsOpen[g.dataset.grp]; renderIntereses(); return; }

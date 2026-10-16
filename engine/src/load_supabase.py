@@ -82,18 +82,26 @@ for part in chunks(rows, 400):
 print('eventos', len(eid))
 
 # 3) sesiones, categorías y fuentes (se reemplazan)
+#    Las categorías de los eventos ya clasificados con IA no se tocan: las reglas solo sirven de pista inicial.
 ids = list(eid.values())
+ai_done = set()
+for part in chunks(ids, 300):
+    flt = 'id=in.(' + ','.join(map(str, part)) + ')'
+    ai_done |= {r['id'] for r in api('GET', 'events?select=id&ai_hash=not.is.null&' + flt)}
 for part in chunks(ids, 300):
     flt = 'event_id=in.(' + ','.join(map(str, part)) + ')'
     api('DELETE', 'event_sessions?' + flt)
-    api('DELETE', 'event_categories?' + flt)
+    rule = [i for i in part if i not in ai_done]
+    if rule:
+        api('DELETE', 'event_categories?event_id=in.(' + ','.join(map(str, rule)) + ')')
 sess, cats, srcs = [], [], []
 for e in evs:
     i = eid.get(e.get('_key'))
     if not i:
         continue
     sess += [{'event_id': i, 'on_date': d} for d in sorted(set(e['sesiones']))]
-    cats += [{'event_id': i, 'category_id': c} for c in dict.fromkeys(e['cats']) if c in cats_ok]
+    if i not in ai_done:
+        cats += [{'event_id': i, 'category_id': c} for c in dict.fromkeys(e['cats']) if c in cats_ok]
     for f in e['fuentes']:
         if f['nombre'] in sources:
             srcs.append({'event_id': i, 'source_id': sources[f['nombre']], 'url': f.get('url')})
