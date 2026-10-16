@@ -59,12 +59,12 @@ Responde SOLO con un array JSON, un objeto por evento, en el mismo orden: [{{"id
 def call_model(batch):
     items = [{'id': e['id'], 'titulo': e['title'], 'lugar': (e.get('venues') or {}).get('name'),
               'fechas': f"{e['starts_on']}–{e['ends_on']}", 'precio': e.get('price_text'),
-              'descripcion': (e.get('description') or '')[:600],
+              'descripcion': (e.get('description') or '')[:350],
               'pistas_de_la_fuente': [c['category_id'] for c in e.get('event_categories') or []]} for e in batch]
     body = {'model': MODEL, 'max_tokens': 4000,
             'system': [{'type': 'text', 'text': SYSTEM, 'cache_control': {'type': 'ephemeral'}}],
             'messages': [{'role': 'user', 'content': json.dumps(items, ensure_ascii=False)}]}
-    for attempt in range(5):
+    for attempt in range(8):
         req = urllib.request.Request('https://api.anthropic.com/v1/messages', method='POST', data=json.dumps(body).encode())
         req.add_header('x-api-key', AKEY)
         req.add_header('anthropic-version', '2023-06-01')
@@ -76,11 +76,15 @@ def call_model(batch):
             out = json.loads(txt[txt.index('['): txt.rindex(']') + 1])
             return out, res.get('usage', {})
         except urllib.error.HTTPError as e:
+            msg = e.read().decode()[:200]
             if e.code in (429, 500, 502, 503, 529):
-                time.sleep(5 * (attempt + 1))
+                wait = float(e.headers.get('retry-after') or 10 * (attempt + 1))
+                print(f'  API {e.code}, reintento en {wait:.0f} s: {msg}', flush=True)
+                time.sleep(wait)
                 continue
-            raise SystemExit(f'API {e.code}: {e.read().decode()[:300]}')
-        except (ValueError, json.JSONDecodeError):
+            raise RuntimeError(f'API {e.code}: {msg}')
+        except (ValueError, json.JSONDecodeError) as ex:
+            print('  respuesta no válida, reintento:', ex, flush=True)
             time.sleep(2)
     raise RuntimeError('el modelo no devolvió JSON válido')
 
@@ -134,7 +138,7 @@ def work(b):
     return save(b, res), u
 
 
-with cf.ThreadPoolExecutor(max_workers=6) as pool:
+with cf.ThreadPoolExecutor(max_workers=int(os.environ.get('BUREO_AI_WORKERS', '2'))) as pool:
     futs = {pool.submit(work, b): b for b in batches}
     for f in cf.as_completed(futs):
         try:
@@ -142,7 +146,7 @@ with cf.ThreadPoolExecutor(max_workers=6) as pool:
             total += n
             for k in usage:
                 usage[k] += u.get(k) or 0
-            print(f'  {total}/{len(pending)}', flush=True)
+            print(f'  {total}/{len(pending)} ({time.strftime("%H:%M:%S")})', flush=True)
         except Exception as ex:
             print('  lote fallido:', ex, flush=True)
 cost = usage['input_tokens'] / 1e6 * 0.10 + usage['cache_read_input_tokens'] / 1e6 * 0.01 + usage['output_tokens'] / 1e6 * 0.50
