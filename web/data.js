@@ -94,6 +94,8 @@
       if (ids.length) del = del.not('event_id', 'in', '(' + ids.join(',') + ')');
       await del;
       if (ids.length) await sb.from(table).upsert(ids.map((id) => k === 'went' ? { user_id: uid, event_id: id, went: true } : { user_id: uid, event_id: id }), { ignoreDuplicates: true });
+    } else if (k === 'taste') {
+      await sb.from('profiles').update({ taste: v }).eq('id', uid);
     } else if (k === 'learned') {
       await sb.from('profiles').update({ learned: v }).eq('id', uid);
     } else if (k === 'streets') {
@@ -103,7 +105,7 @@
     }
   }
   function sync(k, v) {
-    if (!user || !['prefs', 'saved', 'opts', 'streets', 'dismissed', 'went', 'learned'].includes(k)) return;
+    if (!user || !['prefs', 'saved', 'opts', 'streets', 'dismissed', 'went', 'learned', 'taste'].includes(k)) return;
     clearTimeout(timers[k]);
     timers[k] = setTimeout(() => pushKey(k, v).catch((e) => console.warn('sync', k, e)), 400);
   }
@@ -113,7 +115,7 @@
     const [i, s, p, d, w] = await Promise.all([
       sb.from('user_interests').select('category_id,value').eq('user_id', uid),
       sb.from('saved_events').select('event_id').eq('user_id', uid),
-      sb.from('profiles').select('with_kids,with_dog,my_streets,learned').eq('id', uid).maybeSingle(),
+      sb.from('profiles').select('with_kids,with_dog,my_streets,learned,taste,taste_text').eq('id', uid).maybeSingle(),
       sb.from('dismissed_events').select('event_id').eq('user_id', uid),
       sb.from('attendance').select('event_id').eq('user_id', uid).eq('went', true)
     ]);
@@ -124,7 +126,9 @@
       streets: (p.data && p.data.my_streets) || [],
       dismissed: (d.data || []).map((r) => 'e' + r.event_id),
       went: (w.data || []).map((r) => 'e' + r.event_id),
-      learned: (p.data && p.data.learned) || {}
+      learned: (p.data && p.data.learned) || {},
+      taste: (p.data && p.data.taste) || null,
+      taste_text: (p.data && p.data.taste_text) || ''
     };
     const local = app.get();
     const remoteEmpty = !Object.keys(remote.prefs).length && !remote.saved.length && !remote.streets.length && !remote.dismissed.length && !Object.keys(remote.learned).length;
@@ -135,6 +139,7 @@
     } else {
       app.set(remote);
     }
+    if (remote.taste || remote.taste_text) app.set({ taste: remote.taste, taste_text: remote.taste_text });
   }
 
   function renderAccount() {
@@ -158,9 +163,21 @@
       const was = user && user.id;
       user = session ? session.user : null;
       renderAccount();
+      if (app && app.setUser) app.setUser(!!user);
       if (user && user.id !== was) pullAccount().catch((e) => console.warn('pull', e));
     });
   }
+
+  // IA en el servidor (función limon-ai): solo con sesión
+  window.limonAI = async function (payload) {
+    if (!user) return { error: 'Entra con tu cuenta para usar la IA.' };
+    const { data, error } = await sb.functions.invoke('limon-ai', { body: payload });
+    if (error) {
+      try { const b = await error.context.json(); return { error: b.error || 'No se ha podido contactar con la IA.' }; }
+      catch (e) { return { error: 'No se ha podido contactar con la IA.' }; }
+    }
+    return data;
+  };
 
   window.bootBureo = async function (startApp) {
     $('pt-h').textContent = 'Cargando planes…';

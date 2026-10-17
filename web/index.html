@@ -108,6 +108,11 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .fpanel h3 { margin: 0; font: 600 13px var(--f-body); color: var(--quiet); text-transform: uppercase; letter-spacing: .05em }
 .fpanel .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
 .fcount:not(:empty) { margin-left: 2px; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 7px; font-size: 12px; font-weight: 700 }
+.ai { display: flex; flex-direction: column; gap: 10px; background: var(--accent-soft); border-radius: 16px; padding: 14px }
+.ai h2 { margin: 0; display: flex; align-items: center; gap: 8px }
+.ai .why { background: var(--surface); color: var(--ink); font-weight: 400 }
+.ai .why b { color: var(--accent-text) }
+.tchip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-weight: 600; font-size: 13px; border: 0; cursor: pointer }
 .acts { display: flex; gap: 8px; flex-wrap: wrap }
 .act { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer }
 .act[aria-pressed="true"] { background: var(--chip) }
@@ -119,6 +124,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .empty { background: var(--surface); border-radius: 14px; padding: 18px; color: var(--quiet); font-size: 14px }
 .btn { height: 44px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 14.5px; cursor: pointer; padding: 0 16px }
 .btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line) }
+.btn:disabled { opacity: .5; cursor: not-allowed }
 
 .search { height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 0 12px; font: 400 15px var(--f-body); width: 100% }
 select.search { appearance: auto }
@@ -300,6 +306,14 @@ table.cov td.n, table.cov th.n { text-align: right }
 
   <section class="view" id="v-intereses" hidden>
     <h1>Perfil</h1>
+    <div class="panel" id="taste">
+      <h2 style="margin:0">Cuéntame qué te gusta</h2>
+      <p class="note">Escríbelo con tus palabras, como se lo contarías a un amigo: «cine clásico, sobre todo Hitchcock; arqueología y Egipto; nada de reguetón». La IA lo convierte en tu perfil y puedes corregirlo.</p>
+      <label for="ts-text" class="sr">Tus gustos</label>
+      <textarea class="search" id="ts-text" rows="4" maxlength="2000" style="height:auto;padding:10px 12px;resize:vertical" placeholder="Me encanta…"></textarea>
+      <div class="seg"><button class="btn" id="ts-go">Interpretar con IA</button><span class="note" id="ts-msg" role="status"></span></div>
+      <div id="ts-out"></div>
+    </div>
     <h2 style="margin:0">Mis intereses</h2>
     <p class="lead">Toca una categoría para marcarla como interesante, otra vez para no verla nunca, y una tercera para dejarla como estaba. El número es cuántos eventos hay ahora mismo.</p>
     <div class="panel">
@@ -378,6 +392,10 @@ function startApp(DATA, TAX, sync) {
   let dismissed = store.get('dismissed', []);
   let went = store.get('went', []);
   let learned = store.get('learned', {});
+  let taste = store.get('taste', null);
+  let tasteText = store.get('taste_text', '');
+  let logged = false;
+  const aiReco = {};   // por rango de fechas: { loading, planes, error }
   const CLOSURES = DATA.closures || [];
   let state = { caKind: 'todo', caDay: null, filter: null, tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
 
@@ -480,6 +498,14 @@ function startApp(DATA, TAX, sync) {
   function score(e) {
     if (isDismissed(e)) return { s: -1, hits: [] };
     let s = 0; const hits = [];
+    if (taste) {
+      for (const c of e.cats) { if ((taste.evitar || []).includes(c)) return { s: -1, hits: [] }; }
+      for (const c of taste.categorias || []) if (e.cats.includes(c.id)) { s += [0, 1.5, 2.5, 3.5][c.peso] || 0; hits.push(labelOf(c.id)); }
+      if (taste.temas && taste.temas.length) {
+        const hay = ' ' + nf([e.titulo, e.descripcion, (e.temas || []).join(' '), e.serie || ''].join(' ')).replace(/[^a-z0-9ñ]+/g, ' ') + ' ';
+        for (const t of taste.temas) { const k = nf(t).replace(/[^a-z0-9ñ]+/g, ' ').trim(); if (k.length >= 3 && hay.includes(' ' + k + ' ')) { s += 3; hits.push(t); } }
+      }
+    }
     for (const c of e.cats) { const w = learned['cat:' + c]; if (w) s += w * 0.6; }
     for (const t of e.temas || []) { const w = learned['tema:' + t]; if (w) { s += w; if (w >= 1) hits.push(t + ' (por lo que guardas)'); } }
     if (e.serie && learned['serie:' + e.serie] >= 1) { s += learned['serie:' + e.serie]; hits.push('sigues este ciclo'); }
@@ -526,7 +552,7 @@ function startApp(DATA, TAX, sync) {
     const open = !!state.open[e.id];
     const cats = e.cats.filter(c => c !== 'sin_categoria').slice(0, 3);
     const price = e.gratis ? '<span class="tag free">Gratis</span>' : (e.precio && e.precio.length < 40 ? `<span class="tag">${esc(e.precio)}</span>` : '');
-    const why = opt.why && opt.why.length ? `<div class="why">Te encaja: ${esc(opt.why.slice(0, 3).join(' · '))}</div>` : '';
+    const why = opt.reason ? `<div class="why"><b>Por qué:</b> ${esc(opt.reason)}</div>` : opt.why && opt.why.length ? `<div class="why">Te encaja: ${esc(opt.why.slice(0, 3).join(' · '))}</div>` : '';
     const more = open ? `<div class="more" id="m-${e.id}">
         ${e.descripcion ? `<p>${esc(e.descripcion)}</p>` : '<p class="note">La fuente no trae descripción.</p>'}
         ${e.hora && e.hora.length >= 40 ? `<p class="note">${esc(e.hora)}</p>` : ''}
@@ -724,7 +750,7 @@ function startApp(DATA, TAX, sync) {
   const $ = id => document.getElementById(id);
   function renderParaTi() {
     const [a, b] = range(state.when);
-    if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1)) {
+    if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1) && !(taste && ((taste.categorias || []).length || (taste.temas || []).length))) {
       const items = [];
       for (const e of EV) {
         if (isDismissed(e)) continue;
@@ -757,10 +783,47 @@ function startApp(DATA, TAX, sync) {
     $('pt-lead').textContent = items.length ? `Los ${top.length} que mejor encajan con tus intereses. Toca el título para ver más.` : 'Prueba con un rango más amplio o marca más intereses.';
     const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
       (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
-    $('pt-list').innerHTML = streetBanner() + (html || '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
+    $('pt-list').innerHTML = streetBanner() + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
   }
+  // ---------- selección de la IA (servidor): 6–10 planes con el porqué
+  function aiBlock() {
+    const w = state.when;
+    if (!logged) return `<div class="ai"><h2>La IA elige por ti</h2><p class="note" style="margin:0">Entra con tu cuenta y la IA te elegirá los mejores planes de cada semana, con el porqué de cada uno.</p><button class="btn ghost" data-goto="intereses" style="align-self:flex-start">Entrar</button></div>`;
+    const r = aiReco[w];
+    if (!r) { loadAI(w, false); return `<div class="ai"><h2>La IA está eligiendo tus planes…</h2></div>`; }
+    if (r.loading) return `<div class="ai"><h2>La IA está eligiendo tus planes…</h2></div>`;
+    if (r.error) return `<div class="ai"><h2>Selección de la IA</h2><p class="note" style="margin:0">${esc(r.error)}</p></div>`;
+    const list = (r.planes || []).map(p => ({ e: BYID['e' + p.id], why: p.por_que })).filter(x => x.e && !isDismissed(x.e) && passF(x.e, occurs(x.e, ...range(w))));
+    if (!list.length) return '';
+    return `<section class="ai" aria-label="Selección de la IA"><h2>Elegidos para ti</h2>
+      <p class="note" style="margin:0">La IA ha leído ${r.candidatos || 'los'} planes que encajan contigo y se queda con estos.</p>
+      ${list.map(x => card(x.e, { occ: occurs(x.e, ...range(w)), reason: x.why })).join('')}
+      <button class="btn ghost" data-ai-refresh style="align-self:flex-start">Volver a elegir</button></section>`;
+  }
+  async function loadAI(w, force) {
+    aiReco[w] = { loading: true };
+    const res = await window.limonAI({ action: 'recommend', when: w, force });
+    aiReco[w] = res && !res.error ? res : { error: (res && res.error) || 'No se ha podido contactar con la IA.' };
+    if (res && res.vacio) aiReco[w] = { error: 'Cuéntame qué te gusta en tu perfil o marca intereses y la IA elegirá por ti.' };
+    if (state.tab === 'parati') renderParaTi();
+  }
+  function renderTaste() {
+    if (document.activeElement !== $('ts-text')) $('ts-text').value = tasteText || '';
+    $('ts-go').disabled = !logged;
+    if (!logged) $('ts-msg').textContent = 'Entra con tu cuenta (más abajo) para usarlo.';
+    else if ($('ts-msg').textContent.startsWith('Entra')) $('ts-msg').textContent = '';
+    if (!taste) { $('ts-out').innerHTML = ''; return; }
+    const cats = (taste.categorias || []).slice().sort((a, b) => b.peso - a.peso);
+    $('ts-out').innerHTML = `<div class="why" style="background:var(--chip);color:var(--ink);font-weight:400">${esc(taste.resumen || '')}</div>
+      ${(taste.temas || []).length ? `<h3 style="margin:4px 0 0;font:600 13px var(--f-body);color:var(--quiet)">Temas que busco por ti</h3><div class="seg">${taste.temas.map((t, i) => `<button class="tchip" data-rmtema="${i}" aria-label="Quitar ${esc(t)}">${esc(t)} <span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}
+      ${cats.length ? `<h3 style="margin:4px 0 0;font:600 13px var(--f-body);color:var(--quiet)">Categorías</h3><div class="seg">${cats.map((c, i) => `<button class="tchip" style="background:var(--chip);color:var(--ink)" data-rmtcat="${esc(c.id)}" aria-label="Quitar ${esc(labelOf(c.id))}">${esc(labelOf(c.id))}${c.peso === 3 ? ' ★' : ''} <span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}
+      ${(taste.evitar || []).length ? `<p class="note">Evito: ${taste.evitar.map(c => esc(labelOf(c))).join(', ')}</p>` : ''}
+      ${taste.pregunta ? `<p class="note"><b>Para afinar:</b> ${esc(taste.pregunta)} Añádelo al texto y vuelve a interpretarlo.</p>` : ''}`;
+  }
+  function setTaste(t) { taste = t; store.set('taste', taste); Object.keys(aiReco).forEach(k => delete aiReco[k]); }
+
   function renderUnicos() {
     const list = EV.filter(e => e.unico && !isDismissed(e) && parse(e.fin) >= today).sort((a, b) => a.inicio.localeCompare(b.inicio));
     $('un-list').innerHTML = list.map(e => card(e)).join('') || '<div class="empty">No hay planes únicos en las próximas semanas.</div>';
@@ -807,6 +870,7 @@ function startApp(DATA, TAX, sync) {
         ${open ? `<div class="chips">${items.map(it => `<button class="chip" data-cat="${it.id}" data-v="${prefs[it.id] || 0}" aria-label="${esc(it.label)}: ${['sin marcar', 'me interesa', 'no me muestres'][prefs[it.id] || 0]}">${esc(it.label)}<span class="k">${counts[it.id] || 0}</span></button>`).join('')}</div>` : ''}</div>`;
     }).join('');
     $('o-ninos').checked = !!opts.ninos; $('o-perro').checked = !!opts.perro;
+    renderTaste();
   }
   function renderFuentes() {
     const m = META;
@@ -871,6 +935,16 @@ function startApp(DATA, TAX, sync) {
   $('o-perro').addEventListener('change', e => { opts.perro = e.target.checked; store.set('opts', opts); });
   $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
   $('in-clear').addEventListener('click', () => { prefs = {}; store.set('prefs', prefs); renderIntereses(); });
+  $('ts-go').addEventListener('click', async () => {
+    const text = $('ts-text').value.trim();
+    if (text.length < 8) { $('ts-msg').textContent = 'Cuéntame un poco más.'; return; }
+    $('ts-go').disabled = true; $('ts-msg').textContent = 'Interpretando…';
+    const res = await window.limonAI({ action: 'taste', text });
+    $('ts-go').disabled = false;
+    if (!res || res.error) { $('ts-msg').textContent = (res && res.error) || 'No se ha podido contactar con la IA.'; return; }
+    tasteText = text; store.set('taste_text', text); setTaste(res.taste);
+    $('ts-msg').textContent = 'Listo. Para ti ya usa este perfil.'; renderIntereses();
+  });
   $('toast-undo').addEventListener('click', () => { $('toast').hidden = true; if (toastUndo) toastUndo(); toastUndo = null; });
   document.addEventListener('click', ev => {
     const ck = ev.target.closest('[data-cakind]');
@@ -879,6 +953,11 @@ function startApp(DATA, TAX, sync) {
     if (cd) { state.caDay = cd.dataset.caday; renderCalle(); return; }
     const cg = ev.target.closest('[data-caday-go]');
     if (cg) { state.caDay = cg.dataset.cadayGo; go('calle'); return; }
+    const rt = ev.target.closest('[data-rmtema]');
+    if (rt) { const t = Object.assign({}, taste); t.temas = t.temas.filter((_, i) => i !== +rt.dataset.rmtema); setTaste(t); renderIntereses(); return; }
+    const rc = ev.target.closest('[data-rmtcat]');
+    if (rc) { const t = Object.assign({}, taste); t.categorias = t.categorias.filter(c => c.id !== rc.dataset.rmtcat); setTaste(t); renderIntereses(); return; }
+    if (ev.target.closest('[data-ai-refresh]')) { loadAI(state.when, true); renderParaTi(); return; }
     const ft = ev.target.closest('[data-ftoggle]');
     if (ft) { const p = $(ft.dataset.ftoggle + '-fpanel'); p.hidden = !p.hidden; ft.setAttribute('aria-expanded', !p.hidden); renderFilters(); return; }
     const fs = ev.target.closest('[data-fset]');
@@ -937,10 +1016,14 @@ function startApp(DATA, TAX, sync) {
   const t0 = store.get('tab', 'parati');
   go(tabs.includes(t0) ? t0 : 'parati');
   return {
-    get: () => ({ prefs, opts, saved, streets, dismissed, went, learned }),
+    get: () => ({ prefs, opts, saved, streets, dismissed, went, learned, taste }),
+    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); },
     set(p) {
       if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
       if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.learned) learned = p.learned;
+      if ('taste' in p) { taste = p.taste; try { localStorage.setItem('bureo.taste', JSON.stringify(taste)); } catch (e) { } }
+      if ('taste_text' in p) { tasteText = p.taste_text || ''; try { localStorage.setItem('bureo.taste_text', JSON.stringify(tasteText)); } catch (e) { } }
+      if ('taste' in p || 'taste_text' in p) { Object.keys(aiReco).forEach(k => delete aiReco[k]); if (!p.prefs) { renderAll(); return; } }
       store.set('prefs', prefs); store.set('opts', opts); store.set('saved', saved); store.set('streets', streets);
       store.set('dismissed', dismissed); store.set('went', went); store.set('learned', learned); renderAll();
     }
