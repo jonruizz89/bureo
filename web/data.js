@@ -1,4 +1,4 @@
-// Bureo · carga de datos desde Supabase y sincronización de la cuenta
+// Limón (antes Bureo) · carga de datos desde Supabase y sincronización de la cuenta
 (function () {
   const C = window.BUREO_CONFIG;
   const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, {
@@ -56,7 +56,7 @@
   }
 
   async function loadClosures() {
-    const r = await sb.from('closures').select('title,kind,summary,streets,lines,stations,district,ranges,source_url,source_name').eq('city_id', C.city);
+    const r = await sb.from('closures').select('title,kind,summary,streets,lines,stations,district,ranges,source_url,source_name,geom').eq('city_id', C.city);
     if (r.error) { console.warn('cortes', r.error); return []; }
     return r.data;
   }

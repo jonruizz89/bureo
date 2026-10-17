@@ -1,28 +1,32 @@
 <!doctype html>
 <html lang="es">
 <head>
-<title>Bureo Madrid</title>
+<title>Limón · Madrid</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Los planes de Madrid que van contigo: eventos, exposiciones, carreras y citas únicas de la ciudad.">
+<meta name="description" content="Limón: los planes de Madrid que van contigo, y las calles y líneas cortadas antes de salir.">
+<link rel="icon" href="limon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="limon-180.png">
+<meta name="theme-color" content="#FFD43B" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1320" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 /* Layout: una columna de móvil (máx. 640px) con cabecera fija, pestañas y tarjetas de evento; mismo sistema visual que el prototipo */
 :root {
   --bg: #EEF0F3; --surface: #FFFFFF; --ink: #12182B; --quiet: #4B5366; --line: #DDE1E8;
-  --accent: #D9461F; --accent-ink: #FFFFFF; --accent-soft: #FCE7DF; --accent-text: #A8361A;
+  --accent: #FFD43B; --accent-ink: #231D02; --accent-soft: #FFF4C4; --accent-text: #7A5900;
   --ok: #1F7A4D; --ok-soft: #E3F2EA; --chip: #EEF0F3; --strong: #12182B; --strong-ink: #FFFFFF;
   --f-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
   --f-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0F1320; --surface: #181E2E; --ink: #E8EBF2; --quiet: #A3ABBD; --line: #2A3247;
-  --accent: #F0683F; --accent-ink: #160B06; --accent-soft: #3A1F17; --accent-text: #FF9C7C;
+  --accent: #FFD43B; --accent-ink: #231D02; --accent-soft: #3A3312; --accent-text: #FFDF6E;
   --ok: #4CC08A; --ok-soft: #173326; --chip: #232A3C; --strong: #E8EBF2; --strong-ink: #0F1320; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0F1320; --surface: #181E2E; --ink: #E8EBF2; --quiet: #A3ABBD; --line: #2A3247;
-  --accent: #F0683F; --accent-ink: #160B06; --accent-soft: #3A1F17; --accent-text: #FF9C7C;
+  --accent: #FFD43B; --accent-ink: #231D02; --accent-soft: #3A3312; --accent-text: #FFDF6E;
   --ok: #4CC08A; --ok-soft: #173326; --chip: #232A3C; --strong: #E8EBF2; --strong-ink: #0F1320; color-scheme: dark }
 
 * { box-sizing: border-box }
@@ -34,7 +38,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface) }
 a { color: inherit }
 button { font: inherit; color: inherit }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px }
 .wrap { max-width: 640px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
 
 header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line) }
@@ -52,14 +56,16 @@ button.serie.link { background: none; padding: 0; align-self: flex-start }
 .cut .when { font-family: var(--f-display); font-weight: 600; font-size: 15px }
 .street { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--quiet) }
 .line { font-family: var(--f-display); font-weight: 700; font-size: 12px; min-width: 28px; text-align: center; padding: 2px 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12) }
-.line.hit { outline: 2px solid var(--accent); outline-offset: 1px }
+.line.hit { outline: 2px solid var(--accent-text); outline-offset: 1px }
 .street.hit { background: var(--accent-soft); color: var(--accent-text); font-weight: 600 }
 .banner { display: flex; flex-direction: column; gap: 4px; background: var(--strong); color: var(--strong-ink); border-radius: 14px; padding: 14px; border: 0; text-align: left; cursor: pointer; font: inherit }
 .banner b { font-family: var(--f-display); font-size: 16px }
 .filterchip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--strong); color: var(--strong-ink); font-size: 13.5px; border: 0; cursor: pointer }
 .serie { font-size: 12.5px; font-weight: 600; color: var(--accent-text) }
 .tag.tema { background: var(--accent-soft); color: var(--accent-text) }
-.brand b { font-family: var(--f-display); font-size: 22px; letter-spacing: -0.02em; font-weight: 700 }
+.brand b { font-family: var(--f-display); font-size: 23px; letter-spacing: -0.03em; font-weight: 700; display: inline-flex; align-items: center; gap: 8px }
+.brand b img { width: 32px; height: 32px; margin: -4px 0 }
+.brand b em { font-style: normal; background: linear-gradient(transparent 62%, var(--accent) 62% 90%, transparent 90%) }
 .brand span { font-size: 12.5px; color: var(--quiet); text-align: right }
 nav.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none }
 nav.tabs button { flex: 0 0 auto; border: 0; background: none; padding: 10px 10px 12px; font-weight: 500; font-size: 14px; color: var(--quiet); border-bottom: 3px solid transparent; cursor: pointer; min-height: 44px }
@@ -87,7 +93,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px }
 .title { font-family: var(--f-display); font-size: 16.5px; font-weight: 600; line-height: 1.25; margin: 0; padding-right: 40px; overflow-wrap: anywhere }
 .title button { all: unset; cursor: pointer }
-.title button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px }
+.title button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; border-radius: 4px }
 .meta { font-size: 13px; color: var(--quiet); overflow-wrap: anywhere }
 .why { font-size: 13px; background: var(--ok-soft); color: var(--ok); border-radius: 8px; padding: 6px 10px; font-weight: 500 }
 .tags { display: flex; gap: 6px; flex-wrap: wrap }
@@ -95,7 +101,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .tag.free { background: var(--ok-soft); color: var(--ok) }
 .tag.uni { background: var(--accent-soft); color: var(--accent-text) }
 .save { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border: 0; border-radius: 10px; background: none; cursor: pointer; color: var(--quiet); display: flex; align-items: center; justify-content: center }
-.save[aria-pressed="true"] { color: var(--accent) }
+.save[aria-pressed="true"] { color: var(--accent-text) }
 .more { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px }
 .more p { margin: 0 }
 .links { display: flex; gap: 8px; flex-wrap: wrap }
@@ -145,19 +151,34 @@ table.cov td.n, table.cov th.n { text-align: right }
   .bottomnav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line);
     padding: 4px max(8px, env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px)); justify-content: space-around }
   .bottomnav button { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; min-height: 52px; border: 0; background: none; color: var(--quiet); font-size: 11px; font-weight: 500; cursor: pointer }
-  .bottomnav button[aria-current="page"] { color: var(--accent); font-weight: 600 }
-  .bottomnav .dot { position: absolute; top: 6px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent) }
+  .bottomnav button[aria-current="page"] { color: var(--ink); font-weight: 600 }
+  .bottomnav button svg { padding: 3px 14px; box-sizing: content-box; border-radius: 999px; transition: background .15s }
+  .bottomnav button[aria-current="page"] svg { background: var(--accent); color: var(--accent-ink) }
+  .bottomnav .dot { position: absolute; top: 6px; left: calc(50% + 14px); width: 9px; height: 9px; border-radius: 50%; background: #E5484D; box-shadow: 0 0 0 2px var(--surface) }
   main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) }
   .mob-only { display: inline-flex }
 }
 @media (min-width: 761px) { .segtabs { display: none } }
+.mapwrap { padding: 8px 8px 12px; gap: 8px }
+#ca-map { height: 360px; border-radius: 10px; position: relative; z-index: 0; isolation: isolate; background: var(--chip) }
+@media (max-width: 760px) { #ca-map { height: 300px } }
+.mapwrap .legend, .mapwrap .note { padding-inline: 6px }
+.sw { display: inline-block; width: 18px; height: 0; border-top: 4px solid #E03131; border-radius: 2px; vertical-align: middle; margin-right: 6px }
+.sw.vague { border-top: 4px dotted #E03131; opacity: .8 }
+.sw.bus { border-color: #1E5BA8 }
+.sw.mine { border-top-width: 8px; border-color: var(--accent) }
+.leaflet-popup-content { font: 13.5px/1.4 var(--f-body); margin: 10px 12px }
+.leaflet-popup-content b { font-family: var(--f-display); font-size: 14.5px }
+.leaflet-popup-content button { margin-top: 6px; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 8px; padding: 6px 10px; font: 600 12.5px var(--f-body); cursor: pointer }
+.cut.flash { box-shadow: 0 0 0 3px var(--accent) }
+.cut .maplink { align-self: flex-start; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; font: 600 13px var(--f-body); cursor: pointer }
 </style>
 
 </head>
 <body>
 <header class="top">
   <div class="wrap">
-    <div class="brand"><b>bureo</b><span id="stamp"></span></div>
+    <div class="brand"><b><img src="limon.svg" alt="" width="30" height="30"><em>limón</em></b><span id="stamp"></span></div>
     <label for="q-global" class="sr">Buscar un evento</label>
     <input class="search" id="q-global" type="search" placeholder="Buscar evento, lugar, persona o tema" autocomplete="off">
     <nav class="tabs" role="tablist" aria-label="Secciones">
@@ -208,6 +229,16 @@ table.cov td.n, table.cov th.n { text-align: right }
       <div class="seg" id="ca-mine"></div>
     </div>
     <p class="note" id="ca-count"></p>
+    <div class="panel mapwrap" id="ca-mapwrap">
+      <div id="ca-map" role="region" aria-label="Mapa de los cortes del día"></div>
+      <div class="legend">
+        <span><i class="sw cut"></i>Tramo cortado</span>
+        <span><i class="sw vague"></i>Calle afectada, sin tramo exacto</span>
+        <span><i class="sw bus"></i>Desvío de autobús</span>
+        <span><i class="sw mine"></i>Tus calles y líneas</span>
+      </div>
+      <p class="note" id="ca-mapnote"></p>
+    </div>
     <div id="ca-list" class="view"></div>
     <p class="note">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
   </section>
@@ -477,17 +508,18 @@ function startApp(DATA, TAX, sync) {
     const light = ['#FFE114', '#96BF0D', '#FA9F35', '#FFFFFF', '#F373B7'].includes(bg);
     return `background:${bg};color:${light ? '#12182B' : '#FFFFFF'}`;
   }
-  function cutCard(x) {
+  function cutCard(x, i) {
     const c = x.c, r = x.r;
     const when = r.start ? `${r.start}${r.end ? '–' + r.end : ''}` : 'Todo el día';
     const sts = (c.streets || []).slice().sort((a, b) => isMine(b) - isMine(a));
-    return `<article class="card cut ${x.mine ? 'mine' : ''}">
+    return `<article class="card cut ${x.mine ? 'mine' : ''}" id="cut-${i}">
       <div class="tags"><span class="tag ${x.mine ? 'uni' : ''}">${x.mine ? 'Te afecta' : esc(KIND[c.kind] || 'Aviso')}</span>${x.mine ? `<span class="tag">${esc(KIND[c.kind] || 'Aviso')}</span>` : ''}${c.district ? `<span class="tag">${esc(c.district)}</span>` : ''}</div>
       <div class="when">${esc(when)}</div>
       <h3 class="title" style="padding-right:0">${esc(c.title)}</h3>
       ${c.summary ? `<p class="meta" style="margin:0">${esc(c.summary)}</p>` : ''}
       ${((c.lines || []).length || (c.stations || []).length) ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l, c.kind) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
       <div class="tags">${sts.slice(0, 10).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}${sts.length > 10 ? `<span class="street">y ${sts.length - 10} más</span>` : ''}</div>
+      ${c.geom ? `<button class="maplink" data-cutmap="${i}">Ver en el mapa</button>` : ''}
       ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">Ver el aviso ${TRANS.includes(c.kind) ? 'del Consorcio de Transportes' : 'del Ayuntamiento'} ↗</a></div>` : ''}
     </article>`;
   }
@@ -502,8 +534,81 @@ function startApp(DATA, TAX, sync) {
     const mine = list.filter(x => x.mine).length;
     $('ca-count').textContent = list.length ? `${list.length} avisos ${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}` + (streets.length ? ` · ${mine} te afectan` : '') : '';
     $('ca-list').innerHTML = list.map(cutCard).join('') || '<div class="empty">No hay cortes anunciados para ese día.</div>';
+    CUTS_NOW = list;
+    drawMap(list);
     $('ca-mine').innerHTML = streets.map((st, i) => `<button class="filterchip" data-rmstreet="${i}" aria-label="Quitar ${esc(st)}">${esc(st)} <span aria-hidden="true">✕</span></button>`).join('') || '<span class="note">Aún no has añadido ninguna.</span>';
   }
+  // ---------- mapa de cortes (Leaflet + teselas de CARTO sobre OpenStreetMap; se carga solo al abrir Calle)
+  let MAP = null, LAYER = null, CUTS_NOW = [], SHAPES = {};
+  const KCOLOR = { autobus: '#1E5BA8', obras: '#E8590C', cercanias: '#C92A2A', metro_ligero: '#3A86C8' };
+  const dark = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    return new Promise((ok, ko) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      js.onload = ok; js.onerror = ko;
+      document.head.appendChild(js);
+    });
+  }
+  function popupHtml(x, i, name) {
+    const r = x.r, when = r.start ? `${r.start}${r.end ? '–' + r.end : ''}` : 'Todo el día';
+    return `<b>${esc(x.c.title)}</b><br>${esc(name || '')}${name ? ' · ' : ''}${esc(when)}<br><button data-cutgo="${i}">Ver el aviso</button>`;
+  }
+  function drawMap(list) {
+    const withGeo = list.filter(x => x.c.geom).length;
+    $('ca-mapwrap').hidden = !withGeo;
+    if (!withGeo) return;
+    $('ca-mapnote').textContent = withGeo < list.length ? `${list.length - withGeo} de ${list.length} avisos no se pueden situar en el mapa porque no nombran calles ni estaciones concretas.` : '';
+    loadLeaflet().then(() => {
+      if (!MAP) {
+        MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5 }).setView([40.4168, -3.7038], 12);
+        L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark() ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, {
+          subdomains: 'abcd', maxZoom: 19,
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>'
+        }).addTo(MAP);
+        LAYER = L.layerGroup().addTo(MAP);
+      }
+      MAP.invalidateSize();
+      LAYER.clearLayers(); SHAPES = {};
+      const all = [];
+      // primero lo que no te afecta, para que lo tuyo quede encima
+      list.map((x, i) => [x, i]).sort((a, b) => a[0].mine - b[0].mine).forEach(([x, i]) => {
+        const g = x.c.geom; if (!g) return;
+        const col = KCOLOR[x.c.kind] || '#E03131', pts = [];
+        (g.segs || []).forEach(sg => {
+          if (x.mine) L.polyline(sg.l, { color: '#FFD43B', weight: 13, opacity: 0.95, lineCap: 'round' }).addTo(LAYER);
+          const pl = L.polyline(sg.l, { color: sg.c || col, weight: sg.x ? 6 : 5, opacity: sg.x ? 0.95 : 0.8, dashArray: sg.x ? null : '1 9', lineCap: 'round' });
+          pl.bindPopup(popupHtml(x, i, sg.n)).addTo(LAYER);
+          pts.push(...sg.l);
+        });
+        (g.pts || []).forEach(p => {
+          const m = L.circleMarker(p.p, { radius: x.mine ? 10 : 8, color: x.mine ? '#FFD43B' : '#FFFFFF', weight: x.mine ? 4 : 2.5, fillColor: col, fillOpacity: 1 });
+          m.bindPopup(popupHtml(x, i, p.n)).addTo(LAYER);
+          pts.push(p.p);
+        });
+        SHAPES[i] = pts;
+        all.push(...pts);
+      });
+      const mineB = list.map((x, i) => x.mine ? SHAPES[i] || [] : []).flat();
+      const b = mineB.length ? mineB : all;
+      if (b.length) MAP.fitBounds(b, { padding: [24, 24], maxZoom: 15 });
+    }).catch(() => { $('ca-mapwrap').hidden = true; });
+  }
+  function focusCut(i) {
+    const b = SHAPES[i]; if (!MAP || !b || !b.length) return;
+    $('ca-mapwrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    MAP.fitBounds(b, { padding: [30, 30], maxZoom: 16 });
+  }
+  function goCut(i) {
+    const el = $('cut-' + i); if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1600);
+  }
+
   function streetBanner() {
     if (!streets.length) return '';
     for (const x of caDays()) {
@@ -673,6 +778,10 @@ function startApp(DATA, TAX, sync) {
     if (cd) { state.caDay = cd.dataset.caday; renderCalle(); return; }
     const cg = ev.target.closest('[data-caday-go]');
     if (cg) { state.caDay = cg.dataset.cadayGo; go('calle'); return; }
+    const cm = ev.target.closest('[data-cutmap]');
+    if (cm) { focusCut(+cm.dataset.cutmap); return; }
+    const cgo = ev.target.closest('[data-cutgo]');
+    if (cgo) { goCut(+cgo.dataset.cutgo); return; }
     const rm = ev.target.closest('[data-rmstreet]');
     if (rm) { streets = streets.filter((_, i) => i !== Number(rm.dataset.rmstreet)); store.set('streets', streets); renderAll(); return; }
     const ff = ev.target.closest('[data-f-cat], [data-f-tema], [data-f-serie]');

@@ -13,7 +13,7 @@ concurrency:
 jobs:
   closures:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: engine
@@ -24,21 +24,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Recuperar la caché de avisos
+      - name: Recuperar la caché de avisos y mapas
         uses: actions/cache/restore@v4
         with:
-          path: engine/raw/closures_cache.json
+          path: |
+            engine/raw/closures_cache.json
+            engine/raw/geo_streets.json
+            engine/raw/geo_metro.json
+            engine/raw/osm_ways.json
           key: closures-${{ github.run_id }}
           restore-keys: closures-
-      - name: Leer avisos del Ayuntamiento y extraer los cortes
+      - name: Índices de calles y Metro (como mucho una vez por semana)
+        run: mkdir -p raw && python3 src/geo_index.py
+      - name: Leer avisos, extraer los cortes y su trazado
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: mkdir -p raw && python3 src/closures.py
-      - name: Guardar la caché de avisos
+        run: python3 src/closures.py
+      - name: Guardar la caché de avisos y mapas
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: engine/raw/closures_cache.json
+          path: |
+            engine/raw/closures_cache.json
+            engine/raw/geo_streets.json
+            engine/raw/geo_metro.json
+            engine/raw/osm_ways.json
           key: closures-${{ github.run_id }}

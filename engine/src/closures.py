@@ -10,6 +10,8 @@ Variables: SUPABASE_URL, SUPABASE_SECRET, ANTHROPIC_API_KEY (sin ella se reutili
 Caché: raw/closures_cache.json (texto de cada aviso, su huella y lo extraído).
 """
 import json, os, re, sys, html, hashlib, subprocess, time, datetime as dt, urllib.request, urllib.error
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import geo
 
 RAW = os.environ.get('BUREO_RAW', 'raw')
 CACHE = os.path.join(RAW, 'closures_cache.json')
@@ -69,7 +71,7 @@ TOOL = {
     'name': 'guardar_cortes',
     'description': 'Guarda los cortes de calle descritos en el aviso.',
     'input_schema': {'type': 'object', 'required': ['cortes'], 'properties': {'cortes': {'type': 'array', 'items': {
-        'type': 'object', 'required': ['title', 'kind', 'streets', 'lines', 'stations', 'ranges', 'summary'],
+        'type': 'object', 'required': ['title', 'kind', 'streets', 'tramos', 'lines', 'stations', 'ranges', 'summary'],
         'properties': {
             'title': {'type': 'string', 'description': 'Título corto del motivo, p. ej. "Carrera de la Ciencia"'},
             'kind': {'type': 'string', 'enum': ['evento', 'obras', 'recurrente', 'partido', 'manifestacion', 'otro',
@@ -81,7 +83,12 @@ TOOL = {
             'summary': {'type': 'string', 'description': 'Una o dos frases en castellano para el usuario: qué se corta y cuándo'},
             'district': {'type': ['string', 'null']},
             'streets': {'type': 'array', 'items': {'type': 'string'},
-                        'description': 'Nombres de calles, plazas o vías afectadas, tal como se escriben habitualmente (p. ej. "Paseo de la Castellana", "Calle de Serrano")'},
+                        'description': 'Calles, plazas o vías cortadas o afectadas, con su nombre completo (p. ej. "Paseo de la Castellana", "Calle de Serrano"). No incluyas las vías por las que se desvía el tráfico.'},
+            'tramos': {'type': 'array', 'description': 'Para cada vía que el aviso acota («entre X y Y», «desde X hasta Y»), el tramo exacto. Vacío si no se acota ninguna.',
+                       'items': {'type': 'object', 'required': ['street', 'from', 'to'], 'properties': {
+                           'street': {'type': 'string', 'description': 'La vía cortada, igual que en streets'},
+                           'from': {'type': 'string', 'description': 'Calle, plaza o glorieta donde empieza el tramo'},
+                           'to': {'type': 'string', 'description': 'Calle, plaza o glorieta donde acaba el tramo'}}}},
             'ranges': {'type': 'array', 'items': {'type': 'object', 'required': ['from', 'to'], 'properties': {
                 'from': {'type': 'string', 'description': 'YYYY-MM-DD'},
                 'to': {'type': 'string', 'description': 'YYYY-MM-DD; igual que from si es un solo día'},
@@ -93,7 +100,7 @@ TOOL = {
 
 SPENT = {'in': 0, 'out': 0}
 URLNOW = ['']
-PROMPT_VERSION = 'v3'  # cambiarlo vuelve a extraer todos los avisos
+PROMPT_VERSION = 'v4'  # cambiarlo vuelve a extraer todos los avisos
 
 
 def extract(title, text):
@@ -109,7 +116,8 @@ def extract(title, text):
               "to=hoy+60 días. Si un corte va de un día a otro (p. ej. desde el viernes a las 23 h hasta el lunes a las 6 h), añade "
               "también los días intermedios completos (sábado y domingo todo el día). Si el corte depende de fechas que el aviso no da "
               "(por ejemplo, 'los días de partido'), devuelve ranges vacío: no pongas la fecha de hoy. No inventes calles ni horas que no "
-              "estén en el texto. Si el aviso no describe ningún corte concreto, devuelve una lista vacía.")
+              "estén en el texto. En streets pon solo las vías cortadas o afectadas, no los itinerarios alternativos; y si el aviso dice "
+              "entre qué calles va el corte, añádelo en tramos. Si el aviso no describe ningún corte concreto, devuelve una lista vacía.")
     body = {'model': MODEL, 'max_tokens': 4000, 'system': system,
             'tools': [TOOL], 'tool_choice': {'type': 'tool', 'name': 'guardar_cortes'},
             'messages': [{'role': 'user', 'content': f'Aviso: {title}\nDirección: {URLNOW[0]}\n\n{text}'}]}
@@ -224,6 +232,7 @@ for title, u, src in links:
                      'streets': [s for s in c.get('streets') or [] if s][:30], 'ranges': c.get('ranges') or [],
                      'lines': [str(x).strip()[:20] for x in c.get('lines') or [] if str(x).strip()][:20],
                      'stations': [str(x).strip()[:80] for x in c.get('stations') or [] if str(x).strip()][:30],
+                     'tramos': c.get('tramos') or [],
                      'source_url': u,
                      'source_name': ('Consorcio de Transportes · ' if src == 'crtm' else 'Ayuntamiento de Madrid · ') + title[:120]})
 json.dump(new_cache, open(CACHE, 'w'), ensure_ascii=False)
@@ -231,6 +240,19 @@ json.dump(new_cache, open(CACHE, 'w'), ensure_ascii=False)
 # solo los que siguen vigentes
 hoy = dt.date.today().isoformat()
 rows = [r for r in rows if any((x.get('to') or '') >= hoy for x in r['ranges'])]
+
+# geometría para el mapa (OpenStreetMap + callejero municipal + GTFS de Metro)
+pintados = 0
+for r in rows:
+    try:
+        r['geom'] = geo.geom_for(r, r.get('tramos'))
+    except Exception as ex:  # el mapa es un extra: nunca debe tumbar la carga
+        print('  geo', r['title'][:50], ex)
+        r['geom'] = None
+    pintados += bool(r['geom'])
+    r.pop('tramos', None)
+geo.save_osm()
+print(f'{pintados}/{len(rows)} cortes con geometría')
 if rows or index:
     sb('DELETE', 'closures?city_id=eq.madrid')
     if rows:
