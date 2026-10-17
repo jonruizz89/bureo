@@ -44,6 +44,11 @@ jobs:
       - name: Descargar fichas nuevas o cambiadas de esMadrid
         run: python3 src/fetch_esmadrid.py
 
+      - name: Fuentes adicionales (Ministerio, recintos, estrenos, librerías)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python3 src/fetch_venues.py
+
       - name: Índices del callejero y Metro (como mucho una vez por semana)
         run: python3 src/geo_index.py
 

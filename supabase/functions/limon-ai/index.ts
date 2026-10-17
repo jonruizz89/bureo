@@ -83,7 +83,10 @@ async function taste(uid: string, text: string) {
   const list = (cats || []).map((c: { id: string; label: string; group_id: string }) => `${c.id} = ${c.label} (${c.group_id})`).join('\n');
   const system = 'Eres el asistente de Limón, una app que recomienda planes en Madrid. Conviertes lo que alguien cuenta de sus gustos ' +
     'en un perfil: categorías de esta taxonomía con peso, temas concretos que buscar en los eventos y categorías que evitar. ' +
-    'No inventes gustos que no se deduzcan del texto. Usa solo ids de la lista.\n\nTaxonomía (id = nombre (grupo)):\n' + list;
+    'No inventes gustos que no se deduzcan del texto. Usa solo ids de la lista. Si dice que algo no le gusta o no lo quiere ver ' +
+    '(«nada de reguetón», «odio las discotecas»), pon esas categorías en evitar. En temas pon solo nombres concretos que aparecerían ' +
+    'tal cual en un evento (personas, obras, épocas, civilizaciones, estilos); nunca frases genéricas como «conferencias de historia» ' +
+    'o «planes con perro», que ya cubren las categorías.\n\nTaxonomía (id = nombre (grupo)):\n' + list;
   const { out, usd } = await claude(system, text.slice(0, 2000), TASTE_TOOL, 1500);
   if (!out) throw new Error('La IA no devolvió el perfil');
   const t = {
@@ -205,7 +208,8 @@ async function recommend(uid: string, when: string, force: boolean) {
   }).join('\n');
   const system = 'Eres el recomendador de Limón, una app de planes en Madrid. Eliges entre 6 y 10 planes para una persona a partir de su perfil. ' +
     'Prioriza lo que conecta con un interés concreto suyo sobre lo genérico; varía tipos de plan y días; no repitas un mismo ciclo; ' +
-    'descarta lo que choque con lo que evita. El motivo debe citar el interés concreto (no "porque te gusta la cultura").';
+    'descarta lo que choque con lo que evita. El motivo, de menos de 100 caracteres y sin repetir el título ni la fecha, debe citar ' +
+    'el interés concreto (no "porque te gusta la cultura").';
   const user = `Perfil:\n${perfil}\n\nCandidatos (id | cuándo | título | lugar | categorías | temas | descripción):\n${lines}`;
   const { out, usd } = await claude(system, user, RECO_TOOL, 1500);
   const valid = new Set(cand.map((x) => x.e.id));

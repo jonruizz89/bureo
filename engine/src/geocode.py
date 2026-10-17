@@ -119,6 +119,8 @@ def geocode_events(evs, norm):
             known.setdefault(norm(e['lugar']), (e['lat'], e['lng']))
     stats = {'lugar': 0, 'direccion': 0, 'osm': 0, 'sin': 0}
     for e in evs:
+        if e.get('no_geo') or any(f.get('nombre') == 'Estrenos de cine' for f in e.get('fuentes') or []):
+            continue
         if not (e.get('lat') and e.get('lng')):
             ll, how = None, None
             lk = norm(e.get('lugar') or '')

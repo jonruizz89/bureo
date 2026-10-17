@@ -316,6 +316,36 @@ def direccion(loc):
     return ', '.join(x for x in (clean(a.get('streetAddress')), a.get('postalCode')) if x) or None
 
 
+def extra():
+    """Fuentes adicionales leídas por fetch_venues.py (raw/extra_events.json), ya normalizadas."""
+    p = os.path.join(RAW, 'extra_events.json')
+    if not os.path.exists(p):
+        return {}
+    out = collections.defaultdict(list)
+    fuera = 0
+    try:
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from geocode import by_place
+    except Exception:
+        by_place = None
+    for e in json.load(open(p, encoding='utf-8')):
+        ini, fin = d(e.get('inicio')), d(e.get('fin')) or d(e.get('inicio'))
+        if not ini or not e.get('titulo'):
+            continue
+        lat = lng = None
+        desc = clean(e.get('descripcion'))
+        out[e['fuente']].append({
+            'fuente': e['fuente'], 'fuente_id': e['fuente'] + ':' + (e.get('url') or e['titulo']) + ':' + ini.isoformat(),
+            'titulo': clean(e['titulo']), 'descripcion': desc, 'inicio': ini, 'fin': fin if fin and fin >= ini else ini,
+            'hora': e.get('hora'), 'lugar': e.get('lugar'), 'direccion': e.get('direccion'), 'distrito': None,
+            'lat': lat, 'lng': lng, 'precio': e.get('precio'), 'gratis': bool(e.get('gratis')),
+            'url': e.get('url'), 'publico': '', 'cats': categorias(list(e.get('cats') or []), e['titulo'], desc),
+            'destacado': False, 'tipo_origen': None, 'no_geo': e['fuente'] == 'Estrenos de cine',
+        })
+    return out
+
+
 def recinto(fn, nombre, base_cats):
     evs = []
     p = os.path.join(RAW, fn)
@@ -461,6 +491,7 @@ def main():
         'IFEMA': recinto('ifema.json', 'IFEMA', ['ferias_consumo']),
         'RJB': recinto('rjb.json', 'RJB', ['jardines']),
     }
+    fuentes.update(extra())
     todos = [e for v in fuentes.values() for e in v]
     leidos = {k: len(v) for k, v in fuentes.items()}
     vivos = [e for e in todos if e['inicio'] and e['fin'] and e['fin'] >= HOY and e['inicio'] <= HASTA]
@@ -476,7 +507,7 @@ def main():
         e['inicio'] = e['inicio'].isoformat()
         e['fin'] = e['fin'].isoformat()
         e['sesiones'] = e['sesiones'][:40]
-        for k in ('fuente', 'fuente_id', 'url', 'publico', 'tipo_origen', 'evento_ciudad'):
+        for k in ('fuente', 'fuente_id', 'url', 'publico', 'tipo_origen', 'evento_ciudad', 'no_geo'):
             e.pop(k, None)
     eventos.sort(key=lambda x: x['id'])
     try:  # situar en el mapa y en su distrito (si están los índices del callejero)
