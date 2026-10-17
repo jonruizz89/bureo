@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "17 2 * * *"   # 04:17 en Madrid en horario de verano, 03:17 en invierno
   workflow_dispatch:
+    inputs:
+      fetch_minutes:
+        description: "Minutos máximos para descargar fichas de esMadrid"
+        required: false
+        default: "270"
 
 concurrency:
   group: nightly
@@ -19,7 +24,7 @@ jobs:
     env:
       BUREO_RAW: raw
       BUREO_OUT: out
-      BUREO_FETCH_MINUTES: "270"
+      BUREO_FETCH_MINUTES: ${{ inputs.fetch_minutes || '270' }}
     steps:
       - uses: actions/checkout@v4
 
