@@ -99,8 +99,15 @@ def search_group(g, labels):
         COST['out'] += u.get('output_tokens', 0)
         COST['search'] += (u.get('server_tool_use') or {}).get('web_search_requests', 0)
         blk = [b for b in res.get('content', []) if b.get('type') == 'tool_use' and b.get('name') == 'guardar_encontrados']
+        kinds = [b.get('type') for b in res.get('content', [])]
+        if os.environ.get('BUREO_AUDIT_DEBUG'):
+            print('  ', res.get('stop_reason'), kinds, json.dumps(blk[0]['input'], ensure_ascii=False)[:600] if blk else
+                  ' '.join(b.get('text', '') for b in res.get('content', []) if b.get('type') == 'text')[:400])
         if blk:
             return blk[0]['input'].get('eventos') or []
+        if res.get('stop_reason') == 'pause_turn':  # la búsqueda sigue en curso: se reanuda tal cual
+            body['messages'] += [{'role': 'assistant', 'content': res.get('content', [])}]
+            continue
         # si no llamó a la herramienta, se le pide que lo haga con lo que ya ha visto
         body['messages'] += [{'role': 'assistant', 'content': res.get('content', [])},
                              {'role': 'user', 'content': 'Guarda ahora lo encontrado con guardar_encontrados.'}]
@@ -110,6 +117,9 @@ def search_group(g, labels):
 
 def main():
     groups = [g for g in sb('GET', 'category_groups?select=id,name&order=position') if g['id'] != 'otros']
+    only = [x for x in os.environ.get('BUREO_AUDIT_GROUPS', '').split(',') if x]
+    if only:
+        groups = [g for g in groups if g['id'] in only]
     cats = sb('GET', 'categories?select=id,label,group_id&is_generic=eq.false')
     evs = []
     for off in range(0, 20000, 1000):
@@ -143,8 +153,10 @@ def main():
             print('tope de gasto alcanzado; el resto de grupos queda para la próxima semana')
             break
         labels = [c['label'] for c in cats if c['group_id'] == g['id']]
-        found = [x for x in search_group(g, labels) if x.get('titulo') and x.get('fecha', '')[:10] >= HOY.isoformat()
-                 and x.get('fecha', '')[:10] <= FIN.isoformat()]
+        raw = search_group(g, labels)
+        found = [x for x in raw if x.get('titulo') and HOY.isoformat() <= (x.get('fecha') or '')[:10] <= FIN.isoformat()]
+        if len(raw) != len(found):
+            print(f'  {len(raw) - len(found)} sin fecha dentro del periodo:', [x.get('fecha') for x in raw if x not in found][:6])
         miss = [x for x in found if not present(x)]
         pct = round(100 * len(miss) / len(found), 1) if found else 0.0
         print(f'{g["name"]}: {len(found)} encontrados, {len(miss)} faltan ({pct} %)' + ('  ← descubrimiento dirigido' if pct > GAP_ALERT else ''))

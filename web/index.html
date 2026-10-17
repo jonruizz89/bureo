@@ -351,6 +351,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <h1>Fuentes y cobertura</h1>
     <p class="lead" id="fu-lead"></p>
     <div class="panel"><div class="tablewrap"><table class="cov" id="fu-table"></table></div></div>
+    <div class="panel" id="fu-audit" hidden></div>
     <div class="panel" id="fu-notes"></div>
   </section>
 </main>
@@ -882,8 +883,20 @@ function startApp(DATA, TAX, sync) {
       m.fuentes.map(f => `<tr><td>${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(nm[f.name] || f.name)}</a>` : esc(nm[f.name] || f.name)}</td><td class="n">${(per[f.name] || 0).toLocaleString('es-ES')}</td><td>${esc(f.method || '')}</td><td>${esc(f.license || '')}</td></tr>`).join('') + '</tbody>';
     $('fu-notes').innerHTML = `<h2 style="margin:0">Cómo se ha montado</h2>
       <p class="note">Las sesiones de un mismo evento se agrupan en una sola tarjeta. Si el mismo evento aparece en varias fuentes se une en uno y se conservan todos los enlaces: ahora hay ${m.multifuente} eventos con más de una fuente.</p>
-      <p class="note">Las categorías se asignan con reglas sobre el tipo que da cada fuente y palabras del título. ${m.sin_categoria} eventos (${Math.round(100 * m.sin_categoria / Math.max(1, m.eventos))} %) se quedan sin categoría.</p>
-      <p class="note">Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, licencia CC BY 4.0) y de esMadrid.com. Cada tarjeta enlaza a su fuente original.</p>`;
+      <p class="note">Las categorías, temas y ciclos los asigna la IA a partir del título y la descripción. ${m.sin_categoria} eventos (${Math.round(100 * m.sin_categoria / Math.max(1, m.eventos))} %) se quedan sin categoría.</p>
+      <p class="note">Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, licencia CC BY 4.0), de esMadrid.com, de la Agenda Cultural del Ministerio de Cultura y de las webs de cada recinto. Cada tarjeta enlaza a su fuente original.</p>`;
+    const au = DATA.audit;
+    if (au && au.runs.length) {
+      const when = new Date(au.runs[0].run_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+      const tf = au.runs.reduce((a, r) => a + r.found, 0), tm = au.runs.reduce((a, r) => a + r.missing, 0);
+      $('fu-audit').hidden = false;
+      $('fu-audit').innerHTML = `<h2 style="margin:0">Auditoría de cobertura</h2>
+        <p class="note">Cada lunes la IA busca en la web planes de las dos semanas siguientes por grupo de categorías y comprueba si los tenemos. Última revisión: ${esc(when)}. De ${tf} planes encontrados faltaban ${tm} (${Math.round(100 * tm / Math.max(1, tf))} %).</p>
+        <div class="tablewrap"><table class="cov"><thead><tr><th>Grupo</th><th class="n">Encontrados</th><th class="n">Faltaban</th><th class="n">%</th></tr></thead><tbody>
+        ${au.runs.slice().sort((a, b) => b.pct_missing - a.pct_missing).map(r => `<tr><td>${esc(GROUP_NAME[r.group_id] || r.group_id)}</td><td class="n">${r.found}</td><td class="n">${r.missing}</td><td class="n" style="${+r.pct_missing > 10 ? 'color:var(--accent-text);font-weight:700' : ''}">${(+r.pct_missing).toLocaleString('es-ES')}</td></tr>`).join('')}</tbody></table></div>
+        ${au.cands.length ? `<h3 style="margin:8px 0 0;font:600 14px var(--f-body)">Fuentes candidatas</h3><p class="note">Webs donde se publicaban planes que no teníamos. Las que se repiten semana a semana son las primeras que conviene añadir.</p>
+        <div class="tablewrap"><table class="cov"><thead><tr><th>Web</th><th class="n">Veces</th><th>Ejemplo</th></tr></thead><tbody>${au.cands.map(c => `<tr><td>${esc(c.domain)}</td><td class="n">${c.hits}</td><td>${c.example_url ? `<a href="${esc(c.example_url)}" target="_blank" rel="noopener">${esc((c.example_title || c.example_url).slice(0, 70))}</a>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    }
   }
   function renderAll() {
     $('stamp').textContent = 'Madrid · ' + META.eventos.toLocaleString('es-ES') + ' eventos';

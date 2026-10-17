@@ -62,6 +62,14 @@
     return r.data;
   }
 
+  async function loadAudit() {
+    const r = await sb.from('coverage_runs').select('run_at,group_id,found,missing,pct_missing').eq('city_id', C.city).order('run_at', { ascending: false }).limit(40);
+    if (r.error || !r.data.length) return null;
+    const last = r.data[0].run_at;
+    const c = await sb.from('source_candidates').select('domain,hits,example_url,example_title,status').eq('city_id', C.city).eq('status', 'nueva').order('hits', { ascending: false }).limit(12);
+    return { runs: r.data.filter((x) => x.run_at === last), cands: c.data || [] };
+  }
+
   async function loadSources() {
     const r = await sb.from('sources').select('name,url,method,license,last_run_at').eq('city_id', C.city).order('id');
     if (r.error) throw r.error;
@@ -182,7 +190,7 @@
   window.bootBureo = async function (startApp) {
     $('pt-h').textContent = 'Cargando planes…';
     try {
-      const [tax, evs, srcs, cuts] = await Promise.all([loadTaxonomy(), loadEvents(), loadSources(), loadClosures()]);
+      const [tax, evs, srcs, cuts, audit] = await Promise.all([loadTaxonomy(), loadEvents(), loadSources(), loadClosures(), loadAudit().catch(() => null)]);
       const last = srcs.map((s) => s.last_run_at).filter(Boolean).sort().pop();
       const meta = {
         eventos: evs.length,
@@ -191,7 +199,7 @@
         sin_categoria: evs.filter((e) => !e.cats.length || (e.cats.length === 1 && e.cats[0] === 'sin_categoria')).length,
         generado: last ? new Date(last).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' }) : 'sin datos'
       };
-      app = startApp({ eventos: evs, meta, closures: cuts }, tax, sync);
+      app = startApp({ eventos: evs, meta, closures: cuts, audit }, tax, sync);
       wireAccount();
     } catch (e) {
       console.error(e);

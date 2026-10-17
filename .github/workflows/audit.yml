@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: "30 5 * * 1"   # lunes, 07:30 en Madrid (verano)
   workflow_dispatch:
+    inputs:
+      groups:
+        description: "Grupos a revisar (ids separados por comas; vacío = todos)"
+        required: false
+        default: ""
+      debug:
+        description: "Mostrar las respuestas de la IA"
+        required: false
+        default: ""
 
 concurrency:
   group: audit
@@ -26,4 +35,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BUREO_AUDIT_GROUPS: ${{ inputs.groups }}
+          BUREO_AUDIT_DEBUG: ${{ inputs.debug }}
         run: python3 src/audit.py
