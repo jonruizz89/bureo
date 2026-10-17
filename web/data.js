@@ -176,6 +176,14 @@
     });
   }
 
+  // acceso directo para las secciones de cuenta (organizadores, admin, calendario)
+  window.limonDB = { sb, user: () => user, fn: async (name, body) => {
+    if (!user) return { error: 'Entra con tu cuenta.' };
+    const { data, error } = await sb.functions.invoke(name, { body });
+    if (error) { try { const b = await error.context.json(); return { error: b.error || 'Error del servidor' }; } catch (e) { return { error: 'No se ha podido contactar con el servidor.' }; } }
+    return data;
+  } };
+
   // IA en el servidor (función limon-ai): solo con sesión
   window.limonAI = async function (payload) {
     if (!user) return { error: 'Entra con tu cuenta para usar la IA.' };

@@ -105,6 +105,19 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .more { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px }
 .more p { margin: 0 }
 .fpanel { gap: 14px }
+.streetwarn { font-size: 13px; background: #FFF0EE; color: #A4251C; border-radius: 8px; padding: 6px 10px; font-weight: 500 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .streetwarn { background: #3B1A17; color: #FFB4A8 } }
+.badge { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--quiet) }
+.badge.publicado { background: var(--ok-soft); color: var(--ok) }
+.badge.revision { background: var(--accent-soft); color: var(--accent-text) }
+.badge.rechazado { background: #FFF0EE; color: #A4251C }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--quiet) }
+.form .full { grid-column: 1 / -1 }
+.form textarea { height: auto; padding: 10px 12px; resize: vertical }
+@media (max-width: 520px) { .form { grid-template-columns: 1fr } }
+.row-item { display: flex; gap: 10px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 10px; flex-wrap: wrap }
+.row-item:first-child { border-top: 0 }
 .fpanel h3 { margin: 0; font: 600 13px var(--f-body); color: var(--quiet); text-transform: uppercase; letter-spacing: .05em }
 .fpanel .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
 .fcount:not(:empty) { margin-left: 2px; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 7px; font-size: 12px; font-weight: 700 }
@@ -279,6 +292,13 @@ table.cov td.n, table.cov th.n { text-align: right }
 
   <section class="view" id="v-explorar" hidden>
     <h1>Explorar</h1>
+    <button class="btn" id="near-go" style="align-self:flex-start">📍 Ahora cerca de ti</button>
+    <div class="panel" id="near" hidden>
+      <div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Ahora cerca de ti</h2><button class="btn ghost" id="near-close">Cerrar</button></div>
+      <p class="note" id="near-lead"></p>
+      <div id="near-map" style="height:280px;border-radius:10px;position:relative;z-index:0;isolation:isolate;background:var(--chip)"></div>
+      <div id="near-list" class="view"></div>
+    </div>
     <label for="ex-q" class="sr">Buscar</label>
     <input class="search" id="ex-q" type="search" placeholder="Ej.: Hitchcock, Matadero, Usera" hidden>
     <div class="filters">
@@ -301,6 +321,7 @@ table.cov td.n, table.cov th.n { text-align: right }
   <section class="view" id="v-agenda" hidden>
     <h1>Mi agenda</h1>
     <p class="lead">Lo que has guardado, por fecha.</p>
+    <div class="panel" id="ag-cal"></div>
     <div id="ag-list" class="view"></div>
   </section>
 
@@ -326,6 +347,8 @@ table.cov td.n, table.cov th.n { text-align: right }
       <label class="toggle" for="o-ninos">Voy con niños (muestra planes familiares e infantiles)<input type="checkbox" id="o-ninos"></label>
       <label class="toggle" for="o-perro">Voy con mi perro (sube planes con mascotas)<input type="checkbox" id="o-perro"></label>
     </div>
+    <div class="panel" id="org" hidden></div>
+    <div class="panel" id="adm" hidden></div>
     <div class="panel" id="account">
       <h2 style="margin:0">Tu cuenta</h2>
       <div id="acc-out">
@@ -553,7 +576,7 @@ function startApp(DATA, TAX, sync) {
     const open = !!state.open[e.id];
     const cats = e.cats.filter(c => c !== 'sin_categoria').slice(0, 3);
     const price = e.gratis ? '<span class="tag free">Gratis</span>' : (e.precio && e.precio.length < 40 ? `<span class="tag">${esc(e.precio)}</span>` : '');
-    const why = opt.reason ? `<div class="why"><b>Por qué:</b> ${esc(opt.reason)}</div>` : opt.why && opt.why.length ? `<div class="why">Te encaja: ${esc(opt.why.slice(0, 3).join(' · '))}</div>` : '';
+    const why = opt.info ? `<div class="why">${esc(opt.info)}</div>` : opt.reason ? `<div class="why"><b>Por qué:</b> ${esc(opt.reason)}</div>` : opt.why && opt.why.length ? `<div class="why">Te encaja: ${esc(opt.why.slice(0, 3).join(' · '))}</div>` : '';
     const more = open ? `<div class="more" id="m-${e.id}">
         ${e.descripcion ? `<p>${esc(e.descripcion)}</p>` : '<p class="note">La fuente no trae descripción.</p>'}
         ${e.hora && e.hora.length >= 40 ? `<p class="note">${esc(e.hora)}</p>` : ''}
@@ -573,6 +596,7 @@ function startApp(DATA, TAX, sync) {
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
           <div class="meta">${esc(whenText(e, occ))}</div>
           <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}</div>
+          ${streetWarn(e, occ)}
           ${e.serie ? `<button class="serie link" data-f-serie="${esc(e.serie)}" aria-label="Ver todo el ciclo: ${esc(e.serie)}">${esc(e.serie)} ›</button>` : ''}
         </div></div>
       <div class="tags">${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${(e.temas || []).slice(0, 2).map(t => `<button class="tag tema link" data-f-tema="${esc(t)}" aria-label="Más planes sobre ${esc(t)}">${esc(t)}</button>`).join('')}${cats.map(c => `<button class="tag link" data-f-cat="${esc(c)}" aria-label="Más planes de ${esc(labelOf(c))}">${esc(labelOf(c))}</button>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
@@ -746,6 +770,209 @@ function startApp(DATA, TAX, sync) {
     }
     return '';
   }
+
+  // ---------- avisos de calle en cada evento: cortes y cierres cerca del lugar ese día
+  const GEOCUTS = CLOSURES.filter(c => c.geom).map(c => ({ c, segs: (c.geom.segs || []).map(s => s.l), pts: c.geom.pts || [] }));
+  const mxy = (p, o) => [(p[1] - o[1]) * 84800, (p[0] - o[0]) * 111320];
+  function cutDistance(o, g) {
+    let best = 1e9;
+    for (const l of g.segs) {
+      for (let i = 0; i < l.length; i++) {
+        const a = mxy(l[i], o);
+        if (i === 0) best = Math.min(best, Math.hypot(a[0], a[1]));
+        if (i + 1 < l.length) {
+          const b = mxy(l[i + 1], o), dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+          const t = L ? Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / L)) : 0;
+          best = Math.min(best, Math.hypot(a[0] + t * dx, a[1] + t * dy));
+        }
+      }
+    }
+    for (const p of g.pts) { const a = mxy(p.p, o); best = Math.min(best, Math.hypot(a[0], a[1])); }
+    return best;
+  }
+  const warnCache = {};
+  function streetWarn(e, occ) {
+    if (!e.lat || !occ || occ.ongoing) return '';
+    const d = occ.date;
+    if (d - today > 14 * 864e5 || d < today) return '';
+    const k = e.id + ':' + ymd(d);
+    if (!(k in warnCache)) {
+      const o = [e.lat, e.lng]; let out = [];
+      for (const g of GEOCUTS) {
+        const r = activeOn(g.c, d); if (!r) continue;
+        const trans = TRANS.includes(g.c.kind) && g.c.kind !== 'autobus';
+        const m = cutDistance(o, g);
+        if (m > (trans ? 700 : 350)) continue;
+        const where = trans ? g.c.title : (g.segs.length ? 'corte en ' + ((g.c.geom.segs[0] || {}).n || g.c.title) : g.c.title);
+        out.push({ m, t: where + (m > 60 ? ` (a ${Math.round(m / 50) * 50} m)` : '') + (r.start ? `, ${r.start}${r.end ? '–' + r.end : ''}` : '') });
+      }
+      out.sort((a, b) => a.m - b.m);
+      const seenW = new Set();
+      out = out.filter(x => { const key = x.t.replace(/ \(a .*$|, \d.*$/, ''); if (seenW.has(key)) return false; seenW.add(key); return true; });
+      warnCache[k] = out.length ? `<div class="streetwarn">⚠ ${+d === +today ? 'Hoy' : 'Ese día'}: ${esc(out.slice(0, 2).map(x => x.t).join(' · '))}${out.length > 2 ? ` y ${out.length - 2} más` : ''}</div>` : '';
+    }
+    return warnCache[k];
+  }
+
+  // ---------- «Ahora cerca de ti»: lo que empieza en las próximas 3 horas cerca, y lo abierto hoy
+  let NEARMAP = null, NEARLAYER = null, nearPos = null;
+  function nearNow() {
+    const now = new Date(), h = now.getHours() + now.getMinutes() / 60;
+    const soon = [], open = [];
+    for (const e of EV) {
+      if (!e.lat || isDismissed(e)) continue;
+      const occ = occurs(e, today, today); if (!occ) continue;
+      const d = km(nearPos, [e.lat, e.lng]); if (d > 3) continue;
+      const sh = startHour(e);
+      if (sh != null && !occ.ongoing) { if (sh >= h - 0.25 && sh <= h + 3) soon.push({ e, occ, d, sh }); }
+      else if (occ.ongoing && e.cats.some(c => ['arte', 'patrimonio'].includes(groupOf(c)))) open.push({ e, occ, d });
+    }
+    soon.sort((a, b) => a.sh - b.sh || a.d - b.d); open.sort((a, b) => a.d - b.d);
+    return { soon: soon.slice(0, 20), open: open.slice(0, 8) };
+  }
+  function renderNear() {
+    if (!nearPos) return;
+    const { soon, open } = nearNow();
+    const hh = x => { const m = Math.round((x - Math.floor(x)) * 60); return String(Math.floor(x)).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
+    const dist = d => d < 1 ? Math.round(d * 1000 / 50) * 50 + ' m' : d.toFixed(1).replace('.', ',') + ' km';
+    $('near-lead').textContent = soon.length ? `${soon.length} planes empiezan en las próximas 3 horas a menos de 3 km.` : 'No hay nada que empiece en las próximas 3 horas a menos de 3 km.';
+    $('near-list').innerHTML = (soon.length ? soon.map(x => card(x.e, { occ: x.occ, info: `Empieza a las ${hh(x.sh)}, a ${dist(x.d)} de ti` })).join('') : '') +
+      (open.length ? `<h2>Abierto hoy cerca</h2>` + open.map(x => card(x.e, { occ: x.occ, info: `A ${dist(x.d)} de ti` })).join('') : '');
+    loadLeaflet().then(() => {
+      if (!NEARMAP) {
+        NEARMAP = L.map('near-map', { scrollWheelZoom: false });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(NEARMAP);
+        NEARLAYER = L.layerGroup().addTo(NEARMAP);
+        $('near-map').classList.toggle('night', dark());
+      }
+      NEARMAP.invalidateSize(); NEARLAYER.clearLayers();
+      L.circleMarker(nearPos, { radius: 8, color: '#FFFFFF', weight: 3, fillColor: '#1E5BA8', fillOpacity: 1 }).bindPopup('Estás aquí').addTo(NEARLAYER);
+      const all = [nearPos];
+      soon.concat(open).forEach(x => {
+        L.circleMarker([x.e.lat, x.e.lng], { radius: 7, color: '#2B2306', weight: 2, fillColor: x.sh != null ? '#FFD43B' : '#FFFFFF', fillOpacity: 1 })
+          .bindPopup(`<b>${esc(x.e.titulo)}</b><br>${x.sh != null ? hh(x.sh) + ' · ' : ''}${esc(x.e.lugar || '')}`).addTo(NEARLAYER);
+        all.push([x.e.lat, x.e.lng]);
+      });
+      NEARMAP.fitBounds(all, { padding: [24, 24], maxZoom: 15 });
+    });
+  }
+
+  // ---------- cuenta: organizadores, revisión (admin) y calendario
+  const CONF = window.BUREO_CONFIG;
+  let me = null, mySubs = [], admQueue = { editors: [], events: [] }, orgEdit = null;
+  async function loadMe() {
+    const db = window.limonDB, u = db && db.user();
+    if (!u) { me = null; renderAccountExtras(); return; }
+    const { data } = await db.sb.from('profiles').select('role,editor_status,organizer,ical_token').eq('id', u.id).maybeSingle();
+    me = data || null;
+    mySubs = [];
+    if (me && (me.role === 'editor' || me.role === 'admin')) {
+      const r = await db.sb.from('submitted_events').select('*').eq('owner', u.id).order('starts_on', { ascending: false });
+      mySubs = r.data || [];
+    }
+    if (me && me.role === 'admin') {
+      const [a, b] = await Promise.all([
+        db.sb.from('profiles').select('id,email,organizer,editor_status').eq('editor_status', 'solicitado'),
+        db.sb.from('submitted_events').select('*').eq('status', 'revision').order('created_at')]);
+      admQueue = { editors: a.data || [], events: b.data || [] };
+    }
+    renderAccountExtras();
+  }
+  const ST = { publicado: 'Publicado', revision: 'En revisión', rechazado: 'Rechazado', borrador: 'Retirado' };
+  function subForm(x) {
+    x = x || {};
+    return `<form class="form" id="org-form" data-id="${x.id || ''}">
+      <label class="full">Título<input class="search" name="title" required minlength="3" maxlength="200" value="${esc(x.title || '')}"></label>
+      <label>Desde<input class="search" type="date" name="starts_on" required value="${esc(x.starts_on || '')}"></label>
+      <label>Hasta (si dura varios días)<input class="search" type="date" name="ends_on" value="${esc(x.ends_on && x.ends_on !== x.starts_on ? x.ends_on : '')}"></label>
+      <label>Hora<input class="search" name="time_text" maxlength="80" placeholder="19:30" value="${esc(x.time_text || '')}"></label>
+      <label>Precio<input class="search" name="price_text" maxlength="120" placeholder="12 € · gratis con inscripción" value="${esc(x.price_text || '')}"></label>
+      <label>Lugar<input class="search" name="venue_name" maxlength="200" required value="${esc(x.venue_name || '')}"></label>
+      <label>Dirección<input class="search" name="address" maxlength="200" placeholder="Calle y número" value="${esc(x.address || '')}"></label>
+      <label class="full">Web o inscripción<input class="search" type="url" name="url" maxlength="500" placeholder="https://" value="${esc(x.url || '')}"></label>
+      <label class="full">Descripción<textarea class="search" name="description" rows="4" maxlength="2000">${esc(x.description || '')}</textarea></label>
+      <label class="toggle full" style="flex-direction:row">Es gratis<input type="checkbox" name="is_free" ${x.is_free ? 'checked' : ''}></label>
+      <div class="seg full"><button class="btn" type="submit">${x.id ? 'Guardar cambios' : 'Enviar evento'}</button><button class="btn ghost" type="button" data-org-cancel>Cancelar</button><span class="note" id="org-msg" role="status"></span></div>
+    </form>`;
+  }
+  function renderAccountExtras() {
+    const org = $('org'), adm = $('adm'), cal = $('ag-cal');
+    if (!logged || !me) {
+      org.hidden = true; adm.hidden = true;
+      cal.innerHTML = `<h2 style="margin:0">En tu calendario</h2><p class="note">Entra con tu cuenta (en Perfil) y tus planes guardados y los cortes de tus calles aparecerán en Google Calendar, Apple u Outlook, y se actualizarán solos.</p>`;
+      return;
+    }
+    const ics = `${CONF.supabaseUrl}/functions/v1/limon-ical?t=${me.ical_token}`, webcal = ics.replace(/^https:/, 'webcal:');
+    cal.innerHTML = `<h2 style="margin:0">En tu calendario</h2>
+      <p class="note">Tus planes guardados y los cortes de tus calles y líneas aparecen en tu calendario y se actualizan varias veces al día. El enlace es personal: no lo compartas.</p>
+      <div class="seg"><a class="btn" href="${esc(webcal)}" style="display:inline-flex;align-items:center;text-decoration:none">Suscribirme</a>
+      <a class="btn ghost" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Google Calendar</a>
+      <button class="btn ghost" data-copy="${esc(ics)}">Copiar enlace</button></div>`;
+    org.hidden = false;
+    if (!(me.role === 'editor' || me.role === 'admin')) {
+      org.innerHTML = me.editor_status === 'solicitado'
+        ? `<h2 style="margin:0">Organizadores</h2><p class="note">Hemos recibido tu solicitud para publicar eventos. En cuanto esté aprobada podrás crearlos desde aquí.</p>`
+        : `<h2 style="margin:0">¿Organizas eventos?</h2><p class="note">Salas, asociaciones, librerías, clubes o particulares: publica tus eventos en Limón gratis. Revisamos cada solicitud.${me.editor_status === 'rechazado' ? ' Tu solicitud anterior no se aprobó; puedes volver a enviarla.' : ''}</p>
+          <form class="form" id="ed-form"><label>Nombre del organizador<input class="search" name="nombre" required maxlength="120"></label><label>Web o redes<input class="search" name="web" maxlength="300"></label>
+          <label class="full">Qué tipo de eventos organizas<textarea class="search" name="que" rows="3" maxlength="600" required></textarea></label>
+          <div class="seg full"><button class="btn" type="submit">Solicitar acceso de organizador</button><span class="note" id="ed-msg" role="status"></span></div></form>`;
+    } else {
+      org.innerHTML = `<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Mis eventos</h2>${orgEdit === null ? '<button class="btn" data-org-new>Nuevo evento</button>' : ''}</div>
+        <p class="note">Lo que publiques sale en Limón con enlace a tu web. La IA revisa cada evento, lo sitúa en el mapa y le pone categorías.</p>
+        ${orgEdit !== null ? subForm(mySubs.find(x => x.id === orgEdit)) : ''}
+        <div>${mySubs.map(x => `<div class="row-item"><div style="min-width:0;flex:1"><b>${esc(x.title)}</b><div class="note">${esc(x.starts_on)}${x.ends_on !== x.starts_on ? ' → ' + esc(x.ends_on) : ''} · ${esc(x.venue_name || '')}${x.ai_review && x.ai_review.motivo && x.status !== 'publicado' ? ' · ' + esc(x.ai_review.motivo) : ''}</div></div>
+          <div class="seg"><span class="badge ${x.status}">${ST[x.status] || x.status}</span><button class="act" data-org-edit="${x.id}">Editar</button>${x.status !== 'borrador' ? `<button class="act" data-org-retire="${x.id}">Retirar</button>` : ''}</div></div>`).join('') || (orgEdit === null ? '<p class="note">Aún no has publicado nada.</p>' : '')}</div>`;
+    }
+    adm.hidden = me.role !== 'admin';
+    if (me.role === 'admin') {
+      adm.innerHTML = `<h2 style="margin:0">Revisión (admin)</h2>
+        <h3 style="margin:4px 0 0;font:600 14px var(--f-body)">Solicitudes de organizador (${admQueue.editors.length})</h3>
+        ${admQueue.editors.map(p => { const o = p.organizer || {}; return `<div class="row-item"><div style="min-width:0;flex:1"><b>${esc(o.nombre || '')}</b> · ${esc(p.email || '')}<div class="note">${esc(o.que || '')}${o.web ? ' · ' + esc(o.web) : ''}</div></div>
+          <div class="seg"><button class="act" data-adm-ed="${p.id}" data-ok="1">Aprobar</button><button class="act" data-adm-ed="${p.id}" data-ok="0">Rechazar</button></div></div>`; }).join('') || '<p class="note">Ninguna pendiente.</p>'}
+        <h3 style="margin:8px 0 0;font:600 14px var(--f-body)">Eventos en revisión (${admQueue.events.length})</h3>
+        ${admQueue.events.map(x => `<div class="row-item"><div style="min-width:0;flex:1"><b>${esc(x.title)}</b><div class="note">${esc(x.starts_on)} · ${esc(x.venue_name || '')} · ${esc(x.address || '')}${x.ai_review ? ' · IA: ' + (x.ai_review.ok ? 'bien' : esc(x.ai_review.motivo || 'dudas')) + (x.ai_review.sin_ubicacion ? ' · sin ubicar' : '') : ''}</div></div>
+          <div class="seg"><button class="act" data-adm-pub="${x.id}" data-ok="1">Publicar</button><button class="act" data-adm-pub="${x.id}" data-ok="0">Rechazar</button></div></div>`).join('') || '<p class="note">Nada pendiente.</p>'}`;
+    }
+  }
+  async function onAccountClick(ev) {
+    const db = window.limonDB;
+    const t = ev.target;
+    if (t.closest('[data-org-new]')) { orgEdit = 'nuevo'; renderAccountExtras(); return true; }
+    const ed = t.closest('[data-org-edit]'); if (ed) { orgEdit = +ed.dataset.orgEdit; renderAccountExtras(); $('org').scrollIntoView({ behavior: 'smooth' }); return true; }
+    if (t.closest('[data-org-cancel]')) { orgEdit = null; renderAccountExtras(); return true; }
+    const rt = t.closest('[data-org-retire]');
+    if (rt) { await db.sb.from('submitted_events').update({ status: 'borrador' }).eq('id', +rt.dataset.orgRetire); toast('Retirado: deja de salir en Limón.'); loadMe(); return true; }
+    const ae = t.closest('[data-adm-ed]');
+    if (ae) { await db.sb.from('profiles').update({ editor_status: ae.dataset.ok === '1' ? 'aprobado' : 'rechazado' }).eq('id', ae.dataset.admEd); loadMe(); return true; }
+    const ap = t.closest('[data-adm-pub]');
+    if (ap) { const { error } = await db.sb.rpc('publish_submission', { p_id: +ap.dataset.admPub, p_publish: ap.dataset.ok === '1' }); toast(error ? 'No se ha podido: ' + error.message : (ap.dataset.ok === '1' ? 'Publicado.' : 'Rechazado.')); loadMe(); return true; }
+    const cp = t.closest('[data-copy]');
+    if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast('Enlace copiado. Pégalo en tu calendario como «suscripción».'); } catch (e) { prompt('Copia este enlace:', cp.dataset.copy); } return true; }
+    return false;
+  }
+  document.addEventListener('submit', async ev => {
+    const db = window.limonDB, u = db && db.user();
+    if (ev.target.id === 'ed-form') {
+      ev.preventDefault(); const f = new FormData(ev.target);
+      const { error } = await db.sb.from('profiles').update({ organizer: { nombre: f.get('nombre'), web: f.get('web'), que: f.get('que') }, editor_status: 'solicitado' }).eq('id', u.id);
+      $('ed-msg').textContent = error ? 'No se ha podido enviar: ' + error.message : 'Enviado.'; if (!error) loadMe();
+    }
+    if (ev.target.id === 'org-form') {
+      ev.preventDefault(); const f = new FormData(ev.target), id = ev.target.dataset.id;
+      const row = { title: f.get('title').trim(), starts_on: f.get('starts_on'), ends_on: f.get('ends_on') || f.get('starts_on'), time_text: f.get('time_text').trim() || null,
+        price_text: f.get('price_text').trim() || null, venue_name: f.get('venue_name').trim() || null, address: f.get('address').trim() || null,
+        url: f.get('url').trim() || null, description: f.get('description').trim() || null, is_free: !!f.get('is_free'), status: 'revision' };
+      if (row.ends_on < row.starts_on) { $('org-msg').textContent = 'La fecha de fin es anterior a la de inicio.'; return; }
+      $('org-msg').textContent = 'Guardando…';
+      const r = id ? await db.sb.from('submitted_events').update(row).eq('id', +id).select('id').single()
+        : await db.sb.from('submitted_events').insert(Object.assign({ owner: u.id }, row)).select('id').single();
+      if (r.error) { $('org-msg').textContent = 'No se ha podido guardar: ' + r.error.message; return; }
+      $('org-msg').textContent = 'Revisando…';
+      const res = await db.fn('limon-org', { id: r.data.id });
+      orgEdit = null; await loadMe();
+      toast(res.error ? res.error : res.estado === 'publicado' ? 'Publicado. Saldrá en Limón al recargar la página.' : (res.motivo || 'Enviado a revisión.'));
+    }
+  });
 
   // ---------- vistas
   const $ = id => document.getElementById(id);
@@ -958,8 +1185,20 @@ function startApp(DATA, TAX, sync) {
     tasteText = text; store.set('taste_text', text); setTaste(res.taste);
     $('ts-msg').textContent = 'Listo. Para ti ya usa este perfil.'; renderIntereses();
   });
+  $('near-go').addEventListener('click', () => {
+    if (!navigator.geolocation) { toast('Tu navegador no permite saber dónde estás.'); return; }
+    $('near-go').disabled = true; $('near-go').textContent = 'Buscando dónde estás…';
+    navigator.geolocation.getCurrentPosition(p => {
+      nearPos = [p.coords.latitude, p.coords.longitude];
+      $('near-go').disabled = false; $('near-go').textContent = '📍 Ahora cerca de ti';
+      if (km(nearPos, [40.4168, -3.7038]) > 25) toast('Pareces estar fuera de Madrid: te enseño lo que hay cerca del centro.'), nearPos = [40.4168, -3.7038];
+      $('near').hidden = false; $('near-go').hidden = true; renderNear(); $('near').scrollIntoView({ behavior: 'smooth' });
+    }, () => { $('near-go').disabled = false; $('near-go').textContent = '📍 Ahora cerca de ti'; toast('Sin permiso de ubicación no puedo saber qué tienes cerca.'); }, { timeout: 12000, maximumAge: 120000 });
+  });
+  $('near-close').addEventListener('click', () => { $('near').hidden = true; $('near-go').hidden = false; });
   $('toast-undo').addEventListener('click', () => { $('toast').hidden = true; if (toastUndo) toastUndo(); toastUndo = null; });
   document.addEventListener('click', ev => {
+    if (ev.target.closest('#org, #adm, #ag-cal') && ev.target.closest('button, a[data-copy]')) { onAccountClick(ev).then(done => { if (done) ev.preventDefault(); }); if (ev.target.closest('[data-org-new],[data-org-edit],[data-org-cancel],[data-org-retire],[data-adm-ed],[data-adm-pub],[data-copy]')) return; }
     const ck = ev.target.closest('[data-cakind]');
     if (ck) { state.caKind = ck.dataset.cakind; renderCalle(); return; }
     const cd = ev.target.closest('[data-caday]');
@@ -1028,9 +1267,10 @@ function startApp(DATA, TAX, sync) {
   });
   const t0 = store.get('tab', 'parati');
   go(tabs.includes(t0) ? t0 : 'parati');
+  renderAccountExtras();
   return {
     get: () => ({ prefs, opts, saved, streets, dismissed, went, learned, taste }),
-    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); },
+    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); },
     set(p) {
       if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
       if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.learned) learned = p.learned;
