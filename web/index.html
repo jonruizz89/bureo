@@ -160,12 +160,16 @@ table.cov td.n, table.cov th.n { text-align: right }
 }
 @media (min-width: 761px) { .segtabs { display: none } }
 .mapwrap { padding: 8px 8px 12px; gap: 8px }
+#ca-map .leaflet-tile-pane { filter: grayscale(.75) brightness(1.04) }
+#ca-map.night .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) grayscale(.6) brightness(.9) contrast(.85) }
 #ca-map { height: 360px; border-radius: 10px; position: relative; z-index: 0; isolation: isolate; background: var(--chip) }
 @media (max-width: 760px) { #ca-map { height: 300px } }
 .mapwrap .legend, .mapwrap .note { padding-inline: 6px }
 .sw { display: inline-block; width: 18px; height: 0; border-top: 4px solid #E03131; border-radius: 2px; vertical-align: middle; margin-right: 6px }
 .sw.vague { border-top: 4px dotted #E03131; opacity: .8 }
 .sw.bus { border-color: #1E5BA8 }
+.sw.obras { border-color: #E8590C }
+.st { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 3px solid #12182B; background: #fff; vertical-align: middle; margin-right: 6px }
 .sw.mine { border-top-width: 8px; border-color: var(--accent) }
 .leaflet-popup-content { font: 13.5px/1.4 var(--f-body); margin: 10px 12px }
 .leaflet-popup-content b { font-family: var(--f-display); font-size: 14.5px }
@@ -218,6 +222,19 @@ table.cov td.n, table.cov th.n { text-align: right }
     <p class="lead">Calles cortadas y cierres de Metro, Cercanías y autobuses, según los avisos del Ayuntamiento y del Consorcio de Transportes.</p>
     <div class="seg" role="group" aria-label="Tipo" id="ca-kinds"></div>
     <div class="seg" role="group" aria-label="Día" id="ca-days"></div>
+    <p class="note" id="ca-count"></p>
+    <div class="panel mapwrap" id="ca-mapwrap">
+      <div id="ca-map" role="region" aria-label="Mapa de los cortes del día"></div>
+      <div class="legend">
+        <span><i class="sw cut"></i>Tramo cortado</span>
+        <span><i class="sw vague"></i>Calle afectada, sin tramo exacto</span>
+        <span><i class="sw obras"></i>Obras</span>
+        <span><i class="sw bus"></i>Desvío de autobús</span>
+        <span><i class="st"></i>Estación cerrada</span>
+        <span><i class="sw mine"></i>Tus calles y líneas</span>
+      </div>
+      <p class="note" id="ca-mapnote"></p>
+    </div>
     <div class="panel">
       <h2 style="margin:0">Mis calles y líneas</h2>
       <p class="note">Añade tu calle, las que usas a menudo, tus líneas (L6, C5, 27…) o estaciones. Te avisamos cuando algún aviso las nombre.</p>
@@ -227,17 +244,6 @@ table.cov td.n, table.cov th.n { text-align: right }
         <button class="btn" type="submit">Añadir</button>
       </form>
       <div class="seg" id="ca-mine"></div>
-    </div>
-    <p class="note" id="ca-count"></p>
-    <div class="panel mapwrap" id="ca-mapwrap">
-      <div id="ca-map" role="region" aria-label="Mapa de los cortes del día"></div>
-      <div class="legend">
-        <span><i class="sw cut"></i>Tramo cortado</span>
-        <span><i class="sw vague"></i>Calle afectada, sin tramo exacto</span>
-        <span><i class="sw bus"></i>Desvío de autobús</span>
-        <span><i class="sw mine"></i>Tus calles y líneas</span>
-      </div>
-      <p class="note" id="ca-mapnote"></p>
     </div>
     <div id="ca-list" class="view"></div>
     <p class="note">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
@@ -566,10 +572,10 @@ function startApp(DATA, TAX, sync) {
     loadLeaflet().then(() => {
       if (!MAP) {
         MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5 }).setView([40.4168, -3.7038], 12);
-        L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark() ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, {
-          subdomains: 'abcd', maxZoom: 19,
-          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>'
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(MAP);
+        $('ca-map').classList.toggle('night', dark());
         LAYER = L.layerGroup().addTo(MAP);
       }
       MAP.invalidateSize();
@@ -586,7 +592,9 @@ function startApp(DATA, TAX, sync) {
           pts.push(...sg.l);
         });
         (g.pts || []).forEach(p => {
-          const m = L.circleMarker(p.p, { radius: x.mine ? 10 : 8, color: x.mine ? '#FFD43B' : '#FFFFFF', weight: x.mine ? 4 : 2.5, fillColor: col, fillOpacity: 1 });
+          const metro = TRANS.includes(x.c.kind) && x.c.kind !== 'autobus';
+          const ring = metro ? ((g.segs || [])[0] || {}).c || '#12182B' : '#FFFFFF';
+          const m = L.circleMarker(p.p, { radius: x.mine ? 10 : 8, color: x.mine ? '#FFD43B' : ring, weight: x.mine ? 4 : metro ? 4 : 2.5, fillColor: metro ? '#FFFFFF' : col, fillOpacity: 1 });
           m.bindPopup(popupHtml(x, i, p.n)).addTo(LAYER);
           pts.push(p.p);
         });
@@ -594,7 +602,9 @@ function startApp(DATA, TAX, sync) {
         all.push(...pts);
       });
       const mineB = list.map((x, i) => x.mine ? SHAPES[i] || [] : []).flat();
-      const b = mineB.length ? mineB : all;
+      const SOL = [40.4169, -3.7035];
+      const centro = all.filter(p => Math.abs(p[0] - SOL[0]) < 0.065 && Math.abs(p[1] - SOL[1]) < 0.085);  // ~7 km alrededor de Sol
+      const b = mineB.length ? mineB : centro.length ? centro : all;
       if (b.length) MAP.fitBounds(b, { padding: [24, 24], maxZoom: 15 });
     }).catch(() => { $('ca-mapwrap').hidden = true; });
   }
