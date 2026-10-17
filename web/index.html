@@ -126,6 +126,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .ai .why { background: var(--surface); color: var(--ink); font-weight: 400 }
 .ai .why b { color: var(--accent-text) }
 .tchip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-weight: 600; font-size: 13px; border: 0; cursor: pointer }
+.meta .dist { font-weight: 600; color: var(--ink) }
 .acts { display: flex; gap: 8px; flex-wrap: wrap }
 .act { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer }
 .act[aria-pressed="true"] { background: var(--chip) }
@@ -346,6 +347,7 @@ table.cov td.n, table.cov th.n { text-align: right }
       <h2 style="margin:0">Con quién y cómo</h2>
       <label class="toggle" for="o-ninos">Voy con niños (muestra planes familiares e infantiles)<input type="checkbox" id="o-ninos"></label>
       <label class="toggle" for="o-perro">Voy con mi perro (sube planes con mascotas)<input type="checkbox" id="o-perro"></label>
+      <label class="toggle" for="o-dist">Mostrar a qué distancia está cada plan (usa tu ubicación; no se guarda)<input type="checkbox" id="o-dist"></label>
     </div>
     <div class="panel" id="org" hidden></div>
     <div class="panel" id="adm" hidden></div>
@@ -472,6 +474,20 @@ function startApp(DATA, TAX, sync) {
   // ---------- filtros: zona, hora del día, días y precio (compartidos por Para ti y Explorar)
   let F = Object.assign({ dist: '', near: 0, pos: null, franja: '', dias: '', precio: '' }, store.get('filters', {}));
   F.pos = null; F.near = 0;  // la ubicación no se guarda: se pide cada vez
+  let userPos = null;  // última posición conocida del usuario (solo en memoria)
+  const fmtDist = d => d < 1 ? Math.max(50, Math.round(d * 1000 / 50) * 50) + ' m' : d < 10 ? d.toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' km';
+  function setUserPos(p) { userPos = p; if (!F.pos) F.pos = p; renderAll(); }
+  function askPos(quiet) {
+    if (!navigator.geolocation) { if (!quiet) toast('Tu navegador no permite saber dónde estás.'); return; }
+    navigator.geolocation.getCurrentPosition(p => setUserPos([p.coords.latitude, p.coords.longitude]),
+      () => { if (!quiet) { toast('Sin permiso de ubicación no puedo calcular distancias.'); opts.dist = false; store.set('opts', opts); renderAll(); } },
+      { timeout: 10000, maximumAge: 300000 });
+  }
+  // si ya diste permiso antes (o activaste la opción), se usa sin volver a preguntar
+  try {
+    if (opts.dist) askPos(true);
+    else if (navigator.permissions) navigator.permissions.query({ name: 'geolocation' }).then(r => { if (r.state === 'granted') askPos(true); }).catch(() => { });
+  } catch (e) { }
   const DISTRITOS = ['Arganzuela', 'Barajas', 'Carabanchel', 'Centro', 'Chamartín', 'Chamberí', 'Ciudad Lineal', 'Fuencarral-El Pardo', 'Hortaleza', 'Latina', 'Moncloa-Aravaca', 'Moratalaz', 'Puente de Vallecas', 'Retiro', 'Salamanca', 'San Blas-Canillejas', 'Tetuán', 'Usera', 'Vicálvaro', 'Villa de Vallecas', 'Villaverde'];
   const nf = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const startHour = e => { const m = String(e.hora || '').match(/(\d{1,2})[:.h](\d{2})/); return m ? +m[1] + m[2] / 60 : null; };
@@ -511,7 +527,7 @@ function startApp(DATA, TAX, sync) {
     F[k] = String(F[k]) === String(v) ? (k === 'near' ? 0 : '') : (k === 'near' ? +v : v);
     if (k === 'near' && F.near && !F.pos) {
       if (!navigator.geolocation) { F.near = 0; toast('Tu navegador no permite saber dónde estás.'); }
-      else navigator.geolocation.getCurrentPosition(p => { F.pos = [p.coords.latitude, p.coords.longitude]; renderAll(); },
+      else navigator.geolocation.getCurrentPosition(p => { F.pos = [p.coords.latitude, p.coords.longitude]; userPos = userPos || F.pos; renderAll(); },
         () => { F.near = 0; toast('Sin permiso de ubicación: elige un distrito.'); renderAll(); }, { timeout: 10000, maximumAge: 300000 });
     }
     store.set('filters', { dist: F.dist, franja: F.franja, dias: F.dias, precio: F.precio });
@@ -583,7 +599,8 @@ function startApp(DATA, TAX, sync) {
         ${e.precio && e.precio.length >= 40 ? `<p class="note">${esc(e.precio)}</p>` : ''}
         ${e.distrito ? `<p class="note">Distrito: ${esc(e.distrito)}</p>` : ''}
         <div class="links">${e.fuentes.map(f => f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">Ver en ${esc(f.nombre)} ↗</a>` : '').join('')}
-        ${e.web_organizador ? `<a href="${esc(e.web_organizador)}" target="_blank" rel="noopener">Web del organizador ↗</a>` : ''}</div>
+        ${e.web_organizador ? `<a href="${esc(e.web_organizador)}" target="_blank" rel="noopener">Web del organizador ↗</a>` : ''}
+        ${e.lat ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${e.lat},${e.lng}&travelmode=transit" target="_blank" rel="noopener">Cómo llegar ↗</a>` : ''}</div>
         <p class="note">Fuentes: ${e.fuentes.map(f => esc(f.nombre)).join(', ')}</p>
         <div class="acts">
           <button class="act" data-dismiss="${e.id}" aria-pressed="${isDismissed(e)}">${isDismissed(e) ? 'Volver a mostrar' : 'No me interesa'}</button>
@@ -595,7 +612,7 @@ function startApp(DATA, TAX, sync) {
         <div class="body">
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
           <div class="meta">${esc(whenText(e, occ))}</div>
-          <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}</div>
+          <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}${userPos && e.lat ? ` · <span class="dist">a ${fmtDist(km(userPos, [e.lat, e.lng]))}</span>` : ''}</div>
           ${streetWarn(e, occ)}
           ${e.serie ? `<button class="serie link" data-f-serie="${esc(e.serie)}" aria-label="Ver todo el ciclo: ${esc(e.serie)}">${esc(e.serie)} ›</button>` : ''}
         </div></div>
@@ -1097,7 +1114,7 @@ function startApp(DATA, TAX, sync) {
       return `<div class="grp"><button data-grp="${g.id}" aria-expanded="${!!open}"><span class="nm">${esc(g.name)}</span><span class="ct ${on ? 'on' : ''}">${ct}</span><span aria-hidden="true">${open ? '▴' : '▾'}</span></button>
         ${open ? `<div class="chips">${items.map(it => `<button class="chip" data-cat="${it.id}" data-v="${prefs[it.id] || 0}" aria-label="${esc(it.label)}: ${['sin marcar', 'me interesa', 'no me muestres'][prefs[it.id] || 0]}">${esc(it.label)}<span class="k">${counts[it.id] || 0}</span></button>`).join('')}</div>` : ''}</div>`;
     }).join('');
-    $('o-ninos').checked = !!opts.ninos; $('o-perro').checked = !!opts.perro;
+    $('o-ninos').checked = !!opts.ninos; $('o-perro').checked = !!opts.perro; $('o-dist').checked = !!opts.dist;
     renderTaste();
   }
   function renderFuentes() {
@@ -1173,6 +1190,7 @@ function startApp(DATA, TAX, sync) {
   $('ex-q').addEventListener('input', () => { $('q-global').value = $('ex-q').value; });
   $('o-ninos').addEventListener('change', e => { opts.ninos = e.target.checked; store.set('opts', opts); });
   $('o-perro').addEventListener('change', e => { opts.perro = e.target.checked; store.set('opts', opts); });
+  $('o-dist').addEventListener('change', e => { opts.dist = e.target.checked; store.set('opts', opts); if (opts.dist) askPos(false); else { userPos = null; renderAll(); } });
   $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
   $('in-clear').addEventListener('click', () => { prefs = {}; store.set('prefs', prefs); renderIntereses(); });
   $('ts-go').addEventListener('click', async () => {
@@ -1189,7 +1207,7 @@ function startApp(DATA, TAX, sync) {
     if (!navigator.geolocation) { toast('Tu navegador no permite saber dónde estás.'); return; }
     $('near-go').disabled = true; $('near-go').textContent = 'Buscando dónde estás…';
     navigator.geolocation.getCurrentPosition(p => {
-      nearPos = [p.coords.latitude, p.coords.longitude];
+      nearPos = [p.coords.latitude, p.coords.longitude]; userPos = nearPos;
       $('near-go').disabled = false; $('near-go').textContent = '📍 Ahora cerca de ti';
       if (km(nearPos, [40.4168, -3.7038]) > 25) toast('Pareces estar fuera de Madrid: te enseño lo que hay cerca del centro.'), nearPos = [40.4168, -3.7038];
       $('near').hidden = false; $('near-go').hidden = true; renderNear(); $('near').scrollIntoView({ behavior: 'smooth' });
