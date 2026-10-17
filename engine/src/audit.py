@@ -78,7 +78,7 @@ def search_group(g, labels):
               'asociaciones, federaciones, salas pequeñas, librerías, embajadas e institutos culturales. Haz como mucho 3 búsquedas. '
               'Después llama a guardar_encontrados con hasta 15 eventos concretos con fecha dentro del periodo; no inventes nada: '
               'cada evento debe venir de una página que hayas visto.')
-    body = {'model': MODEL, 'max_tokens': 4000, 'system': system,
+    body = {'model': MODEL, 'max_tokens': 16000, 'system': system,
             'tools': [{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 3,
                        'user_location': {'type': 'approximate', 'city': 'Madrid', 'region': 'Madrid', 'country': 'ES', 'timezone': 'Europe/Madrid'}},
                       TOOL],
