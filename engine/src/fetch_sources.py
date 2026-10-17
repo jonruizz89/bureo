@@ -13,7 +13,7 @@ UAS = ['BureoBot/0.1 (+https://github.com/jonruizz89/bureo)', 'curl/8.5.0',
 def curl(url, out):
     """Descarga con reintentos. Si falla, se queda la copia anterior (si la hay) y se avisa sin parar el resto."""
     dest = os.path.join(RAW, out)
-    for i in range(6):
+    for i in range(3):  # menos reintentos: si una web no responde, se usa la copia anterior
         tmp = dest + '.part'
         r = subprocess.run(['curl', '-sSL', '-m', '180', '-A', UAS[i % len(UAS)], '-o', tmp, '-w', '%{http_code}', url],
                            capture_output=True, text=True)
@@ -22,7 +22,7 @@ def curl(url, out):
             print(out, 'ok')
             return True
         print(out, 'intento', i + 1, 'respuesta', r.stdout or r.stderr.strip()[:120], flush=True)
-        time.sleep(20 * (i + 1))
+        time.sleep(15 * (i + 1))
     if os.path.exists(dest):
         print('aviso: no se pudo actualizar', out, '- se usa la copia anterior', file=sys.stderr)
         return True
