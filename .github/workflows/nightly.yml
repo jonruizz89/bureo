@@ -44,6 +44,12 @@ jobs:
       - name: Descargar fichas nuevas o cambiadas de esMadrid
         run: python3 src/fetch_esmadrid.py
 
+      - name: Índices del callejero y Metro (como mucho una vez por semana)
+        run: python3 src/geo_index.py
+
+      - name: Unificar, quitar duplicados, categorizar y situar en el mapa
+        run: python3 src/pipeline.py
+
       - name: Guardar la caché de fichas
         if: always()
         uses: actions/cache/save@v4
@@ -52,9 +58,6 @@ jobs:
             engine/raw/esmadrid.jsonl
             engine/raw/*.json
           key: raw-${{ github.run_id }}
-
-      - name: Unificar, quitar duplicados y categorizar
-        run: python3 src/pipeline.py
 
       - name: Cargar en Supabase
         env:

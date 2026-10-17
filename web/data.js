@@ -23,7 +23,7 @@
   async function loadEvents() {
     const today = ymd(new Date());
     const cols = 'id,title,description,starts_on,ends_on,time_text,district,price_text,is_free,image_url,organizer_url,' +
-      'is_unique,is_featured,ai_unique,topics,series,venues(name),event_sessions(on_date),event_categories(category_id),event_sources(url,sources(name))';
+      'is_unique,is_featured,ai_unique,topics,series,lat,lng,venues(name),event_sessions(on_date),event_categories(category_id),event_sources(url,sources(name))';
     const out = [];
     for (let from = 0; ; from += 1000) {
       const r = await sb.from('events').select(cols).eq('city_id', C.city).gte('ends_on', today)
@@ -41,6 +41,7 @@
       hora: e.time_text,
       lugar: e.venues ? e.venues.name : null,
       distrito: e.district,
+      lat: e.lat, lng: e.lng,
       precio: e.price_text,
       gratis: e.is_free,
       imagen: e.image_url,
@@ -86,6 +87,15 @@
       if (ids.length) del = del.not('event_id', 'in', '(' + ids.join(',') + ')');
       await del;
       if (ids.length) await sb.from('saved_events').upsert(ids.map((id) => ({ user_id: uid, event_id: id })), { ignoreDuplicates: true });
+    } else if (k === 'dismissed' || k === 'went') {
+      const table = k === 'dismissed' ? 'dismissed_events' : 'attendance';
+      const ids = v.map(toDbId).filter(Boolean);
+      let del = sb.from(table).delete().eq('user_id', uid);
+      if (ids.length) del = del.not('event_id', 'in', '(' + ids.join(',') + ')');
+      await del;
+      if (ids.length) await sb.from(table).upsert(ids.map((id) => k === 'went' ? { user_id: uid, event_id: id, went: true } : { user_id: uid, event_id: id }), { ignoreDuplicates: true });
+    } else if (k === 'learned') {
+      await sb.from('profiles').update({ learned: v }).eq('id', uid);
     } else if (k === 'streets') {
       await sb.from('profiles').update({ my_streets: v }).eq('id', uid);
     } else if (k === 'opts') {
@@ -93,29 +103,35 @@
     }
   }
   function sync(k, v) {
-    if (!user || !['prefs', 'saved', 'opts', 'streets'].includes(k)) return;
+    if (!user || !['prefs', 'saved', 'opts', 'streets', 'dismissed', 'went', 'learned'].includes(k)) return;
     clearTimeout(timers[k]);
     timers[k] = setTimeout(() => pushKey(k, v).catch((e) => console.warn('sync', k, e)), 400);
   }
 
   async function pullAccount() {
     const uid = user.id;
-    const [i, s, p] = await Promise.all([
+    const [i, s, p, d, w] = await Promise.all([
       sb.from('user_interests').select('category_id,value').eq('user_id', uid),
       sb.from('saved_events').select('event_id').eq('user_id', uid),
-      sb.from('profiles').select('with_kids,with_dog,my_streets').eq('id', uid).maybeSingle()
+      sb.from('profiles').select('with_kids,with_dog,my_streets,learned').eq('id', uid).maybeSingle(),
+      sb.from('dismissed_events').select('event_id').eq('user_id', uid),
+      sb.from('attendance').select('event_id').eq('user_id', uid).eq('went', true)
     ]);
     const remote = {
       prefs: Object.fromEntries((i.data || []).map((r) => [r.category_id, r.value])),
       saved: (s.data || []).map((r) => 'e' + r.event_id),
       opts: { ninos: !!(p.data && p.data.with_kids), perro: !!(p.data && p.data.with_dog) },
-      streets: (p.data && p.data.my_streets) || []
+      streets: (p.data && p.data.my_streets) || [],
+      dismissed: (d.data || []).map((r) => 'e' + r.event_id),
+      went: (w.data || []).map((r) => 'e' + r.event_id),
+      learned: (p.data && p.data.learned) || {}
     };
     const local = app.get();
-    const remoteEmpty = !Object.keys(remote.prefs).length && !remote.saved.length && !remote.streets.length;
+    const remoteEmpty = !Object.keys(remote.prefs).length && !remote.saved.length && !remote.streets.length && !remote.dismissed.length && !Object.keys(remote.learned).length;
     if (remoteEmpty && (Object.keys(local.prefs).length || local.saved.length)) {
       // primera vez en este dispositivo con cuenta nueva: subimos lo que ya tenías
       await pushKey('prefs', local.prefs); await pushKey('saved', local.saved); await pushKey('opts', local.opts); await pushKey('streets', local.streets || []);
+      await pushKey('dismissed', local.dismissed || []); await pushKey('went', local.went || []); await pushKey('learned', local.learned || {});
     } else {
       app.set(remote);
     }

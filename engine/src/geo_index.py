@@ -137,6 +137,8 @@ def build_streets():
         print('aviso: no se pudo descargar el callejero')
         return False
     vias = {}
+    portals = defaultdict(list)   # clave de calle → [número, lat, lon, distrito]
+    grid = defaultdict(lambda: defaultdict(int))  # celda de ~500 m → distritos
     with open(tmp, encoding='latin-1') as f:
         for r in csv.DictReader(f, delimiter=';'):
             if r['CLASE_APP'] != 'NUMERO':
@@ -151,6 +153,12 @@ def build_streets():
             v = vias.setdefault(r['COD_VIA'], {'clase': r['VIA_CLASE'], 'par': r['VIA_PAR'],
                                                'nombre': r['VIA_NOMBRE_ACENTOS'], 'odd': [], 'even': []})
             v['odd' if n % 2 else 'even'].append((n, (lat, lon)))
+            try:
+                dcode = int(r['DISTRITO'])
+            except ValueError:
+                dcode = 0
+            v['d'] = dcode
+            grid[f'{round(lat / 0.005)}:{round(lon / 0.006)}'][dcode] += 1
     idx = defaultdict(list)
     for cod, v in vias.items():
         tipo = fold(v['clase'])
@@ -162,10 +170,15 @@ def build_streets():
             entry['l'] = axis(v['odd'], v['even'])
         _, k = street_key(v['nombre'])
         idx[k].append(entry)
+        pts = sorted([(n, p) for n, p in v['odd'] + v['even']])
+        portals[k].append({'tipo': tipo, 'p': [[n, round(p[0], 5), round(p[1], 5)] for n, p in pts], 'd': v.get('d', 0)})
         full = name_key(v['nombre'])
         if full != k:
             idx[full].append(entry)
     json.dump(idx, open(os.path.join(RAW, 'geo_streets.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
+    cells = {c: max(ds.items(), key=lambda x: x[1])[0] for c, ds in grid.items()}
+    json.dump({'portals': portals, 'cells': cells}, open(os.path.join(RAW, 'geo_portals.json'), 'w'),
+              ensure_ascii=False, separators=(',', ':'))
     os.remove(tmp)
     print(len(vias), 'vías en el índice de calles')
     return True
@@ -213,7 +226,7 @@ def fresh(name, days=7):
 if __name__ == '__main__':
     os.makedirs(RAW, exist_ok=True)
     force = '--force' in sys.argv
-    if force or not fresh('geo_streets.json'):
+    if force or not fresh('geo_streets.json') or not fresh('geo_portals.json'):
         build_streets()
     if force or not fresh('geo_metro.json'):
         build_metro()

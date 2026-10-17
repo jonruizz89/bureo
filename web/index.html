@@ -104,6 +104,16 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .save[aria-pressed="true"] { color: var(--accent-text) }
 .more { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px }
 .more p { margin: 0 }
+.fpanel { gap: 14px }
+.fpanel h3 { margin: 0; font: 600 13px var(--f-body); color: var(--quiet); text-transform: uppercase; letter-spacing: .05em }
+.fpanel .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
+.fcount:not(:empty) { margin-left: 2px; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 7px; font-size: 12px; font-weight: 700 }
+.acts { display: flex; gap: 8px; flex-wrap: wrap }
+.act { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer }
+.act[aria-pressed="true"] { background: var(--chip) }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20; display: flex; gap: 12px; align-items: center; background: var(--strong); color: var(--strong-ink); border-radius: 12px; padding: 10px 10px 10px 16px; font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.2); max-width: calc(100vw - 32px) }
+.toast button { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 8px; padding: 8px 12px; font-weight: 600; cursor: pointer }
+@media (max-width: 760px) { .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) } }
 .links { display: flex; gap: 8px; flex-wrap: wrap }
 .links a { font-size: 13px; font-weight: 600; color: var(--accent-text); text-decoration: none; padding: 6px 10px; border-radius: 8px; background: var(--accent-soft) }
 .empty { background: var(--surface); border-radius: 14px; padding: 18px; color: var(--quiet); font-size: 14px }
@@ -212,7 +222,9 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div class="seg" role="group" aria-label="Filtros rápidos">
       <button class="pill" id="pt-free" aria-pressed="false">Solo gratis</button>
+      <button class="pill" data-ftoggle="pt" aria-expanded="false">Filtros<span class="fcount"></span></button>
     </div>
+    <div class="panel fpanel" id="pt-fpanel" hidden></div>
     <div id="pt-list" class="view"></div>
     <button class="btn ghost" id="pt-more" hidden>Ver más</button>
   </section>
@@ -272,7 +284,8 @@ table.cov td.n, table.cov th.n { text-align: right }
         <option value="todo">Todo lo disponible</option>
       </select>
     </div>
-    <div class="seg"><button class="pill" id="ex-free" aria-pressed="false">Solo gratis</button></div>
+    <div class="seg"><button class="pill" id="ex-free" aria-pressed="false">Solo gratis</button><button class="pill" data-ftoggle="ex" aria-expanded="false">Filtros<span class="fcount"></span></button></div>
+    <div class="panel fpanel" id="ex-fpanel" hidden></div>
     <div id="ex-active" class="seg"></div>
     <p class="note" id="ex-count"></p>
     <div id="ex-list" class="view"></div>
@@ -327,6 +340,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <div class="panel" id="fu-notes"></div>
   </section>
 </main>
+<div class="toast" id="toast" role="status" hidden><span id="toast-t"></span><button id="toast-undo">Deshacer</button></div>
 
 <nav class="bottomnav" aria-label="Secciones">
     <button data-goto="parati" data-bnav="parati"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6L3.3 9.2l6.1-.6z"/></svg><span>Para ti</span></button>
@@ -361,6 +375,9 @@ function startApp(DATA, TAX, sync) {
   let opts = store.get('opts', { ninos: false, perro: false });
   let saved = store.get('saved', []);
   let streets = store.get('streets', []);
+  let dismissed = store.get('dismissed', []);
+  let went = store.get('went', []);
+  let learned = store.get('learned', {});
   const CLOSURES = DATA.closures || [];
   let state = { caKind: 'todo', caDay: null, filter: null, tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
 
@@ -392,9 +409,80 @@ function startApp(DATA, TAX, sync) {
   const isFamily = e => e.cats.some(c => c === 'infantil' || c === 'cuentacuentos' || c === 'titeres' || c === 'talleres_familia');
   const isPet = e => e.cats.some(c => groupOf(c) === 'mascotas');
 
+  // ---------- aprendizaje: guardar, descartar y «fui» mueven pesos por categoría y tema
+  const SIGNAL = { save: [0.5, 1], unsave: [-0.5, -1], dismiss: [-0.6, -1.2], undismiss: [0.6, 1.2], went: [1, 1.5], unwent: [-1, -1.5] };
+  function learn(e, kind) {
+    const [wc, wt] = SIGNAL[kind];
+    e.cats.filter(c => c !== 'sin_categoria').forEach(c => { learned['cat:' + c] = +(((learned['cat:' + c] || 0) + wc).toFixed(2)); });
+    (e.temas || []).forEach(t => { learned['tema:' + t] = +(((learned['tema:' + t] || 0) + wt).toFixed(2)); });
+    if (e.serie) learned['serie:' + e.serie] = +(((learned['serie:' + e.serie] || 0) + wt).toFixed(2));
+    Object.keys(learned).forEach(k => { if (Math.abs(learned[k]) < 0.05) delete learned[k]; else learned[k] = Math.max(-4, Math.min(4, learned[k])); });
+    store.set('learned', learned);
+  }
+  const isDismissed = e => dismissed.includes(e.id);
+  const BYID = Object.fromEntries(EV.map(e => [e.id, e]));
+  let toastTimer = null, toastUndo = null;
+  function toast(msg, undo) {
+    $('toast-t').textContent = msg; $('toast-undo').hidden = !undo; toastUndo = undo || null;
+    $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 5000);
+  }
+
+  // ---------- filtros: zona, hora del día, días y precio (compartidos por Para ti y Explorar)
+  let F = Object.assign({ dist: '', near: 0, pos: null, franja: '', dias: '', precio: '' }, store.get('filters', {}));
+  F.pos = null; F.near = 0;  // la ubicación no se guarda: se pide cada vez
+  const DISTRITOS = ['Arganzuela', 'Barajas', 'Carabanchel', 'Centro', 'Chamartín', 'Chamberí', 'Ciudad Lineal', 'Fuencarral-El Pardo', 'Hortaleza', 'Latina', 'Moncloa-Aravaca', 'Moratalaz', 'Puente de Vallecas', 'Retiro', 'Salamanca', 'San Blas-Canillejas', 'Tetuán', 'Usera', 'Vicálvaro', 'Villa de Vallecas', 'Villaverde'];
+  const nf = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const startHour = e => { const m = String(e.hora || '').match(/(\d{1,2})[:.h](\d{2})/); return m ? +m[1] + m[2] / 60 : null; };
+  const minPrice = e => { if (e.gratis) return 0; const m = String(e.precio || '').replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(?:€|euros?)/i) || String(e.precio || '').match(/^\D{0,12}(\d+(?:[.,]\d+)?)/); return m ? parseFloat(m[1]) : null; };
+  const km = (a, b) => { const R = 6371, r = Math.PI / 180, dLa = (b[0] - a[0]) * r, dLo = (b[1] - a[1]) * r; const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  const nFilters = () => [F.dist, F.near && F.pos, F.franja, F.dias, F.precio].filter(Boolean).length;
+  function passF(e, occ) {
+    if (F.dist && e.distrito !== F.dist) return false;
+    if (F.near && F.pos) { if (!e.lat || km(F.pos, [e.lat, e.lng]) > F.near) return false; }
+    if (F.franja) {
+      const h = startHour(e);
+      if (h == null) { if (!(occ && occ.ongoing)) return false; }
+      else if (F.franja === 'manana' ? h >= 14 : F.franja === 'tarde' ? (h < 14 || h >= 20.5) : h < 20) return false;
+    }
+    if (F.dias && occ && !occ.ongoing) { const wd = occ.date.getDay(), finde = wd === 0 || wd === 6 || (wd === 5 && (startHour(e) || 0) >= 18); if ((F.dias === 'finde') !== finde) return false; }
+    if (F.precio) { const p = minPrice(e); if (F.precio === 'gratis' ? !e.gratis : (p == null || p > +F.precio)) return false; }
+    return true;
+  }
+  function filtersHtml() {
+    const pill = (k, v, t) => `<button class="pill" data-fset="${k}" data-fval="${v}" aria-pressed="${String(F[k]) === String(v)}">${t}</button>`;
+    return `<div><h3>Zona</h3><div class="row" style="margin-top:6px">
+        <select class="search" data-fsel="dist" style="max-width:240px" aria-label="Distrito"><option value="">Toda la ciudad</option>${DISTRITOS.map(d => `<option ${F.dist === d ? 'selected' : ''}>${d}</option>`).join('')}</select>
+        ${pill('near', 1, 'A 1 km')}${pill('near', 3, 'A 3 km')}${pill('near', 8, 'A 8 km')}</div>
+        <p class="note" id="f-geo">${F.near ? (F.pos ? `Cerca de tu ubicación actual (${F.near} km).` : 'Buscando tu ubicación…') : 'La distancia se calcula desde donde estás ahora; no se guarda.'}</p></div>
+      <div><h3>Momento del día</h3><div class="row" style="margin-top:6px">${pill('franja', 'manana', 'Mañana')}${pill('franja', 'tarde', 'Tarde')}${pill('franja', 'noche', 'Noche')}</div></div>
+      <div><h3>Días</h3><div class="row" style="margin-top:6px">${pill('dias', 'laborables', 'Entre semana')}${pill('dias', 'finde', 'Fin de semana')}</div></div>
+      <div><h3>Precio</h3><div class="row" style="margin-top:6px">${pill('precio', 'gratis', 'Gratis')}${pill('precio', 10, 'Hasta 10 €')}${pill('precio', 20, 'Hasta 20 €')}${pill('precio', 40, 'Hasta 40 €')}</div></div>
+      <div class="row"><button class="btn ghost" data-fclear>Quitar filtros</button><span class="note">Solo salen eventos con ese dato; los que no lo indican quedan fuera.</span></div>`;
+  }
+  function renderFilters() {
+    ['pt', 'ex'].forEach(v => { const p = $(v + '-fpanel'); if (!p.hidden) p.innerHTML = filtersHtml(); });
+    document.querySelectorAll('.fcount').forEach(x => { x.textContent = nFilters() || ''; });
+    const fr = state.tab === 'parati';
+    $('pt-free').setAttribute('aria-pressed', F.precio === 'gratis'); $('ex-free').setAttribute('aria-pressed', F.precio === 'gratis');
+  }
+  function setF(k, v) {
+    F[k] = String(F[k]) === String(v) ? (k === 'near' ? 0 : '') : (k === 'near' ? +v : v);
+    if (k === 'near' && F.near && !F.pos) {
+      if (!navigator.geolocation) { F.near = 0; toast('Tu navegador no permite saber dónde estás.'); }
+      else navigator.geolocation.getCurrentPosition(p => { F.pos = [p.coords.latitude, p.coords.longitude]; renderAll(); },
+        () => { F.near = 0; toast('Sin permiso de ubicación: elige un distrito.'); renderAll(); }, { timeout: 10000, maximumAge: 300000 });
+    }
+    store.set('filters', { dist: F.dist, franja: F.franja, dias: F.dias, precio: F.precio });
+    state.ptShown = 12; state.exShown = 20; renderAll();
+  }
+
   // ---------- puntuación
   function score(e) {
+    if (isDismissed(e)) return { s: -1, hits: [] };
     let s = 0; const hits = [];
+    for (const c of e.cats) { const w = learned['cat:' + c]; if (w) s += w * 0.6; }
+    for (const t of e.temas || []) { const w = learned['tema:' + t]; if (w) { s += w; if (w >= 1) hits.push(t + ' (por lo que guardas)'); } }
+    if (e.serie && learned['serie:' + e.serie] >= 1) { s += learned['serie:' + e.serie]; hits.push('sigues este ciclo'); }
     const likedGroups = new Set(Object.keys(prefs).filter(k => prefs[k] === 1).map(k => GROUP_OF[k]));
     for (const c of e.cats) {
       if (prefs[c] === 2) return { s: -1, hits: [] };
@@ -447,6 +535,10 @@ function startApp(DATA, TAX, sync) {
         <div class="links">${e.fuentes.map(f => f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">Ver en ${esc(f.nombre)} ↗</a>` : '').join('')}
         ${e.web_organizador ? `<a href="${esc(e.web_organizador)}" target="_blank" rel="noopener">Web del organizador ↗</a>` : ''}</div>
         <p class="note">Fuentes: ${e.fuentes.map(f => esc(f.nombre)).join(', ')}</p>
+        <div class="acts">
+          <button class="act" data-dismiss="${e.id}" aria-pressed="${isDismissed(e)}">${isDismissed(e) ? 'Volver a mostrar' : 'No me interesa'}</button>
+          ${(occ && (occ.ongoing || +occ.date <= +today)) || went.includes(e.id) ? `<button class="act" data-went="${e.id}" aria-pressed="${went.includes(e.id)}">${went.includes(e.id) ? '✓ Fui' : 'Ya fui'}</button>` : ''}
+        </div>
       </div>` : '';
     return `<article class="card">
       <div class="row1">${dateBox(e, occ)}
@@ -632,12 +724,12 @@ function startApp(DATA, TAX, sync) {
   const $ = id => document.getElementById(id);
   function renderParaTi() {
     const [a, b] = range(state.when);
-    if (!Object.values(prefs).some(v => v === 1)) {
+    if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1)) {
       const items = [];
       for (const e of EV) {
-        if (state.free && !e.gratis) continue;
+        if (isDismissed(e)) continue;
         if (isFamily(e) && !opts.ninos) continue;
-        const occ = occurs(e, a, b); if (!occ) continue;
+        const occ = occurs(e, a, b); if (!occ || !passF(e, occ)) continue;
         const s = (e.unico ? 3 : 0) + (e.destacado ? 2 : 0) + (e.fuentes.length > 1 ? 1 : 0);
         if (s > 0) items.push({ e, occ, s });
       }
@@ -648,13 +740,11 @@ function startApp(DATA, TAX, sync) {
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
-      $('pt-free').setAttribute('aria-pressed', state.free);
       return;
     }
     const items = [];
     for (const e of EV) {
-      if (state.free && !e.gratis) continue;
-      const occ = occurs(e, a, b); if (!occ) continue;
+      const occ = occurs(e, a, b); if (!occ || !passF(e, occ)) continue;
       const sc = score(e); if (sc.s < 1.5) continue;
       items.push({ e, occ, sc });
     }
@@ -670,25 +760,23 @@ function startApp(DATA, TAX, sync) {
     $('pt-list').innerHTML = streetBanner() + (html || '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
-    $('pt-free').setAttribute('aria-pressed', state.free);
   }
   function renderUnicos() {
-    const list = EV.filter(e => e.unico && parse(e.fin) >= today).sort((a, b) => a.inicio.localeCompare(b.inicio));
+    const list = EV.filter(e => e.unico && !isDismissed(e) && parse(e.fin) >= today).sort((a, b) => a.inicio.localeCompare(b.inicio));
     $('un-list').innerHTML = list.map(e => card(e)).join('') || '<div class="empty">No hay planes únicos en las próximas semanas.</div>';
   }
   function renderExplorar() {
     const q = $('ex-q').value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     const g = $('ex-grp').value, [a, b] = range($('ex-when').value);
-    const free = $('ex-free').getAttribute('aria-pressed') === 'true';
     const res = [];
     for (const e of EV) {
-      if (free && !e.gratis) continue;
+      if (isDismissed(e) && !q) continue;
       if (g && !e.cats.some(c => groupOf(c) === g)) continue;
       const f = state.filter;
       if (f && f.kind === 'cat' && !e.cats.includes(f.value)) continue;
       if (f && f.kind === 'tema' && !(e.temas || []).includes(f.value)) continue;
       if (f && f.kind === 'serie' && e.serie !== f.value) continue;
-      const occ = occurs(e, a, b); if (!occ) continue;
+      const occ = occurs(e, a, b); if (!occ || !passF(e, occ)) continue;
       if (q) { const h = (e.titulo + ' ' + (e.lugar || '') + ' ' + (e.distrito || '') + ' ' + (e.serie || '') + ' ' + (e.temas || []).join(' ') + ' ' + e.cats.map(labelOf).join(' ') + ' ' + (e.descripcion || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); if (!h.includes(q)) continue; }
       res.push({ e, occ });
     }
@@ -737,6 +825,7 @@ function startApp(DATA, TAX, sync) {
     $('stamp').textContent = 'Madrid · ' + META.eventos.toLocaleString('es-ES') + ' eventos';
     document.querySelectorAll('.n-unicos').forEach(n => { n.textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || ''; });
     $('n-unicos').textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || '';
+    renderFilters();
     renderAgenda();
     $('n-calle').textContent = streets.length ? (cutsOn(today).filter(x => x.mine).length || '') : '';
     $('b-calle').hidden = !(streets.length && cutsOn(today).some(x => x.mine));
@@ -756,11 +845,12 @@ function startApp(DATA, TAX, sync) {
   }
   tabs.forEach(t => $('t-' + t).addEventListener('click', () => go(t)));
   document.querySelectorAll('[data-when]').forEach(b => b.addEventListener('click', () => { state.when = b.dataset.when; state.ptShown = 12; renderParaTi(); }));
-  $('pt-free').addEventListener('click', () => { state.free = !state.free; renderParaTi(); });
+  $('pt-free').addEventListener('click', () => setF('precio', 'gratis'));
   $('pt-more').addEventListener('click', () => { state.ptShown += 12; renderParaTi(); });
   $('ex-more').addEventListener('click', () => { state.exShown += 20; renderExplorar(); });
   ['ex-q', 'ex-grp', 'ex-when'].forEach(id => $(id).addEventListener('input', () => { state.exShown = 20; renderExplorar(); }));
-  $('ex-free').addEventListener('click', e => { const b = e.currentTarget; b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); state.exShown = 20; renderExplorar(); });
+  $('ex-free').addEventListener('click', () => setF('precio', 'gratis'));
+  document.addEventListener('change', ev => { const sl = ev.target.closest('[data-fsel]'); if (sl) { F[sl.dataset.fsel] = ''; setF(sl.dataset.fsel, sl.value); } });
   $('ex-grp').innerHTML = '<option value="">Todas las categorías</option>' + TAX.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
   $('in-q').addEventListener('input', renderIntereses);
   $('ca-form').addEventListener('submit', ev => {
@@ -781,6 +871,7 @@ function startApp(DATA, TAX, sync) {
   $('o-perro').addEventListener('change', e => { opts.perro = e.target.checked; store.set('opts', opts); });
   $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
   $('in-clear').addEventListener('click', () => { prefs = {}; store.set('prefs', prefs); renderIntereses(); });
+  $('toast-undo').addEventListener('click', () => { $('toast').hidden = true; if (toastUndo) toastUndo(); toastUndo = null; });
   document.addEventListener('click', ev => {
     const ck = ev.target.closest('[data-cakind]');
     if (ck) { state.caKind = ck.dataset.cakind; renderCalle(); return; }
@@ -788,6 +879,11 @@ function startApp(DATA, TAX, sync) {
     if (cd) { state.caDay = cd.dataset.caday; renderCalle(); return; }
     const cg = ev.target.closest('[data-caday-go]');
     if (cg) { state.caDay = cg.dataset.cadayGo; go('calle'); return; }
+    const ft = ev.target.closest('[data-ftoggle]');
+    if (ft) { const p = $(ft.dataset.ftoggle + '-fpanel'); p.hidden = !p.hidden; ft.setAttribute('aria-expanded', !p.hidden); renderFilters(); return; }
+    const fs = ev.target.closest('[data-fset]');
+    if (fs) { setF(fs.dataset.fset, fs.dataset.fval); return; }
+    if (ev.target.closest('[data-fclear]')) { F = { dist: '', near: 0, pos: F.pos, franja: '', dias: '', precio: '' }; setF('dist', ''); return; }
     const cm = ev.target.closest('[data-cutmap]');
     if (cm) { focusCut(+cm.dataset.cutmap); return; }
     const cgo = ev.target.closest('[data-cutgo]');
@@ -805,7 +901,28 @@ function startApp(DATA, TAX, sync) {
     const gt = ev.target.closest('[data-goto]');
     if (gt) { go(gt.dataset.goto); return; }
     const s = ev.target.closest('[data-save]');
-    if (s) { const id = s.dataset.save; saved = saved.includes(id) ? saved.filter(x => x !== id) : saved.concat(id); store.set('saved', saved); renderAll(); return; }
+    if (s) {
+      const id = s.dataset.save, on = !saved.includes(id);
+      saved = on ? saved.concat(id) : saved.filter(x => x !== id); store.set('saved', saved);
+      if (BYID[id]) learn(BYID[id], on ? 'save' : 'unsave');
+      renderAll(); return;
+    }
+    const dm = ev.target.closest('[data-dismiss]');
+    if (dm) {
+      const id = dm.dataset.dismiss, on = !dismissed.includes(id);
+      dismissed = on ? dismissed.concat(id) : dismissed.filter(x => x !== id); store.set('dismissed', dismissed);
+      if (BYID[id]) learn(BYID[id], on ? 'dismiss' : 'undismiss');
+      if (on) toast('No volverá a salir en tus recomendaciones.', () => { dismissed = dismissed.filter(x => x !== id); store.set('dismissed', dismissed); learn(BYID[id], 'undismiss'); renderAll(); });
+      renderAll(); return;
+    }
+    const wn = ev.target.closest('[data-went]');
+    if (wn) {
+      const id = wn.dataset.went, on = !went.includes(id);
+      went = on ? went.concat(id) : went.filter(x => x !== id); store.set('went', went);
+      if (BYID[id]) learn(BYID[id], on ? 'went' : 'unwent');
+      if (on) toast('Anotado. Te recomendaremos más planes así.');
+      renderAll(); return;
+    }
     let o = ev.target.closest('[data-open]');
     if (!o) {
       const c = ev.target.closest('.card');
@@ -820,9 +937,13 @@ function startApp(DATA, TAX, sync) {
   const t0 = store.get('tab', 'parati');
   go(tabs.includes(t0) ? t0 : 'parati');
   return {
-    get: () => ({ prefs, opts, saved, streets }),
-    set(p) { if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) { streets = p.streets; store.set('streets', streets); }
-      store.set('prefs', prefs); store.set('opts', opts); store.set('saved', saved); renderAll(); }
+    get: () => ({ prefs, opts, saved, streets, dismissed, went, learned }),
+    set(p) {
+      if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
+      if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.learned) learned = p.learned;
+      store.set('prefs', prefs); store.set('opts', opts); store.set('saved', saved); store.set('streets', streets);
+      store.set('dismissed', dismissed); store.set('went', went); store.set('learned', learned); renderAll();
+    }
   };
 }
 bootBureo(startApp);

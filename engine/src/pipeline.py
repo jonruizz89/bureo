@@ -300,12 +300,20 @@ def esmadrid():
                 'inicio': d(e.get('startDate')), 'fin': d(e.get('endDate')) or d(e.get('startDate')),
                 'hora': hora[:90] if hora else None,
                 'lugar': clean(loc.get('name')) if isinstance(loc, dict) else None, 'distrito': None,
+                'direccion': direccion(loc),
                 'lat': None, 'lng': None, 'precio': precio, 'gratis': gratis,
                 'url': r['url'], 'web_organizador': c.get('web'), 'imagen': c.get('imagen'),
                 'publico': '', 'cats': categorias(base, e.get('name') or '', desc),
                 'destacado': False, 'tipo_origen': c.get('tipo'), 'evento_ciudad': 'eventos de ciudad' in tipos,
             })
     return evs
+
+
+def direccion(loc):
+    a = loc.get('address') if isinstance(loc, dict) else None
+    if not isinstance(a, dict):
+        return None
+    return ', '.join(x for x in (clean(a.get('streetAddress')), a.get('postalCode')) if x) or None
 
 
 def recinto(fn, nombre, base_cats):
@@ -391,7 +399,7 @@ def unir(evs):
             unidos += 1
             dup['fuentes'].append({'nombre': e['fuente'], 'url': e['url']})
             dup['cats'] = list(dict.fromkeys(dup['cats'] + e['cats']))
-            for k in ('imagen', 'web_organizador', 'lat', 'lng', 'distrito', 'precio', 'hora'):
+            for k in ('imagen', 'web_organizador', 'lat', 'lng', 'distrito', 'precio', 'hora', 'direccion'):
                 if not dup.get(k) and e.get(k):
                     dup[k] = e[k]
             if len(e.get('descripcion') or '') > len(dup.get('descripcion') or ''):
@@ -471,6 +479,15 @@ def main():
         for k in ('fuente', 'fuente_id', 'url', 'publico', 'tipo_origen', 'evento_ciudad'):
             e.pop(k, None)
     eventos.sort(key=lambda x: x['id'])
+    try:  # situar en el mapa y en su distrito (si están los índices del callejero)
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from geocode import geocode_events
+        print('geocodificación:', geocode_events(eventos, norm))
+    except Exception as ex:
+        print('aviso: sin geocodificación:', ex)
+    for e in eventos:
+        e.pop('direccion', None)
     os.makedirs(OUT, exist_ok=True)
     meta = {
         'generado': dt.datetime.now().isoformat(timespec='minutes'), 'ventana': [HOY.isoformat(), HASTA.isoformat()],
