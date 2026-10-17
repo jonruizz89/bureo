@@ -364,7 +364,11 @@ table.cov td.n, table.cov th.n { text-align: right }
       </div>
       <div id="acc-in" hidden>
         <p class="note">Has entrado como <b id="acc-who"></b>. Tus intereses y tu agenda se guardan en tu cuenta.</p>
-        <div class="seg" style="margin-top:8px"><button class="btn ghost" id="acc-logout">Cerrar sesión</button></div>
+        <div class="seg" style="margin-top:8px"><button class="btn ghost" id="acc-logout">Cerrar sesión</button><button class="btn ghost" id="acc-export">Descargar mis datos</button></div>
+        <details style="margin-top:10px"><summary class="note" style="cursor:pointer">Darme de baja</summary>
+          <p class="note" style="margin-top:8px">Se borran tu cuenta y todos tus datos: intereses, perfil, guardados, calles, historial y, si organizas, tus eventos (dejan de salir en Limón). No se puede deshacer. Escribe <b>BORRAR</b> para confirmar.</p>
+          <form class="seg" id="acc-del-form"><input class="search" id="acc-del" autocomplete="off" style="flex:1;min-width:140px" aria-label="Escribe BORRAR"><button class="btn" type="submit" style="background:#C92A2A;color:#fff">Borrar mi cuenta</button></form>
+          <p class="note" id="acc-del-msg" role="status"></p></details>
       </div>
     </div>
     <div class="seg"><button class="btn ghost" id="in-reset">Probar con un perfil de ejemplo</button><button class="btn ghost" id="in-clear">Empezar de cero</button></div>

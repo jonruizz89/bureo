@@ -167,6 +167,27 @@
         : 'Te hemos enviado un enlace a ' + email + '. Ábrelo en este dispositivo para entrar.';
     });
     $('acc-logout').addEventListener('click', async () => { await sb.auth.signOut(); });
+    $('acc-export').addEventListener('click', async () => {
+      if (!user) return;
+      const uid = user.id, q = (t, col) => sb.from(t).select('*').eq(col || 'user_id', uid);
+      const [p, i, sv, at, di, se] = await Promise.all([q('profiles', 'id'), q('user_interests'), q('saved_events'), q('attendance'), q('dismissed_events'), q('submitted_events', 'owner')]);
+      const out = { exportado: new Date().toISOString(), email: user.email, perfil: p.data, intereses: i.data, guardados: sv.data,
+        asistencias: at.data, descartados: di.data, eventos_publicados: se.data };
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+      a.download = 'limon-mis-datos.json'; document.body.appendChild(a); a.click(); a.remove();
+    });
+    $('acc-del-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      if ($('acc-del').value.trim() !== 'BORRAR') { $('acc-del-msg').textContent = 'Escribe BORRAR en mayúsculas para confirmar.'; return; }
+      $('acc-del-msg').textContent = 'Borrando…';
+      const res = await window.limonDB.fn('limon-account', { action: 'delete', confirm: 'BORRAR' });
+      if (!res || res.error) { $('acc-del-msg').textContent = (res && res.error) || 'No se ha podido borrar.'; return; }
+      try { Object.keys(localStorage).filter((k) => k.startsWith('bureo.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { }
+      await sb.auth.signOut();
+      alert('Tu cuenta y tus datos se han borrado.');
+      location.reload();
+    });
     sb.auth.onAuthStateChange((evt, session) => {
       const was = user && user.id;
       user = session ? session.user : null;
