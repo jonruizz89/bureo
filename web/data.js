@@ -157,14 +157,52 @@
   }
 
   function wireAccount() {
+    const back = location.origin + location.pathname;
+    const ES = (m) => {
+      m = String(m || '');
+      if (/invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos. Si nunca pusiste contraseña, entra con un enlace o pulsa «He olvidado mi contraseña».';
+      if (/email not confirmed/i.test(m)) return 'Aún no has confirmado tu correo: abre el enlace que te enviamos al crear la cuenta.';
+      if (/already registered|already exists/i.test(m)) return 'Ya hay una cuenta con ese correo: entra o recupera la contraseña.';
+      if (/password should be|at least|weak/i.test(m)) return 'La contraseña es demasiado débil: usa al menos 8 caracteres y mezcla letras y números.';
+      if (/rate limit|too many|seconds/i.test(m)) return 'Demasiados intentos seguidos. Espera un minuto y vuelve a probar.';
+      if (/same.*password|different from the old/i.test(m)) return 'Esa ya es tu contraseña actual.';
+      return m;
+    };
     $('acc-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
-      const email = $('acc-email').value.trim();
-      $('acc-msg').textContent = 'Enviando…';
-      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-      $('acc-msg').textContent = error
-        ? 'No se ha podido enviar el enlace: ' + error.message
-        : 'Te hemos enviado un enlace a ' + email + '. Ábrelo en este dispositivo para entrar.';
+      const mode = (ev.submitter && ev.submitter.dataset.mode) || 'login';
+      const email = $('acc-email').value.trim(), password = $('acc-pass').value;
+      const msg = (t) => { $('acc-msg').textContent = t; };
+      if (!email) { msg('Escribe tu correo.'); return; }
+      if ((mode === 'login' || mode === 'signup') && password.length < 8) { msg(mode === 'signup' ? 'Elige una contraseña de al menos 8 caracteres.' : 'Escribe tu contraseña (o pide un enlace para entrar sin ella).'); $('acc-pass').focus(); return; }
+      msg(mode === 'login' ? 'Entrando…' : 'Enviando…');
+      let r;
+      if (mode === 'login') r = await sb.auth.signInWithPassword({ email, password });
+      else if (mode === 'signup') r = await sb.auth.signUp({ email, password, options: { emailRedirectTo: back } });
+      else if (mode === 'reset') r = await sb.auth.resetPasswordForEmail(email, { redirectTo: back });
+      else r = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: back } });
+      if (r.error) { msg(ES(r.error.message)); return; }
+      $('acc-pass').value = '';
+      if (mode === 'login') msg('');
+      else if (mode === 'signup') msg(r.data && r.data.session ? '' : 'Te hemos enviado un correo a ' + email + ' para confirmar la cuenta. Ábrelo y ya estarás dentro.');
+      else if (mode === 'reset') msg('Si hay una cuenta con ' + email + ', te llegará un enlace para poner una contraseña nueva.');
+      else msg('Te hemos enviado un enlace a ' + email + '. Ábrelo en este dispositivo para entrar.');
+    });
+    if ((window.BUREO_CONFIG || {}).google) {
+      $('acc-google').hidden = false;
+      $('acc-google').addEventListener('click', async () => {
+        const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back } });
+        if (error) $('acc-msg').textContent = 'No se ha podido abrir Google: ' + ES(error.message);
+      });
+    }
+    $('acc-pw-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const password = $('acc-pw-new').value;
+      if (password.length < 8) { $('acc-pw-msg').textContent = 'Mínimo 8 caracteres.'; return; }
+      $('acc-pw-msg').textContent = 'Guardando…';
+      const { error } = await sb.auth.updateUser({ password });
+      $('acc-pw-msg').textContent = error ? ES(error.message) : 'Contraseña guardada. Ya puedes entrar con ella en cualquier dispositivo.';
+      if (!error) $('acc-pw-new').value = '';
     });
     $('acc-logout').addEventListener('click', async () => { await sb.auth.signOut(); });
     $('acc-export').addEventListener('click', async () => {
@@ -193,6 +231,14 @@
       const was = user && user.id;
       user = session ? session.user : null;
       renderAccount();
+      if (evt === 'PASSWORD_RECOVERY') {
+        // viene del correo «He olvidado mi contraseña»: abrir el formulario para poner una nueva
+        setTimeout(() => {
+          const t = document.querySelector('[data-goto="intereses"], #t-intereses'); if (t) t.click();
+          $('acc-pw').open = true; $('acc-pw-msg').textContent = 'Escribe tu nueva contraseña.';
+          $('acc-pw').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('acc-pw-new').focus();
+        }, 400);
+      }
       if (app && app.setUser) app.setUser(!!user);
       if (user && user.id !== was) pullAccount().catch((e) => console.warn('pull', e));
     });

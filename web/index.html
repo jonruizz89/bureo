@@ -364,11 +364,13 @@ table.cov td.n, table.cov th.n { text-align: right }
     <div class="panel" id="account">
       <h2 style="margin:0">Tu cuenta</h2>
       <div id="acc-out">
-        <p class="note">Sin cuenta, tus intereses y tu agenda se guardan solo en este navegador. Entra con tu email para tenerlos en todos tus dispositivos.</p>
-        <form id="acc-form" class="seg" style="margin-top:8px">
-          <label for="acc-email" class="note" style="width:100%">Email</label>
-          <input class="search" id="acc-email" type="email" autocomplete="email" required placeholder="tu@email.com" style="flex:1;min-width:200px">
-          <button class="btn" type="submit">Enviarme el enlace</button>
+        <p class="note">Sin cuenta, tus intereses y tu agenda se guardan solo en este navegador. Entra para tenerlos en todos tus dispositivos.</p>
+        <button class="btn ghost" id="acc-google" type="button" hidden style="margin-top:8px;display:inline-flex;align-items:center;gap:8px;justify-content:center"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 38.2 44 33 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continuar con Google</button>
+        <form id="acc-form" class="form" style="margin-top:8px">
+          <label>Email<input class="search" id="acc-email" type="email" autocomplete="email" required placeholder="tu@email.com"></label>
+          <label>Contraseña<input class="search" id="acc-pass" type="password" autocomplete="current-password" minlength="8" placeholder="Mínimo 8 caracteres"></label>
+          <div class="seg full"><button class="btn" type="submit" data-mode="login">Entrar</button><button class="btn ghost" type="submit" data-mode="signup">Crear cuenta</button></div>
+          <div class="seg full" style="gap:14px"><button class="btnlink" type="submit" data-mode="link">Prefiero que me mandes un enlace para entrar sin contraseña</button><button class="btnlink" type="submit" data-mode="reset">He olvidado mi contraseña</button></div>
         </form>
         <p class="note" id="acc-msg" role="status"></p>
         <p class="note" style="margin-top:6px">Al entrar aceptas las <a href="condiciones.html">condiciones de uso</a> y la <a href="privacidad.html">política de privacidad</a>.</p>
@@ -376,6 +378,10 @@ table.cov td.n, table.cov th.n { text-align: right }
       <div id="acc-in" hidden>
         <p class="note">Has entrado como <b id="acc-who"></b>. Tus intereses y tu agenda se guardan en tu cuenta.</p>
         <div class="seg" style="margin-top:8px"><button class="btn ghost" id="acc-logout">Cerrar sesión</button><button class="btn ghost" id="acc-export">Descargar mis datos</button></div>
+        <details id="acc-pw" style="margin-top:10px"><summary class="note" style="cursor:pointer">Poner o cambiar contraseña</summary>
+          <p class="note" style="margin-top:8px">Si entraste con un enlace, aquí puedes poner una contraseña para entrar también con ella.</p>
+          <form class="seg" id="acc-pw-form"><input class="search" id="acc-pw-new" type="password" autocomplete="new-password" minlength="8" required placeholder="Nueva contraseña (mínimo 8)" style="flex:1;min-width:180px"><button class="btn" type="submit">Guardar</button></form>
+          <p class="note" id="acc-pw-msg" role="status"></p></details>
         <details style="margin-top:10px"><summary class="note" style="cursor:pointer">Darme de baja</summary>
           <p class="note" style="margin-top:8px">Se borran tu cuenta y todos tus datos: intereses, perfil, guardados, calles, historial y, si organizas, tus eventos (dejan de salir en Limón). No se puede deshacer. Escribe <b>BORRAR</b> para confirmar.</p>
           <form class="seg" id="acc-del-form"><input class="search" id="acc-del" autocomplete="off" style="flex:1;min-width:140px" aria-label="Escribe BORRAR"><button class="btn" type="submit" style="background:#C92A2A;color:#fff">Borrar mi cuenta</button></form>
