@@ -107,6 +107,11 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .fpanel { gap: 14px }
 .streetwarn { font-size: 13px; background: #FFF0EE; color: #A4251C; border-radius: 8px; padding: 6px 10px; font-weight: 500 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .streetwarn { background: #3B1A17; color: #FFB4A8 } }
+.pwdlg { border: 0; border-radius: 18px; padding: 0; width: min(420px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.25) }
+.pwdlg::backdrop { background: rgba(20, 18, 8, .55) }
+.pwdlg form { display: flex; flex-direction: column; gap: 12px; padding: 24px 22px }
+.pwdlg h2 { margin: 0; font-size: 20px }
+.pwdlg label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--quiet) }
 .rainwarn { font-size: 13px; background: #E8F1FB; color: #1D4F8C; border-radius: 8px; padding: 6px 10px; font-weight: 500 }
 .routewarn { font-size: 13px; background: var(--accent-soft); color: var(--ink); border-radius: 8px; padding: 8px 10px; margin-top: 8px }
 .crew { font-size: 13px; color: var(--accent-text); font-weight: 500 }
@@ -1561,5 +1566,16 @@ function startApp(DATA, TAX, sync) {
 bootBureo(startApp);
 </script>
 
+<dialog class="pwdlg" id="pw-dlg" aria-labelledby="pw-dlg-t">
+  <form id="pw-dlg-form" method="dialog">
+    <div style="display:flex;align-items:center;gap:10px"><img src="limon.svg" alt="" width="32" height="32"><h2 id="pw-dlg-t">Pon tu nueva contraseña</h2></div>
+    <p class="note" style="margin:0">Elige una contraseña de al menos 8 caracteres. La usarás para entrar en Limón desde cualquier dispositivo.</p>
+    <label>Nueva contraseña<input class="search" id="pw-dlg-1" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label>Repítela<input class="search" id="pw-dlg-2" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="pw-dlg-show"> Mostrar contraseña</label>
+    <p class="note" id="pw-dlg-msg" role="status" style="margin:0"></p>
+    <div class="seg"><button class="btn" type="submit" id="pw-dlg-ok">Guardar contraseña</button><button class="btn ghost" type="button" id="pw-dlg-later">Ahora no</button></div>
+  </form>
+</dialog>
 </body>
 </html>

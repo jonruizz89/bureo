@@ -5,6 +5,9 @@
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
   const $ = (id) => document.getElementById(id);
+  // enlace de «He olvidado mi contraseña»: se detecta antes de que la app termine de cargar
+  let recovery = /type=recovery/.test(location.hash);
+  sb.auth.onAuthStateChange((evt) => { if (evt === 'PASSWORD_RECOVERY') { recovery = true; if (window.__limonPw) window.__limonPw(); } });
   const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 
   async function loadTaxonomy() {
@@ -200,6 +203,27 @@
         if (error) $('acc-msg').textContent = 'No se ha podido abrir Google: ' + ES(error.message);
       });
     }
+    // ventana directa para poner la contraseña nueva al volver del correo
+    window.__limonPw = () => {
+      const d = $('pw-dlg');
+      if (d && !d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); setTimeout(() => $('pw-dlg-1').focus(), 50); }
+    };
+    if (recovery) window.__limonPw();
+    $('pw-dlg-show').addEventListener('change', (ev) => { ['pw-dlg-1', 'pw-dlg-2'].forEach((id) => { $(id).type = ev.target.checked ? 'text' : 'password'; }); });
+    $('pw-dlg-later').addEventListener('click', () => $('pw-dlg').close());
+    $('pw-dlg-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const a = $('pw-dlg-1').value, b = $('pw-dlg-2').value, m = $('pw-dlg-msg');
+      if (a.length < 8) { m.textContent = 'Mínimo 8 caracteres.'; return; }
+      if (a !== b) { m.textContent = 'Las dos contraseñas no coinciden.'; $('pw-dlg-2').focus(); return; }
+      $('pw-dlg-ok').disabled = true; m.textContent = 'Guardando…';
+      const { error } = await sb.auth.updateUser({ password: a });
+      $('pw-dlg-ok').disabled = false;
+      if (error) { m.textContent = ES(error.message); return; }
+      m.textContent = '¡Listo! Ya puedes entrar con tu correo y esta contraseña.';
+      $('pw-dlg-1').value = $('pw-dlg-2').value = '';
+      setTimeout(() => $('pw-dlg').close(), 1600);
+    });
     $('acc-pw-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const password = $('acc-pw-new').value;
@@ -236,14 +260,7 @@
       const was = user && user.id;
       user = session ? session.user : null;
       renderAccount();
-      if (evt === 'PASSWORD_RECOVERY') {
-        // viene del correo «He olvidado mi contraseña»: abrir el formulario para poner una nueva
-        setTimeout(() => {
-          const t = document.querySelector('[data-goto="intereses"], #t-intereses'); if (t) t.click();
-          $('acc-pw').open = true; $('acc-pw-msg').textContent = 'Escribe tu nueva contraseña.';
-          $('acc-pw').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('acc-pw-new').focus();
-        }, 400);
-      }
+
       if (app && app.setUser) app.setUser(!!user);
       if (user && user.id !== was) pullAccount().catch((e) => console.warn('pull', e));
     });
