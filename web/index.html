@@ -362,6 +362,7 @@ table.cov td.n, table.cov th.n { text-align: right }
           <button class="btn" type="submit">Enviarme el enlace</button>
         </form>
         <p class="note" id="acc-msg" role="status"></p>
+        <p class="note" style="margin-top:6px">Al entrar aceptas las <a href="condiciones.html">condiciones de uso</a> y la <a href="privacidad.html">política de privacidad</a>.</p>
       </div>
       <div id="acc-in" hidden>
         <p class="note">Has entrado como <b id="acc-who"></b>. Tus intereses y tu agenda se guardan en tu cuenta.</p>
@@ -374,6 +375,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div class="seg"><button class="btn ghost" id="in-reset">Probar con un perfil de ejemplo</button><button class="btn ghost" id="in-clear">Empezar de cero</button></div>
       <button class="btn ghost" data-goto="fuentes" style="align-self:flex-start">Fuentes y cobertura ›</button>
+      <p class="note"><a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones de uso</a> · <a href="mailto:hola@limonplanes.com">hola@limonplanes.com</a></p>
   </section>
 
   <section class="view" id="v-fuentes" hidden>
@@ -947,7 +949,7 @@ function startApp(DATA, TAX, sync) {
         : `<h2 style="margin:0">¿Organizas eventos?</h2><p class="note">Salas, asociaciones, librerías, clubes o particulares: publica tus eventos en Limón gratis. Revisamos cada solicitud.${me.editor_status === 'rechazado' ? ' Tu solicitud anterior no se aprobó; puedes volver a enviarla.' : ''}</p>
           <form class="form" id="ed-form"><label>Nombre del organizador<input class="search" name="nombre" required maxlength="120"></label><label>Web o redes<input class="search" name="web" maxlength="300"></label>
           <label class="full">Qué tipo de eventos organizas<textarea class="search" name="que" rows="3" maxlength="600" required></textarea></label>
-          <div class="seg full"><button class="btn" type="submit">Solicitar acceso de organizador</button><span class="note" id="ed-msg" role="status"></span></div></form>`;
+          <p class="note full">Al solicitarlo aceptas las <a href="condiciones.html#organizadores">condiciones para organizadores</a>.</p><div class="seg full"><button class="btn" type="submit">Solicitar acceso de organizador</button><span class="note" id="ed-msg" role="status"></span></div></form>`;
     } else {
       org.innerHTML = `<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Mis eventos</h2>${orgEdit === null ? '<button class="btn" data-org-new>Nuevo evento</button>' : ''}</div>
         <p class="note">Lo que publiques sale en Limón con enlace a tu web. La IA revisa cada evento, lo sitúa en el mapa y le pone categorías.</p>

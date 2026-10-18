@@ -69,7 +69,7 @@ type Prof = { id: string; email: string; notify: Record<string, boolean> | null;
 const unsubUrl = (p: Prof, k: string) => `${APP}?baja=${p.mail_token}&k=${k}`;
 const oneClick = (p: Prof, k: string) => `${URL}/functions/v1/limon-mail?action=unsub&t=${p.mail_token}&k=${k}`;
 const footer = (p: Prof, k: string, why: string) =>
-  `${why} <a href="${esc(unsubUrl(p, k))}" style="color:#9A8F66">Dejar de recibir estos correos</a> · <a href="${esc(APP)}" style="color:#9A8F66">limonplanes.com</a>`;
+  `${why} <a href="${esc(unsubUrl(p, k))}" style="color:#9A8F66">Dejar de recibir estos correos</a> · <a href="${esc(APP)}privacidad.html" style="color:#9A8F66">Privacidad</a>`;
 const evUrl = (id: number | string) => `${APP}?ev=e${id}`;
 
 async function send(p: Prof, subject: string, html: string, k: string) {
@@ -164,6 +164,8 @@ const streetKey = (s: string) => fold(s).replace(/^(calle|avenida|paseo|plaza|gl
 
 async function daily() {
   const today = madridToday(), days = [today, addDays(today, 1)];
+  // el registro de envíos se guarda 12 meses como mucho (política de privacidad)
+  await admin.from('mail_outbox').delete().lt('created_at', new Date(Date.now() - 365 * 864e5).toISOString());
   const { data: profs } = await admin.from('profiles').select('id,email,notify,mail_token,my_streets').eq('notify->>calle', 'true');
   if (!profs || !profs.length) return { users: 0, sent: 0 };
   const { data: cl } = await admin.from('closures').select('id,title,kind,streets,ranges,geom');
