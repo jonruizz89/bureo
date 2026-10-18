@@ -1262,7 +1262,7 @@ function startApp(DATA, TAX, sync) {
   const personRow = (p, actions) => `<div class="row-item"><div style="min-width:0;flex:1"><button class="btnlink" data-prof="${esc(p.username)}"><b>${esc(p.name)}</b></button> <span class="note">@${esc(p.username)}${p.public ? '' : ' · 🔒'}</span></div><div class="seg">${actions}</div></div>`;
   function renderSocial() {
     const box = $('social'); if (!box) return;
-    if (!logged) { box.innerHTML = '<h2 style="margin:0">Amigos</h2><p class="note">Entra con tu cuenta (más abajo) para seguir a tus amigos, ver a qué planes van y que Limón te recomiende también por lo que hacen.</p>'; return; }
+    if (!logged) { box.innerHTML = '<h2 style="margin:0">Amigos</h2><p class="note">Entra con tu cuenta (en «Tu cuenta», más abajo) para seguir a tus amigos, ver a qué planes van y que Limón te recomiende también por lo que hacen.</p>'; return; }
     const me = SOC.me;
     if (!me || !me.username || SOC.editing) {
       const ed = me && me.username;
@@ -1384,7 +1384,7 @@ function startApp(DATA, TAX, sync) {
         <label class="full">Detalles (opcional)<textarea class="search" name="body" rows="3" maxlength="1500" placeholder="Cuéntanos qué te gustaría y por qué, o qué ha fallado y dónde"></textarea></label>
         <div class="full" id="idea-sim">${IDEAS_SIM.length ? `<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>` + IDEAS_SIM.map(ideaRow).join('') : ''}</div>
         <div class="seg full"><button class="btn" type="submit">Enviar</button><span class="note" id="idea-msg" role="status"></span></div></form>`
-        : '<p class="note">Entra con tu cuenta (más abajo) para proponer ideas y votar.</p>'}
+        : '<p class="note">Entra con tu cuenta (en «Tu cuenta», más abajo) para proponer ideas y votar.</p>'}
       <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button class="pill" data-idea-tab="${k}" aria-pressed="${IDEAS_TAB === k}">${l}</button>`).join('')}</div>
       <div>${list.slice(0, 40).map(ideaRow).join('') || '<p class="note">Aún no hay nada aquí. ¡Estrena el tablón!</p>'}</div>`;
   }
@@ -1741,7 +1741,7 @@ function startApp(DATA, TAX, sync) {
   function renderTaste() {
     if (document.activeElement !== $('ts-text')) $('ts-text').value = tasteText || '';
     $('ts-go').disabled = !logged;
-    if (!logged) $('ts-msg').textContent = 'Entra con tu cuenta (más abajo) para usarlo.';
+    if (!logged) $('ts-msg').textContent = 'Entra con tu cuenta (en «Tu cuenta», más abajo) para usarlo.';
     else if ($('ts-msg').textContent.startsWith('Entra')) $('ts-msg').textContent = '';
     if (!taste) { $('ts-out').innerHTML = ''; return; }
     const cats = (taste.categorias || []).slice().sort((a, b) => b.peso - a.peso);
