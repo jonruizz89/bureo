@@ -240,9 +240,10 @@
       const [p, i, sv, at, di, se, inv, rs] = await Promise.all([q('profiles', 'id'), q('user_interests'), q('saved_events'), q('attendance'), q('dismissed_events'), q('submitted_events', 'owner'),
         sb.from('plan_invites').select('*, plan_rsvps(name,status,created_at)').eq('owner', uid), q('plan_rsvps')]);
       const [fw, tf, ls, lf] = await Promise.all([sb.from('follows').select('*'), q('topic_follows'), sb.from('user_lists').select('*, list_items(event_id,note,added_at)').eq('owner', uid), q('list_follows')]);
+      const [idd, idv] = await Promise.all([q('ideas', 'author'), q('idea_votes')]);
       const out = { exportado: new Date().toISOString(), email: user.email, perfil: p.data, intereses: i.data, guardados: sv.data,
         asistencias: at.data, descartados: di.data, eventos_publicados: se.data, planes_propuestos: inv.data, mis_respuestas_a_planes: rs.data,
-        seguidores_y_seguidos: fw.data, lo_que_sigues: tf.data, mis_listas: ls.data, listas_que_sigo: lf.data };
+        seguidores_y_seguidos: fw.data, lo_que_sigues: tf.data, mis_listas: ls.data, listas_que_sigo: lf.data, mis_ideas: idd.data, mis_votos: idv.data };
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
       a.download = 'limon-mis-datos.json'; document.body.appendChild(a); a.click(); a.remove();

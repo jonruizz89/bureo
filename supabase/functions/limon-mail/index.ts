@@ -1,5 +1,5 @@
 // Limón · correos.
-//  - flush:  envía lo que hay en la cola (decisiones sobre organizadores, quedadas, amigos y avisos para admins). Lo puede pedir cualquiera:
+//  - flush:  envía lo que hay en la cola (decisiones sobre organizadores, quedadas, amigos, ideas y avisos para admins). Lo puede pedir cualquiera:
 //            solo envía lo que ya está en cola.
 //  - daily:  cortes de calle de hoy y mañana junto a tus planes guardados o en tus calles, y lluvia en tus planes al aire libre
 //            (requiere la clave secreta).
@@ -25,7 +25,7 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const fold = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const KINDS = ['semanal', 'calle', 'lluvia', 'organizador', 'admin', 'quedadas', 'amigos'];
+const KINDS = ['semanal', 'calle', 'lluvia', 'organizador', 'admin', 'quedadas', 'amigos', 'ideas'];
 
 // ---------- fechas en Madrid
 function madridToday() {
@@ -86,17 +86,17 @@ async function send(p: Prof, subject: string, html: string, k: string) {
   await sleep(550);  // Resend: 2 envíos por segundo
   if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
-// resumen, cortes y lluvia solo si se activan; organizador, admin, quedadas y amigos salvo que se desactiven
+// resumen, cortes y lluvia solo si se activan; organizador, admin, quedadas, amigos e ideas salvo que se desactiven
 const OPT_IN = ['semanal', 'calle', 'lluvia'];
 const wants = (p: Prof, k: string) => !!p.email && (OPT_IN.includes(k) ? (p.notify || {})[k] === true : (p.notify || {})[k] !== false);
 
-// ---------- cola: organizadores, quedadas, amigos y admins
+// ---------- cola: organizadores, quedadas, amigos, ideas y admins
 async function flush() {
   const { data: rows } = await admin.from('mail_outbox').select('*').is('sent_at', null).is('error', null).order('created_at').limit(50);
   let sent = 0, skipped = 0;
   for (const m of rows || []) {
     const { data: p } = await admin.from('profiles').select('id,email,notify,mail_token,role').eq('id', m.user_id).maybeSingle();
-    const k = m.kind.startsWith('admin') ? 'admin' : m.kind === 'rsvp' ? 'quedadas' : m.kind.startsWith('follow') ? 'amigos' : 'organizador';
+    const k = m.kind.startsWith('admin') ? 'admin' : m.kind === 'rsvp' ? 'quedadas' : m.kind.startsWith('follow') ? 'amigos' : m.kind === 'idea_status' ? 'ideas' : 'organizador';
     let mail: { subject: string; html: string } | null = null;
     const pl = m.payload || {};
     if (p && wants(p, k)) {
@@ -130,6 +130,12 @@ async function flush() {
               ? { subject: `${name} quiere seguirte en Limón`, html: layout({ title: `${name} quiere seguirte`, intro: `<b>${esc(name)}</b> (@${esc(who.username)}) ha pedido ver tus planes. Tu perfil es privado: solo podrá verlos si aceptas.`, cta: { label: 'Ver la solicitud', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por tus amigos en Limón.') }) }
               : { subject: `${name} ha empezado a seguirte en Limón`, html: layout({ title: `${name} te sigue`, intro: `<b>${esc(name)}</b> (@${esc(who.username)}) ha empezado a seguirte.`, cta: { label: 'Ver su perfil', url: link }, footer: footer(p, k, 'Te escribimos por tus amigos en Limón.') }) };
         }
+      } else if (m.kind === 'idea_status') {
+        const T: Record<string, string> = { estudiando: 'La estamos mirando', planificada: 'La hemos planificado', hecha: '¡Ya está hecha!', descartada: 'De momento no la haremos' };
+        mail = { subject: `Tu idea en Limón: ${T[pl.status] || pl.status}`, html: layout({ title: T[pl.status] || 'Tu idea ha cambiado', intro: `Sobre tu idea <b>${esc(pl.title)}</b>.${pl.nota ? '<br><br>' + esc(pl.nota) : ''}<br><br>¡Gracias por ayudarnos a mejorar Limón!`, cta: { label: 'Ver el tablón de ideas', url: APP + '?ideas' }, footer: footer(p, k, 'Te escribimos porque propusiste esta idea.') }) };
+      } else if (m.kind === 'admin_idea') {
+        const KN: Record<string, string> = { idea: 'Idea', fallo: 'Fallo', fuente: 'Falta un sitio o evento' };
+        mail = { subject: `${KN[pl.kind] || 'Idea'}: ${pl.title}`, html: layout({ title: 'Nueva propuesta en el tablón', intro: `<b>${esc(pl.title)}</b> (${esc(KN[pl.kind] || pl.kind)})`, cta: { label: 'Ver el tablón', url: APP + '?ideas' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_editor') {
         mail = { subject: `Solicitud de organizador: ${pl.nombre || 'sin nombre'}`, html: layout({ title: 'Nueva solicitud de organizador', intro: `<b>${esc(pl.nombre)}</b>${pl.web ? ' · ' + esc(pl.web) : ''}<br>${esc(pl.que || '')}`, cta: { label: 'Revisar', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_event') {

@@ -110,6 +110,10 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .pwdlg { border: 0; border-radius: 18px; padding: 0; width: min(420px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.25) }
 .sheet { width: min(560px, calc(100vw - 24px)); max-height: 86vh }
 .sheetbody { display: flex; flex-direction: column; gap: 10px; padding: 22px 20px; overflow: auto; max-height: 86vh }
+.idea { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line) }
+.vote { display: flex; flex-direction: column; align-items: center; min-width: 46px; padding: 6px 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-size: 12px }
+.vote[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.vote b { font-size: 15px }
 .ph { margin: 8px 0 0; font: 600 14px var(--f-body) }
 .stars { color: #E0A800; letter-spacing: 1px }
 .star { background: none; border: 0; font-size: 24px; line-height: 1; color: #E0A800; cursor: pointer; padding: 2px }
@@ -129,6 +133,9 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .badge.publicado { background: var(--ok-soft); color: var(--ok) }
 .badge.revision { background: var(--accent-soft); color: var(--accent-text) }
 .badge.rechazado { background: #FFF0EE; color: #A4251C }
+.badge.hecha { background: var(--ok-soft); color: var(--ok) }
+.badge.estudiando, .badge.planificada { background: var(--accent-soft); color: var(--accent-text) }
+.badge.descartada, .badge.oculta { background: #FFF0EE; color: #A4251C }
 .form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--quiet) }
 .form .full { grid-column: 1 / -1 }
@@ -375,6 +382,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <div class="panel" id="seguir"></div>
     <div class="panel" id="ventajas"></div>
     <div class="panel" id="year"></div>
+    <div class="panel" id="ideas"></div>
     <div class="panel" id="org" hidden></div>
     <div class="panel" id="adm" hidden></div>
     <div class="panel" id="mail" hidden></div>
@@ -407,7 +415,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div class="seg"><button class="btn ghost" id="in-reset">Probar con un perfil de ejemplo</button><button class="btn ghost" id="in-clear">Empezar de cero</button></div>
       <button class="btn ghost" data-goto="fuentes" style="align-self:flex-start">Fuentes y cobertura ›</button>
-      <p class="note"><a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones de uso</a> · <a href="mailto:hola@limonplanes.com">hola@limonplanes.com</a></p>
+      <p class="note"><a href="?ideas">Ideas y sugerencias</a> · <a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones de uso</a> · <a href="mailto:hola@limonplanes.com">hola@limonplanes.com</a></p>
   </section>
 
   <section class="view" id="v-fuentes" hidden>
@@ -1321,6 +1329,73 @@ function startApp(DATA, TAX, sync) {
       <div class="seg"><button class="btn ghost" data-year-share>Compartir</button></div>`;
   }
 
+  // ---------- ideas: la gente propone mejoras, avisa de fallos o de sitios que faltan, y vota
+  let IDEAS = null, IDEAS_TAB = 'top', IDEAS_SIM = [];
+  const IKIND = { idea: 'Idea', fallo: 'Algo no funciona', fuente: 'Falta un sitio o evento' };
+  const ISTATUS = { nueva: 'Nueva', estudiando: 'Lo estamos mirando', planificada: 'Planificada', hecha: '¡Hecha!', descartada: 'Descartada', oculta: 'Oculta' };
+  async function loadIdeas() {
+    const sb = sbx(); if (!sb) return;
+    const { data } = await sb.rpc('ideas_board');
+    IDEAS = data || []; renderIdeas();
+  }
+  const ideaWords = t => nf(t).replace(/[^a-z0-9ñ]+/g, ' ').split(' ').filter(w => w.length >= 4);
+  function similarIdeas(title) {
+    const w = new Set(ideaWords(title)); if (w.size < 2 || !IDEAS) return [];
+    return IDEAS.filter(i => ['nueva', 'estudiando', 'planificada'].includes(i.status))
+      .map(i => ({ i, n: ideaWords(i.title + ' ' + (i.body || '')).filter(x => w.has(x)).length })).filter(x => x.n >= 2)
+      .sort((a, b) => b.n - a.n).slice(0, 3).map(x => x.i);
+  }
+  function ideaRow(i) {
+    const isAdm = me && me.role === 'admin';
+    return `<div class="idea">
+      <button class="vote" data-vote="${i.id}" aria-pressed="${i.voted}" aria-label="${i.voted ? 'Quitar mi voto' : 'Votar'}: ${esc(i.title)}"><span aria-hidden="true">▲</span><b>${i.votes}</b></button>
+      <div style="min-width:0;flex:1">
+        <div class="tags" style="margin:0"><span class="tag">${esc(IKIND[i.kind])}</span><span class="badge ${i.status}">${esc(ISTATUS[i.status])}</span></div>
+        <b style="display:block;margin-top:4px">${esc(i.title)}</b>
+        ${i.body ? `<p class="note" style="margin:2px 0 0;white-space:pre-line">${esc(i.body.length > 280 ? i.body.slice(0, 280) + '…' : i.body)}</p>` : ''}
+        ${i.admin_note ? `<p style="margin:6px 0 0;font-size:13px"><b>Respuesta de Limón:</b> ${esc(i.admin_note)}</p>` : ''}
+        <p class="note" style="margin:4px 0 0">${i.by ? `<button class="btnlink" data-prof="${esc(i.by.username)}">${esc(i.by.name)}</button> · ` : ''}${new Date(i.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}${i.mine && i.status === 'nueva' ? ` · <button class="btnlink" data-idea-del="${i.id}">Borrar</button>` : ''}</p>
+        ${isAdm ? `<form class="seg" data-idea-adm="${i.id}" style="margin-top:6px"><select class="search" name="s" style="max-width:190px">${Object.keys(ISTATUS).map(k => `<option value="${k}" ${k === i.status ? 'selected' : ''}>${ISTATUS[k]}</option>`).join('')}</select><input class="search" name="n" maxlength="500" value="${esc(i.admin_note || '')}" placeholder="Respuesta (opcional)" style="flex:1;min-width:140px"><button class="act" type="submit">Guardar</button></form>` : ''}
+      </div></div>`;
+  }
+  function renderIdeas() {
+    const box = $('ideas'); if (!box) return;
+    if (!IDEAS) { box.innerHTML = '<h2 style="margin:0">Ideas para Limón</h2><p class="note">Cargando…</p>'; return; }
+    const tabs = [['top', 'Más votadas'], ['nuevas', 'Nuevas'], ['marcha', 'En marcha'], ['hechas', 'Hechas']];
+    const open = i => !['hecha', 'descartada', 'oculta'].includes(i.status);
+    let list = IDEAS.slice();
+    if (IDEAS_TAB === 'top') list = list.filter(open).sort((a, b) => b.votes - a.votes || b.created_at.localeCompare(a.created_at));
+    else if (IDEAS_TAB === 'nuevas') list = list.filter(i => i.status === 'nueva');
+    else if (IDEAS_TAB === 'marcha') list = list.filter(i => ['estudiando', 'planificada'].includes(i.status));
+    else list = list.filter(i => i.status === 'hecha');
+    if (me && me.role === 'admin' && IDEAS_TAB === 'nuevas') list = list.concat(IDEAS.filter(i => i.status === 'oculta'));
+    box.innerHTML = `<h2 style="margin:0">Ideas para Limón</h2>
+      <p class="note" style="margin:0">Propón mejoras, avisa si algo falla o si falta un sitio o un evento, y vota las ideas de los demás. Lo más votado es lo primero que miramos.</p>
+      ${logged ? `<form class="form" id="idea-form">
+        <label>Tipo<select class="search" name="kind">${Object.keys(IKIND).map(k => `<option value="${k}">${IKIND[k]}</option>`).join('')}</select></label>
+        <label>En una frase<input class="search" name="title" id="idea-title" required minlength="5" maxlength="120" placeholder="Ej.: avisarme cuando salgan entradas de un artista" autocomplete="off"></label>
+        <label class="full">Detalles (opcional)<textarea class="search" name="body" rows="3" maxlength="1500" placeholder="Cuéntanos qué te gustaría y por qué, o qué ha fallado y dónde"></textarea></label>
+        <div class="full" id="idea-sim">${IDEAS_SIM.length ? `<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>` + IDEAS_SIM.map(ideaRow).join('') : ''}</div>
+        <div class="seg full"><button class="btn" type="submit">Enviar</button><span class="note" id="idea-msg" role="status"></span></div></form>`
+        : '<p class="note">Entra con tu cuenta (más abajo) para proponer ideas y votar.</p>'}
+      <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button class="pill" data-idea-tab="${k}" aria-pressed="${IDEAS_TAB === k}">${l}</button>`).join('')}</div>
+      <div>${list.slice(0, 40).map(ideaRow).join('') || '<p class="note">Aún no hay nada aquí. ¡Estrena el tablón!</p>'}</div>`;
+  }
+  async function ideasClick(t) {
+    const sb = sbx(); if (!sb) return false;
+    const v = t.closest('[data-vote]'), tb = t.closest('[data-idea-tab]'), dl = t.closest('[data-idea-del]');
+    if (tb) { IDEAS_TAB = tb.dataset.ideaTab; renderIdeas(); return true; }
+    if (v) {
+      if (!logged) { toast('Entra con tu cuenta para votar.'); return true; }
+      const i = IDEAS.find(x => x.id === +v.dataset.vote);
+      const { error } = i.voted ? await sb.from('idea_votes').delete().eq('idea_id', i.id).eq('user_id', uid()) : await sb.from('idea_votes').insert({ idea_id: i.id, user_id: uid() });
+      if (error) { toast('No se ha podido: ' + error.message); return true; }
+      i.voted = !i.voted; i.votes += i.voted ? 1 : -1; renderIdeas(); return true;
+    }
+    if (dl) { if (confirm('¿Borrar tu idea?')) { await sb.from('ideas').delete().eq('id', +dl.dataset.ideaDel); await loadIdeas(); } return true; }
+    return false;
+  }
+
   // ---------- «Ahora cerca de ti»: lo que empieza en las próximas 3 horas cerca, y lo abierto hoy
   let NEARMAP = null, NEARLAYER = null, nearPos = null;
   function nearNow() {
@@ -1415,7 +1490,7 @@ function startApp(DATA, TAX, sync) {
       <div class="seg"><a class="btn" href="${esc(webcal)}" style="display:inline-flex;align-items:center;text-decoration:none">Suscribirme</a>
       <a class="btn ghost" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Google Calendar</a>
       <button class="btn ghost" data-copy="${esc(ics)}">Copiar enlace</button></div>`;
-    const nt = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true }, me.notify || {});
+    const nt = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true, ideas: true }, me.notify || {});
     const box = (k, txt) => `<label class="toggle">${txt}<input type="checkbox" data-notify="${k}" ${nt[k] ? 'checked' : ''}></label>`;
     mail.hidden = false;
     mail.innerHTML = `<h2 style="margin:0">Avisos por correo</h2>
@@ -1425,6 +1500,7 @@ function startApp(DATA, TAX, sync) {
       ${box('lluvia', 'Lluvia: si va a llover en un plan al aire libre que tienes guardado para hoy o mañana (por la mañana)')}
       ${box('quedadas', 'Quedadas: cuando alguien responde a un plan que has propuesto')}
       ${box('amigos', 'Amigos: cuando alguien quiere seguirte o acepta tu solicitud')}
+      ${box('ideas', 'Ideas: cuando cambia el estado de una idea que propusiste')}
       ${me.role === 'editor' || me.role === 'admin' || me.editor_status ? box('organizador', 'Organizador: cuando revisamos tu solicitud o tus eventos') : ''}
       ${me.role === 'admin' ? box('admin', 'Admin: solicitudes y eventos pendientes de revisión') : ''}
       ${nt.semanal ? '<div class="seg"><button class="btn ghost" data-mail-test>Enviarme ahora un resumen de prueba</button></div>' : ''}`;
@@ -1472,7 +1548,7 @@ function startApp(DATA, TAX, sync) {
     }
     const cb = ev.target.closest('[data-notify]'); if (!cb || !me) return;
     const db = window.limonDB, u = db && db.user(); if (!u) return;
-    me.notify = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
+    me.notify = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true, ideas: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
     const { error } = await db.sb.from('profiles').update({ notify: me.notify }).eq('id', u.id);
     toast(error ? 'No se ha podido guardar: ' + error.message
       : cb.dataset.notify === 'calle' && cb.checked && !streets.length && !saved.length ? 'Activado. Guarda planes o añade tus calles en «Calle» para recibir avisos.'
@@ -1501,6 +1577,19 @@ function startApp(DATA, TAX, sync) {
   }
   document.addEventListener('submit', async ev => {
     const db = window.limonDB, u = db && db.user();
+    if (ev.target.id === 'idea-form') {
+      ev.preventDefault(); const f = new FormData(ev.target);
+      $('idea-msg').textContent = 'Enviando…';
+      const { error } = await db.sb.from('ideas').insert({ author: u.id, kind: f.get('kind'), title: String(f.get('title')).trim(), body: String(f.get('body') || '').trim() || null });
+      if (error) { $('idea-msg').textContent = error.message; return; }
+      IDEAS_SIM = []; IDEAS_TAB = 'nuevas'; flushMail(); await loadIdeas(); toast('¡Gracias! Tu idea ya está en el tablón.'); return;
+    }
+    const ia = ev.target.closest('[data-idea-adm]');
+    if (ia) {
+      ev.preventDefault(); const f = new FormData(ia);
+      const { error } = await db.sb.from('ideas').update({ status: f.get('s'), admin_note: String(f.get('n') || '').trim() || null }).eq('id', +ia.dataset.ideaAdm);
+      toast(error ? 'No se ha podido: ' + error.message : 'Guardado.'); flushMail(); await loadIdeas(); return;
+    }
     if (ev.target.id === 'soc-form') {
       ev.preventDefault(); const f = new FormData(ev.target);
       const username = String(f.get('username') || '').trim().toLowerCase().replace(/^@/, '');
@@ -1864,6 +1953,7 @@ function startApp(DATA, TAX, sync) {
       renderAll(); return;
     }
     if (ev.target.closest('[data-sheet-close]')) { closeSheets(); return; }
+    if (ev.target.closest('[data-vote],[data-idea-tab],[data-idea-del]')) { ideasClick(ev.target); return; }
     const pf = ev.target.closest('[data-prof]'); if (pf) { openProfile(pf.dataset.prof); return; }
     const ol = ev.target.closest('[data-list]'); if (ol) { openList(ol.dataset.list); return; }
     if (ev.target.closest('[data-follow],[data-unfollow],[data-req-ok],[data-req-no]')) { socialAction(ev.target); return; }
@@ -1931,7 +2021,7 @@ function startApp(DATA, TAX, sync) {
   renderAccountExtras();
   if (QS.get('baja') && window.limonDB) {
     window.limonDB.sb.functions.invoke('limon-mail', { body: { action: 'unsub', t: QS.get('baja'), k: QS.get('k') } }).then(({ data }) => {
-      toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', lluvia: 'Ya no recibirás avisos de lluvia.', quedadas: 'Ya no recibirás avisos de quedadas.', amigos: 'Ya no recibirás avisos de amigos.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
+      toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', lluvia: 'Ya no recibirás avisos de lluvia.', quedadas: 'Ya no recibirás avisos de quedadas.', amigos: 'Ya no recibirás avisos de amigos.', ideas: 'Ya no recibirás avisos de tus ideas.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
       if (data && data.ok && me && me.notify) { me.notify[data.k] = false; renderAccountExtras(); }
     });
   }
@@ -1945,13 +2035,15 @@ function startApp(DATA, TAX, sync) {
       go('explorar'); renderQuedar();
     });
   }
-  renderSocialAll();
+  renderSocialAll(); loadIdeas();
+  document.addEventListener('input', ev => { if (ev.target.id === 'idea-title') { IDEAS_SIM = similarIdeas(ev.target.value); const b = $('idea-sim'); if (b) b.innerHTML = IDEAS_SIM.length ? '<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>' + IDEAS_SIM.map(ideaRow).join('') : ''; } });
+  if (QS.get('ideas') !== null) { go('intereses'); setTimeout(() => { const b = $('ideas'); if (b) b.scrollIntoView({ behavior: 'smooth' }); }, 400); }
   if (QS.get('u') && /^[a-z0-9_.]{3,20}$/i.test(QS.get('u'))) { const un = QS.get('u'); go('intereses'); setTimeout(() => openProfile(un), 300); }
   if (QS.get('lista') && /^\d+$/.test(QS.get('lista'))) { const li = QS.get('lista'); setTimeout(() => openList(li), 300); }
-  if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar') || QS.has('u') || QS.has('lista')) history.replaceState(null, '', location.pathname);
+  if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar') || QS.has('u') || QS.has('lista') || QS.has('ideas')) history.replaceState(null, '', location.pathname);
   return {
     get: () => ({ prefs, opts, saved, streets, dismissed, went, learned, taste }),
-    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); loadSocial(); },
+    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); loadSocial(); loadIdeas(); },
     set(p) {
       if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
       if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.learned) learned = p.learned;
