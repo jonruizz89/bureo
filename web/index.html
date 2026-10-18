@@ -114,6 +114,12 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .vote { display: flex; flex-direction: column; align-items: center; min-width: 46px; padding: 6px 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-size: 12px }
 .vote[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
 .vote b { font-size: 15px }
+/* Perfil: apartados plegables (solo se ve el título hasta que se abren) */
+#v-intereses .panel.fold > :first-child { cursor: pointer; user-select: none }
+#v-intereses .panel.fold:not(.open) > :not(:first-child) { display: none !important }
+#v-intereses .panel.fold:not(.open) { gap: 0 }
+#v-intereses .panel.fold > h2:first-child::after, #v-intereses .panel.fold > :first-child h2::after { content: '▾'; display: inline-block; margin-left: 8px; font-size: .75em; color: var(--quiet); transition: transform .15s }
+#v-intereses .panel.fold.open > h2:first-child::after, #v-intereses .panel.fold.open > :first-child h2::after { transform: rotate(180deg) }
 .ph { margin: 8px 0 0; font: 600 14px var(--f-body) }
 .stars { color: #E0A800; letter-spacing: 1px }
 .star { background: none; border: 0; font-size: 24px; line-height: 1; color: #E0A800; cursor: pointer; padding: 2px }
@@ -357,6 +363,7 @@ table.cov td.n, table.cov th.n { text-align: right }
 
   <section class="view" id="v-intereses" hidden>
     <h1>Perfil</h1>
+    <p class="note" style="margin:-4px 0 0">Toca cada apartado para abrirlo.</p>
     <div class="panel" id="taste">
       <h2 style="margin:0">Cuéntame qué te gusta</h2>
       <p class="note">Escríbelo con tus palabras, como se lo contarías a un amigo: «cine clásico, sobre todo Hitchcock; arqueología y Egipto; nada de reguetón». La IA lo convierte en tu perfil y puedes corregirlo.</p>
@@ -365,14 +372,14 @@ table.cov td.n, table.cov th.n { text-align: right }
       <div class="seg"><button class="btn" id="ts-go">Interpretar con IA</button><span class="note" id="ts-msg" role="status"></span></div>
       <div id="ts-out"></div>
     </div>
-    <h2 style="margin:0">Mis intereses</h2>
-    <p class="lead">Toca una categoría para marcarla como interesante, otra vez para no verla nunca, y una tercera para dejarla como estaba. El número es cuántos eventos hay ahora mismo.</p>
-    <div class="panel">
+    <div class="panel" id="in-panel">
+      <h2 style="margin:0">Mis intereses</h2>
+      <p class="note" style="margin:0">Toca una categoría para marcarla como interesante, otra vez para no verla nunca, y una tercera para dejarla como estaba. El número es cuántos eventos hay ahora mismo.</p>
       <div class="legend"><span>■ Me interesa</span><span style="color:var(--accent-text)">▢ No me muestres</span><span>Sin marcar</span></div>
       <input class="search" id="in-q" type="search" placeholder="Buscar categoría" aria-label="Buscar categoría">
       <div id="in-groups"></div>
     </div>
-    <div class="panel">
+    <div class="panel" id="opts-panel">
       <h2 style="margin:0">Con quién y cómo</h2>
       <label class="toggle" for="o-ninos">Voy con niños (muestra planes familiares e infantiles)<input type="checkbox" id="o-ninos"></label>
       <label class="toggle" for="o-perro">Voy con mi perro (sube planes con mascotas)<input type="checkbox" id="o-perro"></label>
@@ -1684,7 +1691,7 @@ function startApp(DATA, TAX, sync) {
       items.sort((x, y) => y.s - x.s || x.occ.date - y.occ.date);
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
-      $('pt-list').innerHTML = streetBanner() + `<button class="btn" data-goto="intereses">Elegir mis intereses</button>` + friendsBlock(a, b) +
+      $('pt-list').innerHTML = streetBanner() + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -1928,7 +1935,7 @@ function startApp(DATA, TAX, sync) {
     }
     if (ev.target.closest('#ex-clear')) { state.filter = null; state.exShown = 20; renderExplorar(); return; }
     const gt = ev.target.closest('[data-goto]');
-    if (gt) { go(gt.dataset.goto); return; }
+    if (gt) { if (gt.dataset.fold) openFold(gt.dataset.fold, true); go(gt.dataset.goto); return; }
     const s = ev.target.closest('[data-save]');
     if (s) {
       const id = s.dataset.save, on = !saved.includes(id);
@@ -2035,9 +2042,30 @@ function startApp(DATA, TAX, sync) {
       go('explorar'); renderQuedar();
     });
   }
+  // apartados del Perfil plegados por defecto; se recuerda cuáles abre cada persona en este navegador
+  const FOLDS = store.get('folds', {});
+  function setupFolds() {
+    document.querySelectorAll('#v-intereses .panel').forEach(p => {
+      if (!p.id) return;
+      p.classList.add('fold'); p.classList.toggle('open', !!FOLDS[p.id]);
+      const h = p.querySelector('h2'); if (h) { h.setAttribute('role', 'button'); h.tabIndex = 0; h.setAttribute('aria-expanded', !!FOLDS[p.id]); }
+    });
+  }
+  function openFold(id, on) {
+    const p = $(id); if (!p) return;
+    FOLDS[id] = on === undefined ? !FOLDS[id] : on; store.set('folds', FOLDS);
+    p.classList.toggle('open', !!FOLDS[id]); const h = p.querySelector('h2'); if (h) h.setAttribute('aria-expanded', !!FOLDS[id]);
+  }
+  const foldHead = t => { const p = t.closest('#v-intereses .panel.fold'); if (!p) return null; const head = p.firstElementChild; return head && head.contains(t) && !t.closest('button:not([role]), a, input, select, textarea, label') ? p : null; };
+  document.addEventListener('click', ev => { const p = foldHead(ev.target); if (p) { ev.stopPropagation(); openFold(p.id); } }, true);
+  document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('#v-intereses .panel.fold h2')) { ev.preventDefault(); openFold(ev.target.closest('.panel').id); } });
+  // los apartados se repintan a menudo: se vuelve a marcar el título como botón
+  new MutationObserver(() => setupFolds()).observe($('v-intereses'), { childList: true, subtree: false });
+  ['social', 'seguir', 'ventajas', 'year', 'ideas', 'org', 'adm', 'mail'].forEach(id => { const el = $(id); if (el) new MutationObserver(() => { const h = el.querySelector('h2'); if (h && !h.hasAttribute('role')) { h.setAttribute('role', 'button'); h.tabIndex = 0; h.setAttribute('aria-expanded', !!FOLDS[id]); } }).observe(el, { childList: true }); });
+  setupFolds();
   renderSocialAll(); loadIdeas();
   document.addEventListener('input', ev => { if (ev.target.id === 'idea-title') { IDEAS_SIM = similarIdeas(ev.target.value); const b = $('idea-sim'); if (b) b.innerHTML = IDEAS_SIM.length ? '<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>' + IDEAS_SIM.map(ideaRow).join('') : ''; } });
-  if (QS.get('ideas') !== null) { go('intereses'); setTimeout(() => { const b = $('ideas'); if (b) b.scrollIntoView({ behavior: 'smooth' }); }, 400); }
+  if (QS.get('ideas') !== null) { go('intereses'); openFold('ideas', true); setTimeout(() => { const b = $('ideas'); if (b) b.scrollIntoView({ behavior: 'smooth' }); }, 400); }
   if (QS.get('u') && /^[a-z0-9_.]{3,20}$/i.test(QS.get('u'))) { const un = QS.get('u'); go('intereses'); setTimeout(() => openProfile(un), 300); }
   if (QS.get('lista') && /^\d+$/.test(QS.get('lista'))) { const li = QS.get('lista'); setTimeout(() => openList(li), 300); }
   if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar') || QS.has('u') || QS.has('lista') || QS.has('ideas')) history.replaceState(null, '', location.pathname);
