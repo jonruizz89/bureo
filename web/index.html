@@ -1089,7 +1089,7 @@ function startApp(DATA, TAX, sync) {
     for (const k of Object.keys(FRIENDS)) {
       const e = BYID[k]; if (!e || isDismissed(e)) continue;
       const g = friendsOf(e).filter(x => x.kind === 'guardado'); if (!g.length) continue;
-      const occ = occurs(e, a, b); if (!occ) continue;
+      const occ = occurs(e, today, addDays(today, 30)); if (!occ) continue;  // los próximos 30 días, sea cual sea el rango elegido
       list.push({ e, occ, n: g.length });
     }
     list.sort((x, y) => y.n - x.n || x.occ.date - y.occ.date);
