@@ -1,9 +1,9 @@
 // Limón · correos.
-//  - flush:  envía lo que hay en la cola (decisiones sobre organizadores, quedadas y avisos para admins). Lo puede pedir cualquiera:
+//  - flush:  envía lo que hay en la cola (decisiones sobre organizadores, quedadas, amigos y avisos para admins). Lo puede pedir cualquiera:
 //            solo envía lo que ya está en cola.
 //  - daily:  cortes de calle de hoy y mañana junto a tus planes guardados o en tus calles, y lluvia en tus planes al aire libre
 //            (requiere la clave secreta).
-//  - weekly: resumen de la semana según tus gustos (requiere la clave secreta).
+//  - weekly: resumen de la semana según tus gustos, lo que sigues y tus amigos (requiere la clave secreta).
 //  - unsub:  darse de baja de un tipo de aviso con el enlace del correo (también One-Click, RFC 8058).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -25,7 +25,7 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const fold = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const KINDS = ['semanal', 'calle', 'lluvia', 'organizador', 'admin', 'quedadas'];
+const KINDS = ['semanal', 'calle', 'lluvia', 'organizador', 'admin', 'quedadas', 'amigos'];
 
 // ---------- fechas en Madrid
 function madridToday() {
@@ -86,17 +86,17 @@ async function send(p: Prof, subject: string, html: string, k: string) {
   await sleep(550);  // Resend: 2 envíos por segundo
   if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
-// resumen, cortes y lluvia solo si se activan; organizador, admin y quedadas salvo que se desactiven
+// resumen, cortes y lluvia solo si se activan; organizador, admin, quedadas y amigos salvo que se desactiven
 const OPT_IN = ['semanal', 'calle', 'lluvia'];
 const wants = (p: Prof, k: string) => !!p.email && (OPT_IN.includes(k) ? (p.notify || {})[k] === true : (p.notify || {})[k] !== false);
 
-// ---------- cola: organizadores, quedadas y admins
+// ---------- cola: organizadores, quedadas, amigos y admins
 async function flush() {
   const { data: rows } = await admin.from('mail_outbox').select('*').is('sent_at', null).is('error', null).order('created_at').limit(50);
   let sent = 0, skipped = 0;
   for (const m of rows || []) {
     const { data: p } = await admin.from('profiles').select('id,email,notify,mail_token,role').eq('id', m.user_id).maybeSingle();
-    const k = m.kind.startsWith('admin') ? 'admin' : m.kind === 'rsvp' ? 'quedadas' : 'organizador';
+    const k = m.kind.startsWith('admin') ? 'admin' : m.kind === 'rsvp' ? 'quedadas' : m.kind.startsWith('follow') ? 'amigos' : 'organizador';
     let mail: { subject: string; html: string } | null = null;
     const pl = m.payload || {};
     if (p && wants(p, k)) {
@@ -120,6 +120,16 @@ async function flush() {
         if (ev) mail = { subject: `${pl.name} ${VERB[pl.status] || 'ha respondido'} a «${ev.title}»`,
           html: layout({ title: `${pl.name} ${VERB[pl.status] || 'ha respondido'}`, intro: `A tu propuesta de ir a <b>${esc(ev.title)}</b>.${list ? '<br><br>Respuestas: ' + esc(list) : ''}`,
             cta: { label: 'Ver el plan', url: evUrl(ev.id) }, footer: footer(p, k, 'Te escribimos porque propusiste este plan en Limón.') }) };
+      } else if (m.kind === 'follow' || m.kind === 'follow_ok') {
+        const { data: who } = await admin.from('profiles').select('username,display_name').eq('username', pl.from).maybeSingle();
+        if (who) {
+          const name = who.display_name || who.username, link = `${APP}?u=${who.username}`;
+          mail = m.kind === 'follow_ok'
+            ? { subject: `${name} ha aceptado tu solicitud en Limón`, html: layout({ title: `${name} te deja ver sus planes`, intro: `<b>${esc(name)}</b> (@${esc(who.username)}) ha aceptado tu solicitud. Ya ves a qué planes va y lo que ha guardado, y Limón lo tendrá en cuenta para recomendarte.`, cta: { label: 'Ver su perfil', url: link }, footer: footer(p, k, 'Te escribimos por tus amigos en Limón.') }) }
+            : pl.status === 'pending'
+              ? { subject: `${name} quiere seguirte en Limón`, html: layout({ title: `${name} quiere seguirte`, intro: `<b>${esc(name)}</b> (@${esc(who.username)}) ha pedido ver tus planes. Tu perfil es privado: solo podrá verlos si aceptas.`, cta: { label: 'Ver la solicitud', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por tus amigos en Limón.') }) }
+              : { subject: `${name} ha empezado a seguirte en Limón`, html: layout({ title: `${name} te sigue`, intro: `<b>${esc(name)}</b> (@${esc(who.username)}) ha empezado a seguirte.`, cta: { label: 'Ver su perfil', url: link }, footer: footer(p, k, 'Te escribimos por tus amigos en Limón.') }) };
+        }
       } else if (m.kind === 'admin_editor') {
         mail = { subject: `Solicitud de organizador: ${pl.nombre || 'sin nombre'}`, html: layout({ title: 'Nueva solicitud de organizador', intro: `<b>${esc(pl.nombre)}</b>${pl.web ? ' · ' + esc(pl.web) : ''}<br>${esc(pl.que || '')}`, cta: { label: 'Revisar', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_event') {
@@ -294,10 +304,12 @@ async function weekly(only?: string) {
   let sent = 0;
   for (const p of profs as (Prof & { taste: any; learned: Record<string, number> | null; with_kids: boolean | null })[]) {
     if (!p.email) continue;
-    const [ui, dis, sv] = await Promise.all([
+    const [ui, dis, sv, tf, fr] = await Promise.all([
       admin.from('user_interests').select('category_id,value').eq('user_id', p.id),
       admin.from('dismissed_events').select('event_id').eq('user_id', p.id),
-      admin.from('saved_events').select('event_id').eq('user_id', p.id)]);
+      admin.from('saved_events').select('event_id').eq('user_id', p.id),
+      admin.from('topic_follows').select('kind,value').eq('user_id', p.id),
+      admin.from('follows').select('followee').eq('follower', p.id).eq('status', 'accepted')]);
     const prefs: Record<string, number> = {}; for (const r of ui.data || []) prefs[r.category_id] = r.value;
     const dismissed = new Set((dis.data || []).map((r) => r.event_id)), saved = new Set((sv.data || []).map((r) => r.event_id));
     const taste = p.taste || {}, learned = p.learned || {};
@@ -341,15 +353,48 @@ async function weekly(only?: string) {
       meta: [x.d ? human(x.d) : 'Toda la semana', x.e.time_text, x.e.venues?.name, x.e.is_free ? 'Gratis' : x.e.price_text].filter(Boolean).join(' · '),
       url: evUrl(x.e.id), note: x.why && x.why.length ? 'Por: ' + x.why.join(', ') : undefined,
     });
+    // de lo que sigues (salas, ciclos, temas, artistas)
+    const topics = (tf.data || []) as { kind: string; value: string }[];
+    const hitTopic = (e: Ev) => {
+      for (const t of topics) {
+        const v = fold(t.value);
+        if (t.kind === 'sala' && e.venues?.name && fold(e.venues.name) === v) return t.value;
+        if (t.kind === 'ciclo' && e.series && fold(e.series) === v) return t.value;
+        if (t.kind === 'tema' && (e.topics || []).some((x) => fold(x) === v)) return t.value;
+        if (t.kind === 'artista' && v.length >= 3 && (' ' + fold(e.title + ' ' + (e.description || '')) + ' ').includes(' ' + v + ' ')) return t.value;
+      }
+      return null;
+    };
+    const picked = new Set(pick.map((x) => x.e.id));
+    const followItems = topics.length ? evs.filter((e) => !saved.has(e.id) && !dismissed.has(e.id) && !picked.has(e.id) && nextDate(e) && hitTopic(e))
+      .slice(0, 6).map((e) => ({ ...fmt({ e, d: nextDate(e) }), note: 'Sigues: ' + hitTopic(e) })) : [];
+    followItems.forEach((x) => picked.add(Number(x.url.split('=e')[1])));
+    // a qué van las personas que sigues
+    const friendIds = (fr.data || []).map((x: { followee: string }) => x.followee);
+    let friendItems: Item[] = [];
+    if (friendIds.length) {
+      const [{ data: fs }, { data: fp }] = await Promise.all([
+        admin.from('saved_events').select('event_id,user_id').in('user_id', friendIds.slice(0, 200)),
+        admin.from('profiles').select('id,username,display_name').in('id', friendIds.slice(0, 200))]);
+      const names: Record<string, string> = {};
+      (fp || []).forEach((x: { id: string; username: string; display_name: string }) => { names[x.id] = x.display_name || x.username || 'Alguien'; });
+      const byEv: Record<number, string[]> = {};
+      (fs || []).forEach((x: { event_id: number; user_id: string }) => { (byEv[x.event_id] ||= []).push(names[x.user_id]); });
+      friendItems = evs.filter((e) => byEv[e.id] && !saved.has(e.id) && !dismissed.has(e.id) && !picked.has(e.id) && nextDate(e))
+        .sort((a, b) => byEv[b.id].length - byEv[a.id].length).slice(0, 5)
+        .map((e) => ({ ...fmt({ e, d: nextDate(e) }), note: '👥 ' + byEv[e.id].slice(0, 3).join(', ') + (byEv[e.id].length > 3 ? ' y más' : '') }));
+    }
     const savedItems = evs.filter((e) => saved.has(e.id)).map((e) => ({ e, d: nextDate(e) })).sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999')).slice(0, 6).map(fmt);
-    if (!pick.length && !savedItems.length) continue;
+    if (!pick.length && !savedItems.length && !followItems.length && !friendItems.length) continue;
     const ref = only ? 'prueba:' + Date.now() : 'semana:' + from;
     const { data: ins } = await admin.from('mail_outbox').insert({ user_id: p.id, kind: 'semanal', ref, payload: { n: pick.length } }).select('id');
     if (!ins || !ins.length) continue;
     const html = layout({ title: 'Tu semana en Madrid', intro: `Planes del ${human(from)} al ${human(to)} elegidos según lo que te gusta.${pick.length && !Object.keys(prefs).length && !(taste.categorias || []).length ? ' Cuéntanos tus gustos en tu perfil y afinaremos más.' : ''}`,
-      sections: [{ h: 'Tus planes guardados', items: savedItems }, { h: savedItems.length ? 'Te pueden gustar' : '', items: pick.map(fmt) }],
+      sections: [{ h: 'Tus planes guardados', items: savedItems }, { h: 'Tus amigos van a', items: friendItems }, { h: 'De lo que sigues', items: followItems },
+        { h: savedItems.length || friendItems.length || followItems.length ? 'Te pueden gustar' : '', items: pick.map(fmt) }],
       cta: { label: 'Ver más planes', url: APP }, footer: footer(p, 'semanal', 'Recibes el resumen semanal porque lo activaste en Limón.') });
-    try { await send(p, pick.length ? `Tu semana: ${pick[0].e.title} y ${pick.length - 1 + savedItems.length} planes más` : 'Tu semana en Limón', html, 'semanal'); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', ins[0].id); sent++; }
+    const total = pick.length + savedItems.length + followItems.length + friendItems.length;
+    try { await send(p, pick.length ? `Tu semana: ${pick[0].e.title} y ${total - 1} planes más` : 'Tu semana en Limón', html, 'semanal'); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', ins[0].id); sent++; }
     catch (e) { await admin.from('mail_outbox').update({ error: String(e).slice(0, 300) }).eq('id', ins[0].id); }
   }
   return { users: profs.length, sent };

@@ -1306,7 +1306,8 @@ function startApp(DATA, TAX, sync) {
   }
   function buildYear() {
     const y = String(today.getFullYear());
-    let rows = DIARY_ROWS.filter(x => (x.events.starts_on || '').startsWith(y)).map(x => ({ title: x.events.title, date: x.events.starts_on, district: x.events.district, venue: x.events.venues && x.events.venues.name, cats: (x.events.event_categories || []).map(c => c.category_id), rating: x.rating }));
+    // la fecha que cuenta es cuándo marcaste «Ya fui» (en una exposición larga, no su inauguración)
+    let rows = DIARY_ROWS.filter(x => (x.created_at || '').startsWith(y)).map(x => ({ title: x.events.title, date: x.created_at.slice(0, 10), district: x.events.district, venue: x.events.venues && x.events.venues.name, cats: (x.events.event_categories || []).map(c => c.category_id), rating: x.rating }));
     if (!rows.length) rows = went.map(id => BYID[id]).filter(e => e && e.inicio.startsWith(y)).map(e => ({ title: e.titulo, date: e.inicio, district: e.distrito, venue: e.lugar, cats: e.cats, rating: (DIARY[e.id] || {}).rating }));
     if (!rows.length) return '<p class="note">Aún no has marcado ningún plan con «Ya fui» este año. Cuando lo hagas, aquí verás tu resumen.</p>';
     const top = (arr, n) => { const c = {}; arr.filter(Boolean).forEach(x => { c[x] = (c[x] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, n); };
@@ -1414,7 +1415,7 @@ function startApp(DATA, TAX, sync) {
       <div class="seg"><a class="btn" href="${esc(webcal)}" style="display:inline-flex;align-items:center;text-decoration:none">Suscribirme</a>
       <a class="btn ghost" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Google Calendar</a>
       <button class="btn ghost" data-copy="${esc(ics)}">Copiar enlace</button></div>`;
-    const nt = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true }, me.notify || {});
+    const nt = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true }, me.notify || {});
     const box = (k, txt) => `<label class="toggle">${txt}<input type="checkbox" data-notify="${k}" ${nt[k] ? 'checked' : ''}></label>`;
     mail.hidden = false;
     mail.innerHTML = `<h2 style="margin:0">Avisos por correo</h2>
@@ -1423,6 +1424,7 @@ function startApp(DATA, TAX, sync) {
       ${box('calle', 'Cortes de calle: si hoy o mañana hay cortes junto a tus planes guardados o en tus calles (por la mañana)')}
       ${box('lluvia', 'Lluvia: si va a llover en un plan al aire libre que tienes guardado para hoy o mañana (por la mañana)')}
       ${box('quedadas', 'Quedadas: cuando alguien responde a un plan que has propuesto')}
+      ${box('amigos', 'Amigos: cuando alguien quiere seguirte o acepta tu solicitud')}
       ${me.role === 'editor' || me.role === 'admin' || me.editor_status ? box('organizador', 'Organizador: cuando revisamos tu solicitud o tus eventos') : ''}
       ${me.role === 'admin' ? box('admin', 'Admin: solicitudes y eventos pendientes de revisión') : ''}
       ${nt.semanal ? '<div class="seg"><button class="btn ghost" data-mail-test>Enviarme ahora un resumen de prueba</button></div>' : ''}`;
@@ -1470,7 +1472,7 @@ function startApp(DATA, TAX, sync) {
     }
     const cb = ev.target.closest('[data-notify]'); if (!cb || !me) return;
     const db = window.limonDB, u = db && db.user(); if (!u) return;
-    me.notify = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
+    me.notify = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
     const { error } = await db.sb.from('profiles').update({ notify: me.notify }).eq('id', u.id);
     toast(error ? 'No se ha podido guardar: ' + error.message
       : cb.dataset.notify === 'calle' && cb.checked && !streets.length && !saved.length ? 'Activado. Guarda planes o añade tus calles en «Calle» para recibir avisos.'
@@ -1929,7 +1931,7 @@ function startApp(DATA, TAX, sync) {
   renderAccountExtras();
   if (QS.get('baja') && window.limonDB) {
     window.limonDB.sb.functions.invoke('limon-mail', { body: { action: 'unsub', t: QS.get('baja'), k: QS.get('k') } }).then(({ data }) => {
-      toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', lluvia: 'Ya no recibirás avisos de lluvia.', quedadas: 'Ya no recibirás avisos de quedadas.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
+      toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', lluvia: 'Ya no recibirás avisos de lluvia.', quedadas: 'Ya no recibirás avisos de quedadas.', amigos: 'Ya no recibirás avisos de amigos.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
       if (data && data.ok && me && me.notify) { me.notify[data.k] = false; renderAccountExtras(); }
     });
   }
