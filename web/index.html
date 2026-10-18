@@ -723,7 +723,7 @@ function startApp(DATA, TAX, sync) {
     $('ca-count').textContent = list.length ? `${list.length} avisos ${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}` + (streets.length ? ` · ${mine} te afectan` : '') : '';
     $('ca-list').innerHTML = list.map(cutCard).join('') || '<div class="empty">No hay cortes anunciados para ese día.</div>';
     // partidos y conciertos en estadios sin aviso oficial todavía: aviso anticipado
-    const big = bigEventsOn(d).filter(e => !cutsOn(d).some(x => stadiumOf(x.c.title + ' ' + (x.c.summary || '')) === stadiumOf(e.lugar)));
+    const big = bigEventsOn(d).filter(e => stadiumOf(e.lugar).big).filter(e => !cutsOn(d).some(x => stadiumOf(x.c.title + ' ' + (x.c.summary || '')) === stadiumOf(e.lugar)));
     $('ca-big').innerHTML = big.map(e => { const st = stadiumOf(e.lugar); return `<article class="card cut">
       <div class="tags"><span class="tag">Previsto</span><span class="tag">${esc(st.name)}</span></div>
       <div class="when">${esc(e.hora && e.hora.length < 30 ? e.hora : 'Hora por confirmar')}</div>
@@ -858,7 +858,7 @@ function startApp(DATA, TAX, sync) {
         const m = km(o, st.ll) * 1000; if (m > 1200) continue;
         const cs = CLOSURES.filter(c => stadiumOf(c.title + ' ' + (c.summary || '')) === st && activeOn(c, d));
         cs.forEach(c => { const r = activeOn(c, d); out.push({ m: m - 1, t: c.title + (r.start ? `, ${r.start}${r.end ? '–' + r.end : ''}` : '') }); });
-        if (!cs.length) bigEventsOn(d, st).filter(x => x.id !== e.id).slice(0, 1).forEach(x => out.push({ m, t: `${x.titulo} en el ${st.name}${x.hora && x.hora.length < 12 ? ' (' + x.hora + ')' : ''}: puede haber cortes y desvíos` }));
+        if (!cs.length && st.big) bigEventsOn(d, st).filter(x => x.id !== e.id).slice(0, 1).forEach(x => out.push({ m, t: `${x.titulo} en el ${st.name}${x.hora && x.hora.length < 12 ? ' (' + x.hora + ')' : ''}: puede haber cortes y desvíos` }));
       }
       out.sort((a, b) => a.m - b.m);
       const seenW = new Set();
@@ -870,16 +870,17 @@ function startApp(DATA, TAX, sync) {
 
   // ---------- estadios: unir cortes con el partido o concierto de ese día
   const STADIUMS = [
-    { re: /bernab[eé]u/i, name: 'Bernabéu', ll: [40.45306, -3.68835] },
-    { re: /metropolitano/i, name: 'Metropolitano', ll: [40.43619, -3.59978] },
+    { re: /bernab[eé]u/i, name: 'Bernabéu', ll: [40.45306, -3.68835], big: true },
+    { re: /metropolitano/i, name: 'Metropolitano', ll: [40.43619, -3.59978], big: true },
     { re: /movistar arena|wizink/i, name: 'Movistar Arena', ll: [40.42392, -3.67202] }];
   const stadiumOf = t => STADIUMS.find(st => st.re.test(t || ''));
   function bigEventsOn(d, st) {
-    const k = ymd(d);
+    const k = ymd(d), seen = new Set();
     return EV.filter(e => {
       const s2 = stadiumOf(e.lugar); if (!s2 || (st && s2 !== st)) return false;
-      if (e.sesiones.length > 1) return e.sesiones.includes(k);
-      return e.inicio === k && e.fin === k;  // las exposiciones largas no cuentan
+      if (e.sesiones.length > 1 ? !e.sesiones.includes(k) : !(e.inicio === k && e.fin === k)) return false;  // las exposiciones largas no cuentan
+      const key = s2.name + '|' + (startHour(e) || '');  // el mismo partido puede venir de dos fuentes
+      if (seen.has(key)) return false; seen.add(key); return true;
     });
   }
 
@@ -917,13 +918,13 @@ function startApp(DATA, TAX, sync) {
       try { pos = await new Promise((ok, ko) => navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), ko, { timeout: 10000, maximumAge: 300000 })); userPos = pos; }
       catch (x) { put('Sin permiso de ubicación no puedo calcular la ruta.'); return; }
     }
-    if (km(pos, [e.lat, e.lng]) > 60) { put('Estás lejos de Madrid: no puedo comprobar la ruta desde ahí.'); return; }
+    if (km(pos, [40.4168, -3.7038]) > 35) { put('Estás lejos de Madrid: no puedo comprobar la ruta desde ahí.'); return; }
     put('Calculando la ruta…');
     const occ = occurs(e, today, addDays(today, 400)), d = occ ? (occ.ongoing ? today : occ.date) : today;
     try {
-      const j = await fetch(`https://router.project-osrm.org/route/v1/driving/${pos[1].toFixed(5)},${pos[0].toFixed(5)};${e.lng},${e.lat}?overview=full&geometries=geojson`).then(r => r.json());
-      const rt = j.routes && j.routes[0]; if (!rt) throw new Error('sin ruta');
-      const line = rt.geometry.coordinates.map(c => [c[1], c[0]]);
+      const { data: rt, error } = await window.limonDB.sb.functions.invoke('limon-route', { body: { from: pos, to: [e.lat, e.lng] } });
+      if (error || !rt || !rt.line) throw new Error('sin ruta');
+      const line = rt.line;
       const hits = [];
       for (const g of GEOCUTS) {
         if (TRANS.includes(g.c.kind) || !g.segs.length) continue;
