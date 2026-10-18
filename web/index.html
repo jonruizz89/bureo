@@ -108,6 +108,12 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .streetwarn { font-size: 13px; background: #FFF0EE; color: #A4251C; border-radius: 8px; padding: 6px 10px; font-weight: 500 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .streetwarn { background: #3B1A17; color: #FFB4A8 } }
 .pwdlg { border: 0; border-radius: 18px; padding: 0; width: min(420px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.25) }
+.sheet { width: min(560px, calc(100vw - 24px)); max-height: 86vh }
+.sheetbody { display: flex; flex-direction: column; gap: 10px; padding: 22px 20px; overflow: auto; max-height: 86vh }
+.ph { margin: 8px 0 0; font: 600 14px var(--f-body) }
+.stars { color: #E0A800; letter-spacing: 1px }
+.star { background: none; border: 0; font-size: 24px; line-height: 1; color: #E0A800; cursor: pointer; padding: 2px }
+.diary { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft) }
 .pwdlg::backdrop { background: rgba(20, 18, 8, .55) }
 .pwdlg form { display: flex; flex-direction: column; gap: 12px; padding: 24px 22px }
 .pwdlg h2 { margin: 0; font-size: 20px }
@@ -338,6 +344,8 @@ table.cov td.n, table.cov th.n { text-align: right }
     <p class="lead">Lo que has guardado, por fecha.</p>
     <div class="panel" id="ag-cal"></div>
     <div id="ag-list" class="view"></div>
+    <div class="panel" id="ag-diary"></div>
+    <div class="panel" id="ag-lists"></div>
   </section>
 
   <section class="view" id="v-intereses" hidden>
@@ -363,6 +371,10 @@ table.cov td.n, table.cov th.n { text-align: right }
       <label class="toggle" for="o-perro">Voy con mi perro (sube planes con mascotas)<input type="checkbox" id="o-perro"></label>
       <label class="toggle" for="o-dist">Mostrar a qué distancia está cada plan (usa tu ubicación; no se guarda)<input type="checkbox" id="o-dist"></label>
     </div>
+    <div class="panel" id="social"></div>
+    <div class="panel" id="seguir"></div>
+    <div class="panel" id="ventajas"></div>
+    <div class="panel" id="year"></div>
     <div class="panel" id="org" hidden></div>
     <div class="panel" id="adm" hidden></div>
     <div class="panel" id="mail" hidden></div>
@@ -530,7 +542,8 @@ function startApp(DATA, TAX, sync) {
       else if (F.franja === 'manana' ? h >= 14 : F.franja === 'tarde' ? (h < 14 || h >= 20.5) : h < 20) return false;
     }
     if (F.dias && occ && !occ.ongoing) { const wd = occ.date.getDay(), finde = wd === 0 || wd === 6 || (wd === 5 && (startHour(e) || 0) >= 18); if ((F.dias === 'finde') !== finde) return false; }
-    if (F.precio) { const p = minPrice(e); if (F.precio === 'gratis' ? !e.gratis : (p == null || p > +F.precio)) return false; }
+    if (F.precio === 'ventaja') { if (!e.gratis && !ventajaHit(e)) return false; }
+    else if (F.precio) { const p = minPrice(e); if (F.precio === 'gratis' ? !e.gratis : (p == null || p > +F.precio)) return false; }
     return true;
   }
   function filtersHtml() {
@@ -541,7 +554,7 @@ function startApp(DATA, TAX, sync) {
         <p class="note" id="f-geo">${F.near ? (F.pos ? `Cerca de tu ubicación actual (${F.near} km).` : 'Buscando tu ubicación…') : 'La distancia se calcula desde donde estás ahora; no se guarda.'}</p></div>
       <div><h3>Momento del día</h3><div class="row" style="margin-top:6px">${pill('franja', 'manana', 'Mañana')}${pill('franja', 'tarde', 'Tarde')}${pill('franja', 'noche', 'Noche')}</div></div>
       <div><h3>Días</h3><div class="row" style="margin-top:6px">${pill('dias', 'laborables', 'Entre semana')}${pill('dias', 'finde', 'Fin de semana')}</div></div>
-      <div><h3>Precio</h3><div class="row" style="margin-top:6px">${pill('precio', 'gratis', 'Gratis')}${pill('precio', 10, 'Hasta 10 €')}${pill('precio', 20, 'Hasta 20 €')}${pill('precio', 40, 'Hasta 40 €')}</div></div>
+      <div><h3>Precio</h3><div class="row" style="margin-top:6px">${pill('precio', 'gratis', 'Gratis')}${pill('precio', 10, 'Hasta 10 €')}${pill('precio', 20, 'Hasta 20 €')}${pill('precio', 40, 'Hasta 40 €')}${ventajas.length ? pill('precio', 'ventaja', 'Gratis o con mi descuento') : ''}</div>${ventajas.length ? '' : '<p class="note">Marca tus ventajas (Carné Joven, estudiante…) en Perfil para ver los planes con descuento para ti.</p>'}</div>
       <div class="row"><button class="btn ghost" data-fclear>Quitar filtros</button><span class="note">Solo salen eventos con ese dato; los que no lo indican quedan fuera.</span></div>`;
   }
   function renderFilters() {
@@ -583,6 +596,10 @@ function startApp(DATA, TAX, sync) {
       else if (c.startsWith('g:') && likedGroups.has(groupOf(c))) { s += 1.2; hits.push(labelOf(c)); }
       else if (likedGroups.has(groupOf(c))) { s += 0.4; }
     }
+    const fr = friendsOf(e).filter(x => x.kind === 'guardado');
+    if (fr.length) { s += Math.min(3, 1.2 * fr.length); hits.push(fr.length === 1 ? fr[0].name + ' lo tiene guardado' : fr.length + ' amigos lo tienen guardado'); }
+    for (const c of e.cats) { const w = FRIEND_CATS[c]; if (w) s += w; }
+    const tf = topicHit(e); if (tf) { s += 2.5; hits.push('sigues ' + tf); }
     if (isFamily(e) && !opts.ninos) return { s: -1, hits: [] };
     if (opts.perro && isPet(e)) { s += 2; hits.push('vas con tu perro'); }
     if (s > 0) {
@@ -618,7 +635,8 @@ function startApp(DATA, TAX, sync) {
     const isSaved = saved.includes(e.id);
     const open = !!state.open[e.id];
     const cats = e.cats.filter(c => c !== 'sin_categoria').slice(0, 3);
-    const price = e.gratis ? '<span class="tag free">Gratis</span>' : (e.precio && e.precio.length < 40 ? `<span class="tag">${esc(e.precio)}</span>` : '');
+    const vh = ventajaHit(e);
+    const price = (e.gratis ? '<span class="tag free">Gratis</span>' : (e.precio && e.precio.length < 40 ? `<span class="tag">${esc(e.precio)}</span>` : '')) + (vh ? `<span class="tag free" title="La ficha menciona condiciones para: ${esc(vh)}. Compruébalo en la web.">Posible descuento para ti</span>` : '');
     const why = opt.info ? `<div class="why">${esc(opt.info)}</div>` : opt.reason ? `<div class="why"><b>Por qué:</b> ${esc(opt.reason)}</div>` : opt.why && opt.why.length ? `<div class="why">Te encaja: ${esc(opt.why.slice(0, 3).join(' · '))}</div>` : '';
     const more = open ? `<div class="more" id="m-${e.id}">
         ${e.descripcion ? `<p>${esc(e.descripcion)}</p>` : '<p class="note">La fuente no trae descripción.</p>'}
@@ -634,7 +652,11 @@ function startApp(DATA, TAX, sync) {
           ${(occ && (occ.ongoing || +occ.date <= +today)) || went.includes(e.id) ? `<button class="act" data-went="${e.id}" aria-pressed="${went.includes(e.id)}">${went.includes(e.id) ? '✓ Fui' : 'Ya fui'}</button>` : ''}
           ${occ && parse(e.fin) >= today ? `<button class="act" data-invite="${e.id}">Proponer plan</button>` : ''}
           ${e.lat ? `<button class="act" data-route="${e.id}">¿Cortes en el camino?</button>` : ''}
+          <button class="act" data-addlist="${e.id}">Añadir a lista</button>
+          ${e.lugar ? topicBtn('sala', e.lugar, 'la sala') : ''}${e.serie ? topicBtn('ciclo', e.serie, 'el ciclo') : ''}
         </div>
+        ${went.includes(e.id) ? diaryForm(e) : ''}
+        ${state.listing === e.id ? listPicker(e) : ''}
         ${state.inviting === e.id ? inviteForm(e) : ''}
         ${state.route && state.route[e.id] ? `<div class="routewarn">${state.route[e.id]}</div>` : ''}
       </div>` : '';
@@ -644,7 +666,7 @@ function startApp(DATA, TAX, sync) {
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
           <div class="meta">${esc(whenText(e, occ))}</div>
           <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}${userPos && e.lat ? ` · <span class="dist">a ${fmtDist(km(userPos, [e.lat, e.lng]))}</span>` : ''}</div>
-          ${streetWarn(e, occ)}${rainWarn(e, occ)}${crewHtml(e)}
+          ${streetWarn(e, occ)}${rainWarn(e, occ)}${crewHtml(e)}${friendsHtml(e)}
           ${e.serie ? `<button class="serie link" data-f-serie="${esc(e.serie)}" aria-label="Ver todo el ciclo: ${esc(e.serie)}">${esc(e.serie)} ›</button>` : ''}
         </div></div>
       <div class="tags">${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${(e.temas || []).slice(0, 2).map(t => `<button class="tag tema link" data-f-tema="${esc(t)}" aria-label="Más planes sobre ${esc(t)}">${esc(t)}</button>`).join('')}${cats.map(c => `<button class="tag link" data-f-cat="${esc(c)}" aria-label="Más planes de ${esc(labelOf(c))}">${esc(labelOf(c))}</button>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
@@ -1004,6 +1026,300 @@ function startApp(DATA, TAX, sync) {
     return k;
   }
 
+  // ---------- social: perfil público o privado, seguir a gente y usar lo que hacen tus amigos para recomendarte
+  let SOC = { me: null, net: null, results: null, editing: false };
+  let FRIENDS = {};      // 'e123' → [{ name, username, kind: 'guardado' | 'fue', rating }]
+  let FRIEND_CATS = {};  // categoría → peso, por los planes que tus amigos valoraron bien
+  let TOPICS = store.get('topics', []);  // [{ kind: 'sala' | 'ciclo' | 'tema' | 'artista', value }]
+  let DIARY = store.get('diary', {});    // 'e123' → { rating, note }
+  let DIARY_ROWS = [];                   // de la base de datos, con título y fecha (incluye planes ya pasados)
+  let MYLISTS = [], FOLLOWED_LISTS = [];
+  const ORIGIN = location.origin + location.pathname;
+  const sbx = () => window.limonDB && window.limonDB.sb;
+  const uid = () => { const db = window.limonDB; const u = db && db.user(); return u && u.id; };
+
+  async function loadSocial() {
+    const sb = sbx(), id = uid();
+    if (!sb || !id) { SOC.me = null; SOC.net = null; FRIENDS = {}; FRIEND_CATS = {}; MYLISTS = []; FOLLOWED_LISTS = []; DIARY_ROWS = []; renderSocialAll(); return; }
+    const [p, t, d, l, lf] = await Promise.all([
+      sb.from('profiles').select('username,display_name,is_public,findable_email,bio,ventajas').eq('id', id).maybeSingle(),
+      sb.from('topic_follows').select('kind,value'),
+      sb.from('attendance').select('event_id,rating,note,created_at,events(title,starts_on,district,venues(name),event_categories(category_id))').eq('user_id', id).eq('went', true).order('created_at', { ascending: false }),
+      sb.from('user_lists').select('id,title,description,is_public,list_items(event_id)').eq('owner', id).order('updated_at', { ascending: false }),
+      sb.from('list_follows').select('list_id,user_lists(id,title)').eq('user_id', id)]);
+    SOC.me = p.data || null;
+    if (SOC.me && SOC.me.ventajas && SOC.me.ventajas.length) { ventajas = SOC.me.ventajas; store.set('ventajas', ventajas); }
+    else if (SOC.me && ventajas.length) sb.from('profiles').update({ ventajas }).eq('id', id);
+    // lo que seguías sin cuenta se sube al entrar
+    const remote = t.data || [], key = x => x.kind + '|' + x.value;
+    const missing = TOPICS.filter(x => !remote.some(r => key(r) === key(x)));
+    if (missing.length) await sb.from('topic_follows').upsert(missing.map(x => ({ user_id: id, kind: x.kind, value: x.value })), { ignoreDuplicates: true });
+    TOPICS = remote.concat(missing); store.set('topics', TOPICS);
+    DIARY_ROWS = (d.data || []).filter(x => x.events);
+    DIARY_ROWS.forEach(x => { if (x.rating || x.note) DIARY['e' + x.event_id] = { rating: x.rating, note: x.note }; });
+    store.set('diary', DIARY);
+    MYLISTS = (l.data || []).map(x => ({ id: x.id, title: x.title, description: x.description, is_public: x.is_public, items: (x.list_items || []).map(i => 'e' + i.event_id) }));
+    FOLLOWED_LISTS = (lf.data || []).map(x => x.user_lists).filter(Boolean);
+    FRIENDS = {}; FRIEND_CATS = {}; SOC.net = null;
+    if (SOC.me && SOC.me.username) {
+      const [n, fa] = await Promise.all([sb.rpc('my_network'), sb.rpc('friends_activity')]);
+      SOC.net = n.data || null;
+      (fa.data || []).forEach(x => {
+        const k = 'e' + x.event_id; (FRIENDS[k] = FRIENDS[k] || []).push(x);
+        if (x.kind === 'fue' && x.rating >= 4) (x.cats || []).forEach(c => { if (c !== 'sin_categoria') FRIEND_CATS[c] = Math.min(1.5, (FRIEND_CATS[c] || 0) + 0.3); });
+      });
+    }
+    renderSocialAll(); renderAll();
+  }
+  function renderSocialAll() { renderSocial(); renderSeguir(); renderVentajas(); renderYear(); renderDiary(); renderLists(); }
+
+  // quién de tus amigos ha guardado o ha ido a este plan
+  function friendsOf(e) { return (FRIENDS[e.id] || []).filter((x, i, a) => a.findIndex(y => y.username === x.username) === i); }
+  function friendsHtml(e) {
+    const fr = friendsOf(e); if (!fr.length) return '';
+    const g = fr.filter(x => x.kind === 'guardado'), w = fr.filter(x => x.kind === 'fue');
+    const names = l => l.length <= 2 ? l.map(x => x.name).join(' y ') : `${l[0].name}, ${l[1].name} y ${l.length - 2} más`;
+    const parts = [];
+    if (g.length) parts.push(`${esc(names(g))} ${g.length === 1 ? 'lo tiene' : 'lo tienen'} guardado`);
+    if (w.length) parts.push(`${esc(names(w))} ${w.length === 1 ? 'fue' : 'fueron'}${w.some(x => x.rating) ? ' (' + w.filter(x => x.rating).map(x => '★'.repeat(x.rating)).slice(0, 2).join(', ') + ')' : ''}`);
+    return `<div class="crew">👥 ${parts.join(' · ')}</div>`;
+  }
+  function friendsBlock(a, b) {
+    const list = [];
+    for (const k of Object.keys(FRIENDS)) {
+      const e = BYID[k]; if (!e || isDismissed(e)) continue;
+      const g = friendsOf(e).filter(x => x.kind === 'guardado'); if (!g.length) continue;
+      const occ = occurs(e, a, b); if (!occ) continue;
+      list.push({ e, occ, n: g.length });
+    }
+    list.sort((x, y) => y.n - x.n || x.occ.date - y.occ.date);
+    return list.length ? '<h2>Tus amigos van a</h2>' + list.slice(0, 4).map(x => card(x.e, { occ: x.occ })).join('') : '';
+  }
+
+  // seguir salas, ciclos, temas o artistas
+  const TKIND = { sala: 'la sala', ciclo: 'el ciclo', tema: 'el tema', artista: '' };
+  const following = (kind, value) => TOPICS.some(x => x.kind === kind && nf(x.value) === nf(value));
+  function topicHit(e) {
+    for (const t of TOPICS) {
+      const v = nf(t.value);
+      if (t.kind === 'sala' && e.lugar && nf(e.lugar) === v) return t.value;
+      if (t.kind === 'ciclo' && e.serie && nf(e.serie) === v) return t.value;
+      if (t.kind === 'tema' && (e.temas || []).some(x => nf(x) === v)) return t.value;
+      if (t.kind === 'artista' && v.length >= 3 && (' ' + nf(e.titulo + ' ' + (e.descripcion || '')).replace(/[^a-z0-9ñ]+/g, ' ') + ' ').includes(' ' + v.replace(/[^a-z0-9ñ]+/g, ' ').trim() + ' ')) return t.value;
+    }
+    return null;
+  }
+  const topicBtn = (kind, value, label) => `<button class="act" data-topic-kind="${kind}" data-topic="${esc(value)}" aria-pressed="${following(kind, value)}">${following(kind, value) ? '✓ Sigues ' + label : '+ Seguir ' + label}</button>`;
+  async function toggleTopic(kind, value) {
+    const on = !following(kind, value);
+    TOPICS = on ? TOPICS.concat({ kind, value }) : TOPICS.filter(x => !(x.kind === kind && nf(x.value) === nf(value)));
+    store.set('topics', TOPICS);
+    const sb = sbx(), id = uid();
+    if (sb && id) {
+      if (on) await sb.from('topic_follows').upsert({ user_id: id, kind, value }, { ignoreDuplicates: true });
+      else await sb.from('topic_follows').delete().eq('user_id', id).eq('kind', kind).eq('value', value);
+    }
+    toast(on ? `Sigues «${value}». Lo nuevo te saldrá antes en Para ti${logged ? ' y en el resumen semanal' : ''}.` : `Ya no sigues «${value}».`);
+    renderSeguir(); renderAll();
+  }
+  function renderSeguir() {
+    const box = $('seguir'); if (!box) return;
+    box.innerHTML = `<h2 style="margin:0">Lo que sigues</h2>
+      <p class="note" style="margin:0">Salas, ciclos, temas o artistas. Lo nuevo te sale antes en Para ti${logged ? ' y en el resumen semanal (si lo tienes activado)' : ''}. Desde cada evento puedes seguir su sala o su ciclo.</p>
+      <div class="seg">${TOPICS.map(t => `<button class="filterchip" data-topic-kind="${t.kind}" data-topic="${esc(t.value)}" aria-label="Dejar de seguir ${esc(t.value)}">${esc(t.value)} <span aria-hidden="true">✕</span></button>`).join('') || '<span class="note">Aún no sigues nada.</span>'}</div>
+      <form class="seg" id="seguir-form"><input class="search" name="v" maxlength="80" placeholder="Artista, compañía o tema (ej.: Rosalía, flamenco)" style="flex:1;min-width:200px"><button class="btn" type="submit">Seguir</button></form>`;
+  }
+
+  // mis ventajas: descuentos que mencionan las fichas
+  const VENTAJAS = [
+    ['joven', 'Carné Joven o menor de 30', /carn[eé] joven|menores de (25|26|30)|j[oó]venes/i],
+    ['estudiante', 'Estudiante', /estudiante/i],
+    ['mayor', 'Mayor de 65 o pensionista', /mayores de 6[05]|jubilad|pensionist|tercera edad|\+ ?65/i],
+    ['paro', 'En desempleo', /desemplead|parad[oa]s|en paro/i],
+    ['familia', 'Familia numerosa o monoparental', /familias? numerosas?|monoparental/i],
+    ['discapacidad', 'Discapacidad', /discapacidad|diversidad funcional/i]];
+  let ventajas = store.get('ventajas', []);
+  function ventajaHit(e) {
+    if (!ventajas.length || e.gratis) return null;
+    const t = (e.precio || '') + ' ' + (e.descripcion || '');
+    const v = VENTAJAS.find(([k, , re]) => ventajas.includes(k) && re.test(t));
+    return v ? v[1] : null;
+  }
+  function renderVentajas() {
+    const box = $('ventajas'); if (!box) return;
+    box.innerHTML = `<h2 style="margin:0">Mis ventajas</h2>
+      <p class="note" style="margin:0">Marca lo que tengas y te señalaremos los planes cuya ficha menciona un descuento o entrada gratis para ti. Compruébalo siempre en la web del evento. No se comparte con nadie.</p>
+      <div class="seg">${VENTAJAS.map(([k, l]) => `<label class="pill" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-ventaja="${k}" ${ventajas.includes(k) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>`;
+  }
+
+  // diario: «Ya fui» con estrellas y apuntes
+  async function saveDiary(id, patch) {
+    DIARY[id] = Object.assign({}, DIARY[id] || {}, patch); store.set('diary', DIARY);
+    const sb = sbx(), u = uid();
+    if (sb && u) {
+      const { error } = await sb.from('attendance').upsert({ user_id: u, event_id: +id.slice(1), went: true, rating: DIARY[id].rating || null, note: DIARY[id].note || null }, { onConflict: 'user_id,event_id' });
+      if (error) toast('No se ha podido guardar: ' + error.message);
+    }
+  }
+  const starsTxt = n => n ? '★'.repeat(n) + '☆'.repeat(5 - n) : '';
+  function diaryForm(e) {
+    const d = DIARY[e.id] || {};
+    return `<div class="diary"><span class="note">¿Qué tal?</span> <span class="stars" role="group" aria-label="Tu valoración">${[1, 2, 3, 4, 5].map(n => `<button class="star" data-rate="${e.id}" data-n="${n}" aria-label="${n} de 5" aria-pressed="${(d.rating || 0) >= n}">${(d.rating || 0) >= n ? '★' : '☆'}</button>`).join('')}</span>
+      <form class="seg" data-note-form="${e.id}" style="margin-top:6px"><input class="search" name="note" maxlength="500" value="${esc(d.note || '')}" placeholder="Apuntes para ti (y para quien te siga)" style="flex:1;min-width:180px"><button class="btn ghost" type="submit">Guardar</button></form></div>`;
+  }
+  function renderDiary() {
+    const box = $('ag-diary'); if (!box) return;
+    const rows = DIARY_ROWS.length ? DIARY_ROWS.map(x => ({ id: 'e' + x.event_id, title: x.events.title, date: x.events.starts_on, rating: (DIARY['e' + x.event_id] || {}).rating || x.rating, note: (DIARY['e' + x.event_id] || {}).note || x.note }))
+      : went.map(id => BYID[id] ? { id, title: BYID[id].titulo, date: BYID[id].inicio, rating: (DIARY[id] || {}).rating, note: (DIARY[id] || {}).note } : null).filter(Boolean);
+    box.innerHTML = `<h2 style="margin:0">Mi diario</h2>
+      <p class="note" style="margin:0">Los planes que marcas con «Ya fui», con tu nota y tus apuntes.${SOC.me && SOC.me.username ? (SOC.me.is_public ? ' Tu perfil es público: cualquiera puede verlo.' : ' Solo lo ven las personas que te siguen.') : ''}</p>
+      ${rows.slice(0, 30).map(r => `<div class="row-item"><div style="min-width:0;flex:1">${BYID[r.id] ? `<button class="btnlink" data-goev="${r.id}">${esc(r.title)}</button>` : esc(r.title)}<div class="note">${esc(r.date || '')}${r.rating ? ' · <span class="stars">' + starsTxt(r.rating) + '</span>' : ''}${r.note ? ' · «' + esc(r.note) + '»' : ''}</div></div></div>`).join('') || '<p class="note">Aún vacío. Abre un plan al que hayas ido y pulsa «Ya fui».</p>'}`;
+  }
+
+  // listas de planes
+  function listPicker(e) {
+    if (!logged) return '<p class="note">Entra con tu cuenta para crear listas.</p>';
+    return `<div class="routewarn"><b>Añadir a una lista</b>
+      ${MYLISTS.map(l => `<label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" data-li-toggle="${l.id}" data-ev="${e.id}" ${l.items.includes(e.id) ? 'checked' : ''}> ${esc(l.title)} <span class="note">${l.is_public ? 'pública' : 'privada'}</span></label>`).join('')}
+      <form class="seg" data-newlist="${e.id}" style="margin-top:8px"><input class="search" name="t" required minlength="2" maxlength="80" placeholder="Nueva lista (ej.: Domingos de lluvia)" style="flex:1;min-width:160px"><label class="note" style="display:flex;gap:4px;align-items:center"><input type="checkbox" name="pub" checked> Pública</label><button class="btn" type="submit">Crear</button></form></div>`;
+  }
+  function renderLists() {
+    const box = $('ag-lists'); if (!box) return;
+    if (!logged) { box.innerHTML = '<h2 style="margin:0">Mis listas</h2><p class="note">Entra con tu cuenta para hacer listas de planes («Madrid con niños», «Jazz en salas pequeñas»…) y compartirlas.</p>'; return; }
+    box.innerHTML = `<h2 style="margin:0">Mis listas</h2>
+      <p class="note" style="margin:0">Desde cualquier plan, «Añadir a lista». Las públicas las puede ver y seguir cualquiera con el enlace.</p>
+      ${MYLISTS.map(l => `<div class="row-item"><div style="min-width:0;flex:1"><button class="btnlink" data-list="${l.id}"><b>${esc(l.title)}</b></button><div class="note">${l.items.length} planes · ${l.is_public ? 'pública' : 'privada'}</div></div>
+        <div class="seg"><button class="act" data-list-pub="${l.id}">${l.is_public ? 'Hacer privada' : 'Hacer pública'}</button>${l.is_public ? `<button class="act" data-list-share="${l.id}">Compartir</button>` : ''}<button class="act" data-list-del="${l.id}">Borrar</button></div></div>`).join('') || '<p class="note">Aún no tienes listas.</p>'}
+      ${FOLLOWED_LISTS.length ? '<h3 class="ph">Listas que sigues</h3>' + FOLLOWED_LISTS.map(l => `<div class="row-item"><button class="btnlink" data-list="${l.id}">${esc(l.title)}</button></div>`).join('') : ''}`;
+  }
+
+  // ventana para ver un perfil o una lista
+  let SHEET = null;
+  function openSheet(html) { const d = $('sheet'); $('sheet-body').innerHTML = html; if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); } }
+  const closeSheets = () => document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  const miniRow = e => { const o = occurs(e, today, addDays(today, 400)); return `<div class="row-item"><div style="min-width:0;flex:1"><button class="btnlink" data-goev="${e.id}">${esc(e.titulo)}</button><div class="note">${esc(whenText(e, o))}${e.lugar ? ' · ' + esc(e.lugar) : ''}</div></div></div>`; };
+  function followBtn(p) {
+    if (p.following === 'accepted') return `<button class="act" data-unfollow="${esc(p.username)}" aria-pressed="true">Siguiendo ✓</button>`;
+    if (p.following === 'pending') return `<button class="act" data-unfollow="${esc(p.username)}">Solicitud enviada</button>`;
+    return `<button class="act" data-follow="${esc(p.username)}">${p.follows_me === 'accepted' ? 'Seguir también' : 'Seguir'}</button>`;
+  }
+  async function openProfile(username) {
+    openSheet('<p class="note">Cargando…</p>');
+    const { data } = await sbx().rpc('profile_view', { p_username: username });
+    SHEET = { kind: 'perfil', data };
+    renderSheet();
+  }
+  async function openList(id) {
+    openSheet('<p class="note">Cargando…</p>');
+    const { data } = await sbx().rpc('list_view', { p_id: +id });
+    SHEET = { kind: 'lista', data };
+    renderSheet();
+  }
+  function renderSheet() {
+    if (!SHEET) return;
+    const p = SHEET.data, close = '<button class="btn ghost" data-sheet-close>Cerrar</button>';
+    if (!p) { $('sheet-body').innerHTML = `<div class="seg" style="justify-content:space-between"><h2 style="margin:0">No disponible</h2>${close}</div><p class="note">No existe o es privado.</p>`; return; }
+    if (SHEET.kind === 'lista') {
+      const evs = (p.items || []).map(i => BYID['e' + i.event_id] ? miniRow(BYID['e' + i.event_id]) : `<div class="row-item"><span class="note">${esc(i.title)} (ya pasó)</span></div>`);
+      $('sheet-body').innerHTML = `<div class="seg" style="justify-content:space-between;align-items:flex-start"><div><h2 style="margin:0">${esc(p.title)}</h2>
+        <p class="note" style="margin:2px 0 0">${p.owner ? `de <button class="btnlink" data-prof="${esc(p.owner.username)}">${esc(p.owner.name)}</button> · ` : ''}${(p.items || []).length} planes · ${p.n_followers} la siguen${p.public ? '' : ' · privada'}</p></div>${close}</div>
+        ${p.description ? `<p style="margin:0">${esc(p.description)}</p>` : ''}
+        <div class="seg">${!p.mine && logged ? `<button class="act" data-list-follow="${p.id}" aria-pressed="${p.following}">${p.following ? 'Siguiendo ✓' : 'Seguir lista'}</button>` : ''}${p.public ? `<button class="act" data-list-share="${p.id}">Compartir</button>` : ''}</div>
+        ${evs.join('') || '<p class="note">Lista vacía.</p>'}`;
+      return;
+    }
+    const up = (p.saved || []).map(id => BYID['e' + id]).filter(Boolean).sort((a, b) => a.inicio.localeCompare(b.inicio)).slice(0, 15);
+    const head = `<div class="seg" style="justify-content:space-between;align-items:flex-start"><div><h2 style="margin:0">${esc(p.name)}</h2>
+        <p class="note" style="margin:2px 0 0">@${esc(p.username)} · ${p.public ? 'perfil público' : 'perfil privado'} · ${p.n_followers} seguidores · sigue a ${p.n_following}</p></div>${close}</div>
+      ${p.bio ? `<p style="margin:0">${esc(p.bio)}</p>` : ''}
+      ${p.me ? '<p class="note" style="margin:0">Así ven tu perfil quienes pueden verlo.</p>' : logged && SOC.me && SOC.me.username ? `<div class="seg">${followBtn(p)}</div>` : `<p class="note" style="margin:0">${logged ? 'Crea tu perfil en Perfil → Amigos para seguir a esta persona.' : 'Entra con tu cuenta para seguir a esta persona.'}</p>`}`;
+    if (!p.visible) {
+      $('sheet-body').innerHTML = head + `<p class="note">🔒 Perfil privado. ${p.following === 'pending' ? 'Has pedido seguirle: cuando acepte verás sus planes.' : 'Síguele y, cuando acepte, verás sus planes, su diario y sus listas.'}</p>`;
+      return;
+    }
+    $('sheet-body').innerHTML = head +
+      '<h3 class="ph">Va a ir o lo tiene guardado</h3>' + (up.map(miniRow).join('') || '<p class="note">Nada próximo.</p>') +
+      '<h3 class="ph">Ha ido</h3>' + ((p.went || []).slice(0, 20).map(w => `<div class="row-item"><div style="min-width:0;flex:1">${BYID['e' + w.event_id] ? `<button class="btnlink" data-goev="e${w.event_id}">${esc(w.title)}</button>` : esc(w.title)}<div class="note">${esc(w.date)}${w.rating ? ' · <span class="stars">' + starsTxt(w.rating) + '</span>' : ''}${w.note ? ' · «' + esc(w.note) + '»' : ''}</div></div></div>`).join('') || '<p class="note">Aún nada.</p>') +
+      ((p.lists || []).length ? '<h3 class="ph">Listas</h3>' + p.lists.map(l => `<div class="row-item"><button class="btnlink" data-list="${l.id}">${esc(l.title)}</button><span class="note">${l.n} planes</span></div>`).join('') : '');
+  }
+
+  // panel de amigos en Perfil
+  const personRow = (p, actions) => `<div class="row-item"><div style="min-width:0;flex:1"><button class="btnlink" data-prof="${esc(p.username)}"><b>${esc(p.name)}</b></button> <span class="note">@${esc(p.username)}${p.public ? '' : ' · 🔒'}</span></div><div class="seg">${actions}</div></div>`;
+  function renderSocial() {
+    const box = $('social'); if (!box) return;
+    if (!logged) { box.innerHTML = '<h2 style="margin:0">Amigos</h2><p class="note">Entra con tu cuenta (más abajo) para seguir a tus amigos, ver a qué planes van y que Limón te recomiende también por lo que hacen.</p>'; return; }
+    const me = SOC.me;
+    if (!me || !me.username || SOC.editing) {
+      const ed = me && me.username;
+      box.innerHTML = `<h2 style="margin:0">${ed ? 'Editar tu perfil' : 'Amigos: crea tu perfil'}</h2>
+        <p class="note" style="margin:0">Para seguir a tus amigos y que te sigan. Nadie verá tu correo.</p>
+        <form class="form" id="soc-form">
+          <label>Tu nombre<input class="search" name="name" required maxlength="40" value="${esc(ed ? me.display_name || '' : '')}" placeholder="Como quieres que te vean"></label>
+          <label>Usuario<input class="search" name="username" required maxlength="20" value="${esc(ed ? me.username : '')}" placeholder="ej.: ana.madrid" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+          <label class="full">Sobre ti (opcional)<input class="search" name="bio" maxlength="160" value="${esc(ed ? me.bio || '' : '')}" placeholder="Jazz, teatro y paseos por el Retiro"></label>
+          <div class="full" style="display:flex;flex-direction:column;gap:6px">
+            <label style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="vis" value="priv" ${!ed || !me.is_public ? 'checked' : ''}><span><b>Privado</b> (recomendado): solo las personas que apruebes ven tus planes, tu diario y tus listas privadas.</span></label>
+            <label style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="vis" value="pub" ${ed && me.is_public ? 'checked' : ''}><span><b>Público</b>: cualquiera puede seguirte y ver a qué planes vas.</span></label>
+            <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="findable" ${ed && me.findable_email ? 'checked' : ''}><span>Que me encuentren quienes tengan mi correo en sus contactos</span></label>
+          </div>
+          <div class="seg full"><button class="btn" type="submit">Guardar</button>${ed ? '<button class="btn ghost" type="button" data-soc-cancel>Cancelar</button>' : ''}<span class="note" id="soc-msg" role="status"></span></div>
+        </form>`;
+      return;
+    }
+    const net = SOC.net || { following: [], followers: [], requests: [] };
+    const canContacts = !!(navigator.contacts && window.ContactsManager);
+    box.innerHTML = `<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Amigos</h2><button class="act" data-soc-edit>Editar perfil</button></div>
+      <p class="note" style="margin:0"><button class="btnlink" data-prof="${esc(me.username)}"><b>${esc(me.display_name || me.username)}</b></button> · @${esc(me.username)} · ${me.is_public ? 'perfil público' : '🔒 perfil privado'}</p>
+      <div class="seg"><button class="btn ghost" data-soc-share>Compartir mi perfil</button>${canContacts ? '<button class="btn ghost" data-soc-contacts>Buscar en mis contactos</button>' : ''}</div>
+      <form class="seg" id="soc-search"><input class="search" name="q" placeholder="Buscar por nombre o @usuario" style="flex:1;min-width:180px" autocomplete="off"><button class="btn" type="submit">Buscar</button></form>
+      ${SOC.results ? `<div>${SOC.results.length ? SOC.results.map(p => personRow(p, followBtn(p))).join('') : `<p class="note">${SOC.resultsMsg || 'No he encontrado a nadie.'} Comparte tu perfil para que te encuentren.</p>`}</div>` : ''}
+      ${net.requests.length ? `<h3 class="ph">Quieren seguirte (${net.requests.length})</h3>` + net.requests.map(p => personRow(p, `<button class="act" data-req-ok="${esc(p.username)}">Aceptar</button><button class="act" data-req-no="${esc(p.username)}">Rechazar</button>`)).join('') : ''}
+      <details><summary class="note" style="cursor:pointer">Sigues a ${net.following.length} · Te siguen ${net.followers.length}</summary>
+        ${net.following.map(p => personRow(p, followBtn(p))).join('') || '<p class="note">Aún no sigues a nadie.</p>'}
+        ${net.followers.length ? '<h3 class="ph">Te siguen</h3>' + net.followers.map(p => personRow(p, (p.following ? '' : followBtn(p)) + `<button class="act" data-req-no="${esc(p.username)}">Quitar</button>`)).join('') : ''}
+      </details>
+      <p class="note" style="margin:0">Lo que guardan y a lo que van las personas que sigues te ayuda a descubrir planes: sale en Para ti con su nombre.${canContacts ? '' : ' Buscar en la agenda del móvil solo funciona en Chrome para Android; desde aquí, comparte tu perfil por WhatsApp o búscales por su usuario.'}</p>`;
+  }
+  async function socialAction(t) {
+    const sb = sbx(); if (!sb) return false;
+    const f = t.closest('[data-follow]'), uf = t.closest('[data-unfollow]'), ok = t.closest('[data-req-ok]'), no = t.closest('[data-req-no]');
+    if (f) { const { data, error } = await sb.rpc('follow_user', { p_username: f.dataset.follow }); toast(error ? error.message : data === 'pending' ? 'Solicitud enviada: verás sus planes cuando acepte.' : 'Ahora le sigues.'); }
+    else if (uf) { await sb.rpc('unfollow_user', { p_username: uf.dataset.unfollow }); toast('Ya no le sigues.'); }
+    else if (ok) { await sb.rpc('follow_respond', { p_username: ok.dataset.reqOk, p_accept: true }); toast('Aceptado.'); }
+    else if (no) { await sb.rpc('follow_respond', { p_username: no.dataset.reqNo, p_accept: false }); toast('Hecho.'); }
+    else return false;
+    flushMail();
+    if (SOC.results) { const q = SOC.lastQ; if (q) { const r = await sb.rpc('profile_search', { p_q: q }); SOC.results = r.data || []; } }
+    await loadSocial();
+    if (SHEET && SHEET.kind === 'perfil' && $('sheet').open && SHEET.data) openProfile(SHEET.data.username);
+    return true;
+  }
+  async function shareLink(url, title, text) {
+    if (navigator.share) { try { await navigator.share({ title, text, url }); return; } catch (x) { if (x && x.name === 'AbortError') return; } }
+    try { await navigator.clipboard.writeText(text + ' ' + url); toast('Enlace copiado.'); } catch (x) { prompt('Copia este enlace:', url); }
+  }
+
+  // tu año en planes
+  function renderYear() {
+    const box = $('year'); if (!box) return;
+    box.innerHTML = `<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Tu año en planes</h2><button class="btn ghost" data-year>${state.year ? 'Ocultar' : 'Ver mi ' + today.getFullYear()}</button></div>` + (state.year || '');
+  }
+  function buildYear() {
+    const y = String(today.getFullYear());
+    let rows = DIARY_ROWS.filter(x => (x.events.starts_on || '').startsWith(y)).map(x => ({ title: x.events.title, date: x.events.starts_on, district: x.events.district, venue: x.events.venues && x.events.venues.name, cats: (x.events.event_categories || []).map(c => c.category_id), rating: x.rating }));
+    if (!rows.length) rows = went.map(id => BYID[id]).filter(e => e && e.inicio.startsWith(y)).map(e => ({ title: e.titulo, date: e.inicio, district: e.distrito, venue: e.lugar, cats: e.cats, rating: (DIARY[e.id] || {}).rating }));
+    if (!rows.length) return '<p class="note">Aún no has marcado ningún plan con «Ya fui» este año. Cuando lo hagas, aquí verás tu resumen.</p>';
+    const top = (arr, n) => { const c = {}; arr.filter(Boolean).forEach(x => { c[x] = (c[x] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, n); };
+    const cats = top(rows.flatMap(r => r.cats.filter(c => c !== 'sin_categoria')).map(labelOf), 3), dis = top(rows.map(r => r.district), 3), ven = top(rows.map(r => r.venue), 3);
+    const months = top(rows.map(r => ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][+r.date.slice(5, 7) - 1]), 1);
+    const rated = rows.filter(r => r.rating), best = rated.sort((a, b) => b.rating - a.rating)[0];
+    const lines = [`${rows.length} ${rows.length === 1 ? 'plan' : 'planes'} en ${y}`, cats.length && 'Lo tuyo: ' + cats.map(x => x[0]).join(', '), dis.length && 'Tus barrios: ' + dis.map(x => x[0]).join(', '),
+      ven.length && 'Donde más has ido: ' + ven.map(x => x[0]).join(', '), months.length && 'Tu mes más activo: ' + months[0][0], best && `Tu favorito: ${best.title} (${'★'.repeat(best.rating)})`].filter(Boolean);
+    SOC.yearText = lines.join(' · ');
+    return `<div class="routewarn" style="font-size:15px"><b style="font-size:22px">${rows.length}</b> ${rows.length === 1 ? 'plan' : 'planes'} en ${y}<ul style="margin:8px 0 0;padding-left:18px">${lines.slice(1).map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>
+      <div class="seg"><button class="btn ghost" data-year-share>Compartir</button></div>`;
+  }
+
   // ---------- «Ahora cerca de ti»: lo que empieza en las próximas 3 horas cerca, y lo abierto hoy
   let NEARMAP = null, NEARLAYER = null, nearPos = null;
   function nearNow() {
@@ -1139,6 +1455,19 @@ function startApp(DATA, TAX, sync) {
   // los correos de la cola (organizadores, admins) salen en cuanto pasa algo; si falla, los manda la tarea diaria
   function flushMail() { const db = window.limonDB; if (db) db.sb.functions.invoke('limon-mail', { body: { action: 'flush' } }).catch(() => { }); }
   document.addEventListener('change', async ev => {
+    const vj = ev.target.closest('[data-ventaja]');
+    if (vj) {
+      ventajas = vj.checked ? ventajas.concat(vj.dataset.ventaja) : ventajas.filter(x => x !== vj.dataset.ventaja); store.set('ventajas', ventajas);
+      const sb = sbx(), id = uid(); if (sb && id) sb.from('profiles').update({ ventajas }).eq('id', id);
+      renderAll(); return;
+    }
+    const lt = ev.target.closest('[data-li-toggle]');
+    if (lt) {
+      const l = MYLISTS.find(x => x.id === +lt.dataset.liToggle), evId = lt.dataset.ev, sb = sbx();
+      if (lt.checked) await sb.from('list_items').insert({ list_id: l.id, event_id: +evId.slice(1) }); else await sb.from('list_items').delete().eq('list_id', l.id).eq('event_id', +evId.slice(1));
+      await sb.from('user_lists').update({ updated_at: new Date().toISOString() }).eq('id', l.id);
+      toast(lt.checked ? `Añadido a «${l.title}».` : `Quitado de «${l.title}».`); await loadSocial(); return;
+    }
     const cb = ev.target.closest('[data-notify]'); if (!cb || !me) return;
     const db = window.limonDB, u = db && db.user(); if (!u) return;
     me.notify = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
@@ -1170,6 +1499,35 @@ function startApp(DATA, TAX, sync) {
   }
   document.addEventListener('submit', async ev => {
     const db = window.limonDB, u = db && db.user();
+    if (ev.target.id === 'soc-form') {
+      ev.preventDefault(); const f = new FormData(ev.target);
+      const username = String(f.get('username') || '').trim().toLowerCase().replace(/^@/, '');
+      if (!/^[a-z0-9_.]{3,20}$/.test(username)) { $('soc-msg').textContent = 'El usuario debe tener de 3 a 20 caracteres: letras sin tildes, números, punto o guion bajo.'; return; }
+      $('soc-msg').textContent = 'Guardando…';
+      const { error } = await db.sb.from('profiles').update({ username, display_name: String(f.get('name')).trim(), bio: String(f.get('bio') || '').trim() || null,
+        is_public: f.get('vis') === 'pub', findable_email: !!f.get('findable') }).eq('id', u.id);
+      if (error) { $('soc-msg').textContent = /duplicate|unique/i.test(error.message) ? 'Ese usuario ya existe: prueba otro.' : 'No se ha podido guardar: ' + error.message; return; }
+      SOC.editing = false; await loadSocial(); toast('Perfil guardado.'); return;
+    }
+    if (ev.target.id === 'soc-search') {
+      ev.preventDefault(); const q = String(new FormData(ev.target).get('q') || '').trim(); if (q.length < 2) return;
+      const { data } = await db.sb.rpc('profile_search', { p_q: q }); SOC.results = data || []; SOC.lastQ = q; SOC.resultsMsg = 'No he encontrado a nadie con ese nombre o usuario.'; renderSocial(); return;
+    }
+    if (ev.target.id === 'seguir-form') {
+      ev.preventDefault(); const v = String(new FormData(ev.target).get('v') || '').trim(); if (v.length < 2) return;
+      const tema = Object.values(BYID).some(e => (e.temas || []).some(t => nf(t) === nf(v)));
+      if (!following(tema ? 'tema' : 'artista', v)) await toggleTopic(tema ? 'tema' : 'artista', v); return;
+    }
+    const nl = ev.target.closest('[data-newlist]');
+    if (nl) {
+      ev.preventDefault(); const f = new FormData(nl), e = BYID[nl.dataset.newlist];
+      const { data, error } = await db.sb.from('user_lists').insert({ owner: u.id, title: String(f.get('t')).trim(), is_public: !!f.get('pub') }).select('id').single();
+      if (error) { toast('No se ha podido crear: ' + error.message); return; }
+      await db.sb.from('list_items').insert({ list_id: data.id, event_id: +e.id.slice(1) });
+      toast('Lista creada con este plan.'); await loadSocial(); return;
+    }
+    const nf2 = ev.target.closest('[data-note-form]');
+    if (nf2) { ev.preventDefault(); await saveDiary(nf2.dataset.noteForm, { note: String(new FormData(nf2).get('note') || '').trim() || null }); toast('Apunte guardado.'); renderAll(); return; }
     const inf = ev.target.closest('[data-invite-form]');
     if (inf) {
       ev.preventDefault(); if (!u) return;
@@ -1223,7 +1581,7 @@ function startApp(DATA, TAX, sync) {
   const $ = id => document.getElementById(id);
   function renderParaTi() {
     const [a, b] = range(state.when);
-    if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1) && !(taste && ((taste.categorias || []).length || (taste.temas || []).length))) {
+    if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1) && !(taste && ((taste.categorias || []).length || (taste.temas || []).length)) && !Object.keys(FRIENDS).length && !TOPICS.length) {
       const items = [];
       for (const e of EV) {
         if (isDismissed(e)) continue;
@@ -1235,7 +1593,7 @@ function startApp(DATA, TAX, sync) {
       items.sort((x, y) => y.s - x.s || x.occ.date - y.occ.date);
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
-      $('pt-list').innerHTML = streetBanner() + `<button class="btn" data-goto="intereses">Elegir mis intereses</button>` +
+      $('pt-list').innerHTML = streetBanner() + `<button class="btn" data-goto="intereses">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -1256,7 +1614,7 @@ function startApp(DATA, TAX, sync) {
     $('pt-lead').textContent = items.length ? `Los ${top.length} que mejor encajan con tus intereses. Toca el título para ver más.` : 'Prueba con un rango más amplio o marca más intereses.';
     const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
       (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
-    $('pt-list').innerHTML = streetBanner() + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
+    $('pt-list').innerHTML = streetBanner() + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
   }
@@ -1329,6 +1687,7 @@ function startApp(DATA, TAX, sync) {
     const list = EV.filter(e => saved.includes(e.id)).sort((a, b) => a.inicio.localeCompare(b.inicio));
     $('ag-list').innerHTML = list.map(e => card(e)).join('') || '<div class="empty">Aún no has guardado nada. Toca el marcador de cualquier evento para traerlo aquí.</div>';
     $('n-agenda').textContent = saved.length || '';
+    renderDiary(); renderLists();
   }
   const counts = {};
   EV.forEach(e => { if (parse(e.fin) >= today) e.cats.forEach(c => { counts[c] = (counts[c] || 0) + 1; }); });
@@ -1502,8 +1861,44 @@ function startApp(DATA, TAX, sync) {
       if (on) toast('Anotado. Te recomendaremos más planes así.');
       renderAll(); return;
     }
+    if (ev.target.closest('[data-sheet-close]')) { closeSheets(); return; }
+    const pf = ev.target.closest('[data-prof]'); if (pf) { openProfile(pf.dataset.prof); return; }
+    const ol = ev.target.closest('[data-list]'); if (ol) { openList(ol.dataset.list); return; }
+    if (ev.target.closest('[data-follow],[data-unfollow],[data-req-ok],[data-req-no]')) { socialAction(ev.target); return; }
+    const tp = ev.target.closest('[data-topic]'); if (tp) { toggleTopic(tp.dataset.topicKind, tp.dataset.topic); return; }
+    const al = ev.target.closest('[data-addlist]'); if (al) { state.listing = state.listing === al.dataset.addlist ? null : al.dataset.addlist; renderAll(); return; }
+    const rate = ev.target.closest('[data-rate]'); if (rate) { saveDiary(rate.dataset.rate, { rating: +rate.dataset.n }).then(() => { renderAll(); }); return; }
+    if (ev.target.closest('[data-soc-edit]')) { SOC.editing = true; renderSocial(); return; }
+    if (ev.target.closest('[data-soc-cancel]')) { SOC.editing = false; renderSocial(); return; }
+    if (ev.target.closest('[data-soc-share]') && SOC.me) { shareLink(ORIGIN + '?u=' + SOC.me.username, 'Limón', `Sígueme en Limón para ver a qué planes voy en Madrid:`); return; }
+    if (ev.target.closest('[data-soc-contacts]')) {
+      (async () => {
+        try {
+          const cs = await navigator.contacts.select(['email'], { multiple: true });
+          const emails = cs.flatMap(c => c.email || []).slice(0, 500);
+          if (!emails.length) { toast('Esos contactos no tienen correo.'); return; }
+          const { data } = await sbx().rpc('find_by_emails', { p_emails: emails });
+          SOC.results = data || []; SOC.resultsMsg = 'Ninguno de esos contactos está en Limón o ha permitido que le encuentren por su correo.'; renderSocial();
+        } catch (x) { if (x && x.name !== 'AbortError') toast('No he podido abrir tus contactos.'); }
+      })(); return;
+    }
+    if (ev.target.closest('[data-year]')) { state.year = state.year ? '' : buildYear(); renderYear(); return; }
+    if (ev.target.closest('[data-year-share]')) { shareLink(ORIGIN, 'Mi año en planes', 'Mi año en planes con Limón: ' + (SOC.yearText || '')); return; }
+    const lp = ev.target.closest('[data-list-pub]');
+    if (lp) { const l = MYLISTS.find(x => x.id === +lp.dataset.listPub); sbx().from('user_lists').update({ is_public: !l.is_public, updated_at: new Date().toISOString() }).eq('id', l.id).then(() => loadSocial()); return; }
+    const ls = ev.target.closest('[data-list-share]');
+    if (ls) { const l = MYLISTS.find(x => x.id === +ls.dataset.listShare) || (SHEET && SHEET.data) || {}; shareLink(ORIGIN + '?lista=' + ls.dataset.listShare, l.title || 'Lista', `Mira esta lista de planes en Limón: «${l.title || ''}»`); return; }
+    const ld = ev.target.closest('[data-list-del]');
+    if (ld) { const l = MYLISTS.find(x => x.id === +ld.dataset.listDel); if (confirm(`¿Borrar la lista «${l.title}»?`)) sbx().from('user_lists').delete().eq('id', l.id).then(() => { toast('Lista borrada.'); loadSocial(); }); return; }
+    const lf = ev.target.closest('[data-list-follow]');
+    if (lf) {
+      const id = +lf.dataset.listFollow, on = !(SHEET && SHEET.data && SHEET.data.following);
+      (on ? sbx().from('list_follows').insert({ user_id: uid(), list_id: id }) : sbx().from('list_follows').delete().eq('user_id', uid()).eq('list_id', id))
+        .then(() => { toast(on ? 'Sigues esta lista: la tienes en tu agenda.' : 'Ya no sigues esta lista.'); openList(id); loadSocial(); });
+      return;
+    }
     const gv = ev.target.closest('[data-goev]');
-    if (gv && BYID[gv.dataset.goev]) { const x = BYID[gv.dataset.goev]; state.filter = { kind: 'id', value: x.id, label: x.titulo }; state.open[x.id] = true; $('ex-when').value = 'todo'; go('explorar'); return; }
+    if (gv && BYID[gv.dataset.goev]) { closeSheets(); const x = BYID[gv.dataset.goev]; state.filter = { kind: 'id', value: x.id, label: x.titulo }; state.open[x.id] = true; $('ex-when').value = 'todo'; go('explorar'); return; }
     const rb = ev.target.closest('[data-route]');
     if (rb && BYID[rb.dataset.route]) { checkRoute(BYID[rb.dataset.route]); return; }
     const ib = ev.target.closest('[data-invite]');
@@ -1548,10 +1943,13 @@ function startApp(DATA, TAX, sync) {
       go('explorar'); renderQuedar();
     });
   }
-  if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar')) history.replaceState(null, '', location.pathname);
+  renderSocialAll();
+  if (QS.get('u') && /^[a-z0-9_.]{3,20}$/i.test(QS.get('u'))) { const un = QS.get('u'); go('intereses'); setTimeout(() => openProfile(un), 300); }
+  if (QS.get('lista') && /^\d+$/.test(QS.get('lista'))) { const li = QS.get('lista'); setTimeout(() => openList(li), 300); }
+  if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar') || QS.has('u') || QS.has('lista')) history.replaceState(null, '', location.pathname);
   return {
     get: () => ({ prefs, opts, saved, streets, dismissed, went, learned, taste }),
-    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); },
+    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); loadSocial(); },
     set(p) {
       if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
       if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.learned) learned = p.learned;
@@ -1566,6 +1964,7 @@ function startApp(DATA, TAX, sync) {
 bootBureo(startApp);
 </script>
 
+<dialog class="pwdlg sheet" id="sheet" aria-label="Perfil o lista"><div id="sheet-body" class="sheetbody"></div></dialog>
 <dialog class="pwdlg" id="pw-dlg" aria-labelledby="pw-dlg-t">
   <form id="pw-dlg-form" method="dialog">
     <div style="display:flex;align-items:center;gap:10px"><img src="limon.svg" alt="" width="32" height="32"><h2 id="pw-dlg-t">Pon tu nueva contraseña</h2></div>
