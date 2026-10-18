@@ -351,6 +351,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div class="panel" id="org" hidden></div>
     <div class="panel" id="adm" hidden></div>
+    <div class="panel" id="mail" hidden></div>
     <div class="panel" id="account">
       <h2 style="margin:0">Tu cuenta</h2>
       <div id="acc-out">
@@ -884,7 +885,7 @@ function startApp(DATA, TAX, sync) {
   async function loadMe() {
     const db = window.limonDB, u = db && db.user();
     if (!u) { me = null; renderAccountExtras(); return; }
-    const { data } = await db.sb.from('profiles').select('role,editor_status,organizer,ical_token').eq('id', u.id).maybeSingle();
+    const { data } = await db.sb.from('profiles').select('role,editor_status,organizer,ical_token,notify').eq('id', u.id).maybeSingle();
     me = data || null;
     mySubs = [];
     if (me && (me.role === 'editor' || me.role === 'admin')) {
@@ -917,9 +918,9 @@ function startApp(DATA, TAX, sync) {
     </form>`;
   }
   function renderAccountExtras() {
-    const org = $('org'), adm = $('adm'), cal = $('ag-cal');
+    const org = $('org'), adm = $('adm'), cal = $('ag-cal'), mail = $('mail');
     if (!logged || !me) {
-      org.hidden = true; adm.hidden = true;
+      org.hidden = true; adm.hidden = true; mail.hidden = true;
       cal.innerHTML = `<h2 style="margin:0">En tu calendario</h2><p class="note">Entra con tu cuenta (en Perfil) y tus planes guardados y los cortes de tus calles aparecerán en Google Calendar, Apple u Outlook, y se actualizarán solos.</p>`;
       return;
     }
@@ -929,6 +930,16 @@ function startApp(DATA, TAX, sync) {
       <div class="seg"><a class="btn" href="${esc(webcal)}" style="display:inline-flex;align-items:center;text-decoration:none">Suscribirme</a>
       <a class="btn ghost" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Google Calendar</a>
       <button class="btn ghost" data-copy="${esc(ics)}">Copiar enlace</button></div>`;
+    const nt = Object.assign({ semanal: false, calle: false, organizador: true, admin: true }, me.notify || {});
+    const box = (k, txt) => `<label class="toggle">${txt}<input type="checkbox" data-notify="${k}" ${nt[k] ? 'checked' : ''}></label>`;
+    mail.hidden = false;
+    mail.innerHTML = `<h2 style="margin:0">Avisos por correo</h2>
+      <p class="note">Solo te escribimos si lo activas. Cada correo trae un enlace para darte de baja.</p>
+      ${box('semanal', 'Resumen semanal: los planes de la semana elegidos según tus gustos (los jueves)')}
+      ${box('calle', 'Cortes de calle: si hoy o mañana hay cortes junto a tus planes guardados o en tus calles (por la mañana)')}
+      ${me.role === 'editor' || me.role === 'admin' || me.editor_status ? box('organizador', 'Organizador: cuando revisamos tu solicitud o tus eventos') : ''}
+      ${me.role === 'admin' ? box('admin', 'Admin: solicitudes y eventos pendientes de revisión') : ''}
+      ${nt.semanal ? '<div class="seg"><button class="btn ghost" data-mail-test>Enviarme ahora un resumen de prueba</button></div>' : ''}`;
     org.hidden = false;
     if (!(me.role === 'editor' || me.role === 'admin')) {
       org.innerHTML = me.editor_status === 'solicitado'
@@ -955,6 +966,18 @@ function startApp(DATA, TAX, sync) {
           <div class="seg"><button class="act" data-adm-pub="${x.id}" data-ok="1">Publicar</button><button class="act" data-adm-pub="${x.id}" data-ok="0">Rechazar</button></div></div>`).join('') || '<p class="note">Nada pendiente.</p>'}`;
     }
   }
+  // los correos de la cola (organizadores, admins) salen en cuanto pasa algo; si falla, los manda la tarea diaria
+  function flushMail() { const db = window.limonDB; if (db) db.sb.functions.invoke('limon-mail', { body: { action: 'flush' } }).catch(() => { }); }
+  document.addEventListener('change', async ev => {
+    const cb = ev.target.closest('[data-notify]'); if (!cb || !me) return;
+    const db = window.limonDB, u = db && db.user(); if (!u) return;
+    me.notify = Object.assign({ semanal: false, calle: false, organizador: true, admin: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
+    const { error } = await db.sb.from('profiles').update({ notify: me.notify }).eq('id', u.id);
+    toast(error ? 'No se ha podido guardar: ' + error.message
+      : cb.dataset.notify === 'calle' && cb.checked && !streets.length && !saved.length ? 'Activado. Guarda planes o añade tus calles en «Calle» para recibir avisos.'
+      : cb.checked ? 'Activado.' : 'Desactivado.');
+    renderAccountExtras();
+  });
   async function onAccountClick(ev) {
     const db = window.limonDB;
     const t = ev.target;
@@ -964,9 +987,13 @@ function startApp(DATA, TAX, sync) {
     const rt = t.closest('[data-org-retire]');
     if (rt) { await db.sb.from('submitted_events').update({ status: 'borrador' }).eq('id', +rt.dataset.orgRetire); toast('Retirado: deja de salir en Limón.'); loadMe(); return true; }
     const ae = t.closest('[data-adm-ed]');
-    if (ae) { await db.sb.from('profiles').update({ editor_status: ae.dataset.ok === '1' ? 'aprobado' : 'rechazado' }).eq('id', ae.dataset.admEd); loadMe(); return true; }
+    if (ae) { await db.sb.from('profiles').update({ editor_status: ae.dataset.ok === '1' ? 'aprobado' : 'rechazado' }).eq('id', ae.dataset.admEd); flushMail(); loadMe(); return true; }
     const ap = t.closest('[data-adm-pub]');
-    if (ap) { const { error } = await db.sb.rpc('publish_submission', { p_id: +ap.dataset.admPub, p_publish: ap.dataset.ok === '1' }); toast(error ? 'No se ha podido: ' + error.message : (ap.dataset.ok === '1' ? 'Publicado.' : 'Rechazado.')); loadMe(); return true; }
+    if (ap) { const { error } = await db.sb.rpc('publish_submission', { p_id: +ap.dataset.admPub, p_publish: ap.dataset.ok === '1' }); toast(error ? 'No se ha podido: ' + error.message : (ap.dataset.ok === '1' ? 'Publicado.' : 'Rechazado.')); flushMail(); loadMe(); return true; }
+    if (t.closest('[data-mail-test]')) {
+      const b = t.closest('[data-mail-test]'); b.disabled = true; const r = await db.fn('limon-mail', { action: 'weekly' }); b.disabled = false;
+      toast(r.error ? r.error : r.sent ? 'Enviado: mira tu correo.' : 'No hay planes que encajen esta semana: prueba a marcar intereses.'); return true;
+    }
     const cp = t.closest('[data-copy]');
     if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast('Enlace copiado. Pégalo en tu calendario como «suscripción».'); } catch (e) { prompt('Copia este enlace:', cp.dataset.copy); } return true; }
     return false;
@@ -976,7 +1003,7 @@ function startApp(DATA, TAX, sync) {
     if (ev.target.id === 'ed-form') {
       ev.preventDefault(); const f = new FormData(ev.target);
       const { error } = await db.sb.from('profiles').update({ organizer: { nombre: f.get('nombre'), web: f.get('web'), que: f.get('que') }, editor_status: 'solicitado' }).eq('id', u.id);
-      $('ed-msg').textContent = error ? 'No se ha podido enviar: ' + error.message : 'Enviado.'; if (!error) loadMe();
+      $('ed-msg').textContent = error ? 'No se ha podido enviar: ' + error.message : 'Enviado.'; if (!error) { flushMail(); loadMe(); }
     }
     if (ev.target.id === 'org-form') {
       ev.preventDefault(); const f = new FormData(ev.target), id = ev.target.dataset.id;
@@ -990,7 +1017,7 @@ function startApp(DATA, TAX, sync) {
       if (r.error) { $('org-msg').textContent = 'No se ha podido guardar: ' + r.error.message; return; }
       $('org-msg').textContent = 'Revisando…';
       const res = await db.fn('limon-org', { id: r.data.id });
-      orgEdit = null; await loadMe();
+      flushMail(); orgEdit = null; await loadMe();
       toast(res.error ? res.error : res.estado === 'publicado' ? 'Publicado. Saldrá en Limón al recargar la página.' : (res.motivo || 'Enviado a revisión.'));
     }
   });
@@ -1088,13 +1115,15 @@ function startApp(DATA, TAX, sync) {
       if (f && f.kind === 'cat' && !e.cats.includes(f.value)) continue;
       if (f && f.kind === 'tema' && !(e.temas || []).includes(f.value)) continue;
       if (f && f.kind === 'serie' && e.serie !== f.value) continue;
-      const occ = occurs(e, a, b); if (!occ || !passF(e, occ)) continue;
+      if (f && f.kind === 'id' && e.id !== f.value) continue;
+      const occ = f && f.kind === 'id' ? (occurs(e, a, b) || { date: parse(e.inicio), ongoing: false }) : occurs(e, a, b);
+      if (!occ || (!(f && f.kind === 'id') && !passF(e, occ))) continue;
       if (q) { const h = (e.titulo + ' ' + (e.lugar || '') + ' ' + (e.distrito || '') + ' ' + (e.serie || '') + ' ' + (e.temas || []).join(' ') + ' ' + e.cats.map(labelOf).join(' ') + ' ' + (e.descripcion || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); if (!h.includes(q)) continue; }
       res.push({ e, occ });
     }
     res.sort((x, y) => x.occ.date - y.occ.date);
     const f = state.filter;
-    $('ex-active').innerHTML = f ? `<button class="filterchip" id="ex-clear" aria-label="Quitar filtro">${esc(f.kind === 'cat' ? labelOf(f.value) : f.value)} <span aria-hidden="true">✕</span></button>` : '';
+    $('ex-active').innerHTML = f ? `<button class="filterchip" id="ex-clear" aria-label="Quitar filtro">${esc(f.kind === 'cat' ? labelOf(f.value) : f.kind === 'id' ? f.label : f.value)} <span aria-hidden="true">✕</span></button>` : '';
     $('ex-count').textContent = res.length + (res.length === 1 ? ' evento' : ' eventos');
     $('ex-list').innerHTML = res.slice(0, state.exShown).map(x => card(x.e, { occ: x.occ })).join('') || '<div class="empty">Ningún evento con esos filtros.</div>';
     $('ex-more').hidden = res.length <= state.exShown;
@@ -1220,7 +1249,7 @@ function startApp(DATA, TAX, sync) {
   $('near-close').addEventListener('click', () => { $('near').hidden = true; $('near-go').hidden = false; });
   $('toast-undo').addEventListener('click', () => { $('toast').hidden = true; if (toastUndo) toastUndo(); toastUndo = null; });
   document.addEventListener('click', ev => {
-    if (ev.target.closest('#org, #adm, #ag-cal') && ev.target.closest('button, a[data-copy]')) { onAccountClick(ev).then(done => { if (done) ev.preventDefault(); }); if (ev.target.closest('[data-org-new],[data-org-edit],[data-org-cancel],[data-org-retire],[data-adm-ed],[data-adm-pub],[data-copy]')) return; }
+    if (ev.target.closest('#org, #adm, #ag-cal, #mail') && ev.target.closest('button, a[data-copy]')) { onAccountClick(ev).then(done => { if (done) ev.preventDefault(); }); if (ev.target.closest('[data-org-new],[data-org-edit],[data-org-cancel],[data-org-retire],[data-adm-ed],[data-adm-pub],[data-copy],[data-mail-test]')) return; }
     const ck = ev.target.closest('[data-cakind]');
     if (ck) { state.caKind = ck.dataset.cakind; renderCalle(); return; }
     const cd = ev.target.closest('[data-caday]');
@@ -1287,9 +1316,20 @@ function startApp(DATA, TAX, sync) {
     const c = ev.target.closest('[data-cat]');
     if (c) { const id = c.dataset.cat; prefs[id] = ((prefs[id] || 0) + 1) % 3; if (!prefs[id]) delete prefs[id]; store.set('prefs', prefs); renderIntereses(); const el = document.querySelector(`[data-cat="${id}"]`); if (el) el.focus(); }
   });
-  const t0 = store.get('tab', 'parati');
-  go(tabs.includes(t0) ? t0 : 'parati');
+  // enlaces desde los correos: ?ev=e123 abre ese evento, ?tab=calle abre una pestaña, ?baja=…&k=… da de baja un aviso
+  const QS = new URLSearchParams(location.search);
+  const t0 = QS.get('tab') || store.get('tab', 'parati');
+  const ev0 = QS.get('ev') && BYID[QS.get('ev')];
+  if (ev0) { state.filter = { kind: 'id', value: ev0.id, label: ev0.titulo }; state.open[ev0.id] = true; $('ex-when').value = 'todo'; go('explorar'); }
+  else go(tabs.includes(t0) ? t0 : 'parati');
   renderAccountExtras();
+  if (QS.get('baja') && window.limonDB) {
+    window.limonDB.sb.functions.invoke('limon-mail', { body: { action: 'unsub', t: QS.get('baja'), k: QS.get('k') } }).then(({ data }) => {
+      toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
+      if (data && data.ok && me && me.notify) { me.notify[data.k] = false; renderAccountExtras(); }
+    });
+  }
+  if (QS.has('ev') || QS.has('baja') || QS.has('tab')) history.replaceState(null, '', location.pathname);
   return {
     get: () => ({ prefs, opts, saved, streets, dismissed, went, learned, taste }),
     setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); },

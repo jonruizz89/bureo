@@ -1,0 +1,28 @@
+name: Correos
+
+on:
+  schedule:
+    - cron: "15 6 * * *"    # cada día, 08:15 en Madrid (verano): cortes de hoy y mañana + cola pendiente
+    - cron: "0 15 * * 4"    # jueves, 17:00 en Madrid (verano): resumen semanal
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "daily (cortes) o weekly (resumen)"
+        required: true
+        default: "daily"
+
+jobs:
+  mail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Enviar
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+          ACTION: ${{ inputs.action || (github.event.schedule == '0 15 * * 4' && 'weekly' || 'daily') }}
+        run: |
+          code=$(curl -sS -o out.json -w '%{http_code}' -m 600 -X POST "$SUPABASE_URL/functions/v1/limon-mail" \
+            -H "Authorization: Bearer $SUPABASE_SECRET" -H "Content-Type: application/json" -d "{\"action\":\"$ACTION\"}")
+          cat out.json; echo
+          test "$code" = "200"
