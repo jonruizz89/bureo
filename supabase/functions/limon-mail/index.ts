@@ -13,7 +13,7 @@ const KEYS: string[] = (() => {
 })();
 const SECRET = KEYS[0] || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND = Deno.env.get('RESEND_API_KEY');
-const APP = Deno.env.get('LIMON_APP_URL') || 'https://jonruizz89.github.io/bureo/';
+const APP = Deno.env.get('LIMON_APP_URL') || 'https://limonplanes.com/';
 const FROM = 'Limón <hola@limonplanes.com>';
 const admin = createClient(URL, SECRET, { auth: { persistSession: false } });
 const CORS = {
@@ -51,7 +51,7 @@ function layout(o: { title: string; intro: string; items?: Item[]; sections?: { 
 <div style="background:#FFF9E0;padding:28px 12px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#231D02">
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px 24px">
     <table role="presentation" style="border-collapse:collapse"><tr>
-      <td><img src="https://jonruizz89.github.io/bureo/limon-180.png" width="36" height="36" alt="" style="display:block"></td>
+      <td><img src="https://limonplanes.com/limon-180.png" width="36" height="36" alt="" style="display:block"></td>
       <td style="padding-left:10px;font-size:18px;font-weight:700">Limón</td></tr></table>
     <h1 style="font-size:21px;line-height:1.3;margin:20px 0 8px">${esc(o.title)}</h1>
     <p style="font-size:15px;line-height:1.5;margin:0 0 8px;color:#3D3517">${o.intro}</p>
