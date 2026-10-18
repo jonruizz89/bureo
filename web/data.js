@@ -184,7 +184,12 @@
       if (r.error) { msg(ES(r.error.message)); return; }
       $('acc-pass').value = '';
       if (mode === 'login') msg('');
-      else if (mode === 'signup') msg(r.data && r.data.session ? '' : 'Te hemos enviado un correo a ' + email + ' para confirmar la cuenta. Ábrelo y ya estarás dentro.');
+      else if (mode === 'signup') {
+        // si el correo ya tiene cuenta, Supabase no envía nada y devuelve un usuario sin identidades
+        const dup = r.data && r.data.user && Array.isArray(r.data.user.identities) && r.data.user.identities.length === 0;
+        msg(r.data && r.data.session ? '' : dup ? 'Ya tienes una cuenta con ' + email + '. Pulsa «He olvidado mi contraseña» para ponerle una, o pide un enlace para entrar sin ella.'
+          : 'Te hemos enviado un correo a ' + email + ' para confirmar la cuenta. Ábrelo y ya estarás dentro.');
+      }
       else if (mode === 'reset') msg('Si hay una cuenta con ' + email + ', te llegará un enlace para poner una contraseña nueva.');
       else msg('Te hemos enviado un enlace a ' + email + '. Ábrelo en este dispositivo para entrar.');
     });
