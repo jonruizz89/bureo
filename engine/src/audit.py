@@ -14,9 +14,12 @@ SKEY = os.environ['SUPABASE_SECRET']
 AKEY = os.environ['ANTHROPIC_API_KEY']
 MODEL = os.environ.get('BUREO_AUDIT_MODEL', 'claude-haiku-5-5')
 MAX_USD = float(os.environ.get('BUREO_AUDIT_MAX_USD', '1.0'))
-CITY = 'madrid'
+CITY = os.environ.get('BUREO_CITY', 'madrid')
 HOY = dt.date.today()
 FIN = HOY + dt.timedelta(days=14)
+_c = json.loads(urllib.request.urlopen(urllib.request.Request(URL + f'/rest/v1/cities?id=eq.{CITY}&select=name,region',
+    headers={'apikey': SKEY, 'Authorization': 'Bearer ' + SKEY}), timeout=60).read().decode())[0]
+CNAME, CREGION = _c['name'], _c.get('region') or _c['name']
 COST = {'in': 0, 'out': 0, 'search': 0}
 GAP_ALERT = 10.0  # % de huecos a partir del cual se pide un descubrimiento dirigido
 AGREGADORES = ('eventbrite.', 'meetup.', 'timeout.', 'feverup.', 'fever.', 'ticketmaster.', 'entradas.com', 'correrjuntos.',
@@ -43,7 +46,7 @@ def fold(t):
     return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9ñ ]', ' ', ''.join(c for c in t if unicodedata.category(c) != 'Mn'))).strip()
 
 
-STOP = set('de del la las el los y en a con para por un una al lo sus su madrid 2026 2027 edicion festival concierto exposicion'.split())
+STOP = set('de del la las el los y en a con para por un una al lo sus su 2026 2027 edicion festival concierto exposicion'.split()) | set(fold(CNAME).split())
 
 
 def toks(t):
@@ -72,15 +75,15 @@ TOOL = {'name': 'guardar_encontrados', 'description': 'Guarda los eventos encont
 
 
 def search_group(g, labels):
-    system = (f'Hoy es {HOY.isoformat()}. Eres el auditor de cobertura de Limón, una app de planes en Madrid. Busca en la web eventos '
-              f'presenciales en el municipio de Madrid entre el {HOY.isoformat()} y el {FIN.isoformat()} del grupo «{g["name"]}» '
+    system = (f'Hoy es {HOY.isoformat()}. Eres el auditor de cobertura de Limón, una app de planes en {CNAME}. Busca en la web eventos '
+              f'presenciales en el municipio de {CNAME} entre el {HOY.isoformat()} y el {FIN.isoformat()} del grupo «{g["name"]}» '
               f'({", ".join(labels)}). Busca sobre todo lo que una agenda oficial podría no tener: organizadores privados, '
               'asociaciones, federaciones, salas pequeñas, librerías, embajadas e institutos culturales. Haz como mucho 3 búsquedas. '
               'Después llama a guardar_encontrados con hasta 15 eventos concretos con fecha dentro del periodo; no inventes nada: '
               'cada evento debe venir de una página que hayas visto.')
     body = {'model': MODEL, 'max_tokens': 16000, 'system': system,
             'tools': [{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 3,
-                       'user_location': {'type': 'approximate', 'city': 'Madrid', 'region': 'Madrid', 'country': 'ES', 'timezone': 'Europe/Madrid'}},
+                       'user_location': {'type': 'approximate', 'city': CNAME, 'region': CREGION, 'country': 'ES', 'timezone': 'Europe/Madrid'}},
                       TOOL],
             'messages': [{'role': 'user', 'content': f'Grupo: {g["name"]}'}]}
     for attempt in range(2):
@@ -129,7 +132,7 @@ def main():
         if len(part) < 1000:
             break
     base = [(toks(e['title']), fold(e['title']), dt.date.fromisoformat(e['starts_on']), dt.date.fromisoformat(e['ends_on'])) for e in evs]
-    known = {domain(s['url']) for s in sb('GET', f'sources?select=url&city_id=eq.{CITY}')} | {'esmadrid.com', 'madrid.es', 'datos.madrid.es'}
+    known = {domain(s['url']) for s in sb('GET', f'sources?select=url&city_id=eq.{CITY}')} | ({'esmadrid.com', 'madrid.es', 'datos.madrid.es'} if CITY == 'madrid' else set())
     print(f'{len(evs)} eventos en la base para {HOY}–{FIN}; {len(groups)} grupos')
 
     def present(item):

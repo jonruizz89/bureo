@@ -8,7 +8,8 @@ import json, sys, hashlib, re, unicodedata, urllib.request, urllib.error
 import os
 env = dict(l.strip().split('=', 1) for l in open(sys.argv[1]) if '=' in l) if len(sys.argv) > 1 else os.environ
 URL, KEY = env['SUPABASE_URL'].rstrip('/'), env['SUPABASE_SECRET']
-CITY = 'madrid'
+CITY = os.environ.get('BUREO_CITY', 'madrid')
+PFX = '' if CITY == 'madrid' else CITY + '|'  # Madrid conserva sus claves de siempre
 
 
 def norm(t):
@@ -61,7 +62,7 @@ print('recintos', len(vid))
 # 2) eventos
 rows, seen = [], set()
 for e in evs:
-    k = hashlib.md5(f"{norm(e['titulo'])}|{norm(e.get('lugar') or '')}|{e['inicio']}".encode()).hexdigest()
+    k = hashlib.md5(f"{PFX}{norm(e['titulo'])}|{norm(e.get('lugar') or '')}|{e['inicio']}".encode()).hexdigest()
     if k in seen:
         continue
     seen.add(k)
@@ -111,5 +112,5 @@ for tbl, rws, conflict in (('event_sessions', sess, 'event_id,on_date'), ('event
         api('POST', f'{tbl}?on_conflict={conflict}', part, 'resolution=merge-duplicates,return=minimal')
     print(tbl, len(rws))
 import datetime as _dt
-api('PATCH', f'sources?city_id=eq.{CITY}', {'last_run_at': _dt.datetime.now(_dt.timezone.utc).isoformat()}, 'return=minimal')
+api('PATCH', f'sources?city_id=eq.{CITY}&status=eq.activa', {'last_run_at': _dt.datetime.now(_dt.timezone.utc).isoformat()}, 'return=minimal')
 print('ok')

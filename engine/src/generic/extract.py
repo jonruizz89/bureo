@@ -1,0 +1,199 @@
+"""Paso 3 · Leer cada noche las fuentes activas de una ciudad con su receta y dejar out/<ciudad>/events.json.
+
+Después: load_supabase.py (BUREO_CITY=<ciudad>, BUREO_OUT=out/<ciudad>) y classify.py ponen las categorías con IA.
+Solo se quedan los eventos del municipio (por el municipio que indica la fuente o por las coordenadas) de los próximos 120 días.
+"""
+import datetime as dt, json, os, re, sys, time, urllib.parse, urllib.request
+from lib import sb, fetch, parse_page, load_city, fold, usd, over_budget, UA
+import formats as F
+
+HOY = dt.date.today()
+HASTA = HOY + dt.timedelta(days=120)
+RAW = os.environ.get('BUREO_RAW', 'raw')
+MAX_GEO = int(os.environ.get('BUREO_GEOCODE_MAX', '150'))
+
+
+def read_source(s, city):
+    c = s.get('config') or {}
+    m = c.get('method')
+    if m == 'ical':
+        st, _, txt, f = fetch(c['feed'])
+        return F.ical_events(txt, f) if st == 200 else None
+    if m == 'datos':
+        st, ct, txt, f = fetch(c['feed'], limit=20_000_000)
+        if st != 200:
+            return None
+        rows, kind = F.table_rows(txt, ct)
+        mp = c.get('mapping') or {}
+        data = F.dig(rows, mp.get('ruta')) if kind == 'json' and isinstance(rows, dict) else rows
+        return F.mapped_events(data, mp, f)
+    if m == 'jsonld':
+        st, _, txt, f = fetch(c['url'])
+        return F.jsonld_events(parse_page(txt, f)['ld'], f) if st == 200 else None
+    if m == 'jsonld_fichas':
+        st, _, txt, f = fetch(c['url'])
+        if st != 200:
+            return None
+        from probe import detail_links
+        out = []
+        for h in [l for l in detail_links(parse_page(txt, f), f, 120) if l.startswith(c.get('prefijo') or '')][:c.get('max', 40)]:
+            s2, _, t2, f2 = fetch(h)
+            if s2 == 200:
+                out += F.jsonld_events(parse_page(t2, f2)['ld'], f2)
+        return out
+    if m == 'rss':
+        st, _, txt, _ = fetch(c['feed'])
+        items = F.feed_items(txt) if st == 200 else []
+        return F.llm_events('\n\n'.join(items[:60]), c['feed'], city['name'], HOY.isoformat())[0] if items else None
+    if m == 'ia':
+        out, url = [], c['url']
+        for _ in range(int(c.get('paginas') or 1)):
+            if not url or over_budget():
+                break
+            st, _, txt, f = fetch(url)
+            if st != 200:
+                return out or None
+            evs, url = F.llm_events(parse_page(txt, f)['text'], f, city['name'], HOY.isoformat())
+            out += evs
+        return out
+    return None
+
+
+# ---------- situar en el mapa (Nominatim, dentro de los límites de la ciudad) y en su distrito
+def geocoder(city):
+    path = os.path.join(RAW, f'geo_{city["id"]}.json')
+    cache = json.load(open(path)) if os.path.exists(path) else {}
+    spent, last = [0], [0.0]
+    bbox = city.get('bbox') or [city['lng'] - 0.1, city['lat'] - 0.08, city['lng'] + 0.1, city['lat'] + 0.08]
+    dists = city.get('districts') or []
+
+    def district(addr):
+        for k in ('city_district', 'suburb', 'quarter', 'neighbourhood'):
+            v = fold(addr.get(k))
+            for d in dists:
+                if v and (fold(d) == v or fold(d).split(' ')[0] == v.split(' ')[0]):
+                    return d
+        return None
+
+    def find(q):
+        k = fold(q)
+        if k in cache:
+            return cache[k]
+        if spent[0] >= MAX_GEO:
+            return None
+        wait = 1.1 - (time.time() - last[0])
+        if wait > 0:
+            time.sleep(wait)
+        u = 'https://nominatim.openstreetmap.org/search?' + urllib.parse.urlencode(
+            {'q': q, 'format': 'jsonv2', 'limit': 1, 'addressdetails': 1, 'countrycodes': 'es', 'viewbox': ','.join(map(str, bbox)), 'bounded': 1})
+        try:
+            with urllib.request.urlopen(urllib.request.Request(u, headers={'User-Agent': UA}), timeout=30) as r:
+                res = json.loads(r.read().decode())
+        except Exception:
+            res = []
+        last[0] = time.time(); spent[0] += 1
+        cache[k] = [float(res[0]['lat']), float(res[0]['lon']), district(res[0].get('address') or {})] if res else None
+        return cache[k]
+
+    def save():
+        os.makedirs(RAW, exist_ok=True)
+        json.dump(cache, open(path, 'w'), ensure_ascii=False)
+    return find, save
+
+
+def in_city(e, city):
+    name = fold(city['name'])
+    if e.get('municipio'):
+        mu = fold(e['municipio'])
+        if name not in mu and mu not in name:
+            return False
+    bb = city.get('bbox')
+    if bb and e.get('lat') and e.get('lng'):
+        m = 0.01
+        if not (bb[0] - m <= e['lng'] <= bb[2] + m and bb[1] - m <= e['lat'] <= bb[3] + m):
+            return False
+    return True
+
+
+def main(cid):
+    city = load_city(cid)
+    srcs = sb('GET', f'sources?select=id,name,url,layer,config&city_id=eq.{cid}&status=eq.activa&order=id')
+    raw, per = [], {}
+    for s in srcs:
+        if not (s.get('config') or {}).get('method'):
+            continue
+        try:
+            evs = read_source(s, city)
+        except Exception as ex:
+            print(f'✗ {s["name"]}: {type(ex).__name__}: {ex}'); evs = None
+        if evs is None:
+            sb('PATCH', f'sources?id=eq.{s["id"]}', {'notes': f'Fallo de lectura el {HOY.isoformat()}'}, 'return=minimal')
+            print(f'✗ {s["name"]}: no se ha podido leer'); continue
+        keep = []
+        for e in evs:
+            if not e.get('inicio') or (e.get('fin') or e['inicio']) < HOY.isoformat() or e['inicio'] > HASTA.isoformat():
+                continue
+            if s.get('layer') == 'regional' and not e.get('municipio') and not (e.get('lat') and e.get('lng')):
+                continue  # agendas autonómicas: solo si sabemos que es en la ciudad
+            if not in_city(e, city):
+                continue
+            e['fuentes'] = [{'nombre': s['name'], 'url': e.get('url') or s['url']}]
+            keep.append(e)
+        per[s['name']] = len(keep)
+        raw += keep
+        sb('PATCH', f'sources?id=eq.{s["id"]}', {'events_last': len(keep), 'notes': None}, 'return=minimal')
+        print(f'✓ {s["name"]}: {len(keep)} eventos')
+
+    # el mismo evento en varias fuentes o con varias sesiones → una sola tarjeta
+    groups = {}
+    for e in raw:
+        k = (fold(e['titulo'])[:70], fold(e.get('lugar') or '')[:40])
+        groups.setdefault(k, []).append(e)
+    eventos = []
+    for (_, _), lst in groups.items():
+        lst.sort(key=lambda x: x['inicio'])
+        singles = [x for x in lst if x['inicio'] == (x.get('fin') or x['inicio'])]
+        ranges = [x for x in lst if x not in singles]
+        bundles = ([singles] if singles else []) + [[x] for x in ranges]
+        for b in bundles:
+            base = dict(b[0])
+            for x in b[1:]:
+                for k, v in x.items():
+                    if not base.get(k) and v:
+                        base[k] = v
+            fuentes = {}
+            for x in b:
+                for f in x['fuentes']:
+                    fuentes.setdefault(f['nombre'], f)
+            dates = sorted({x['inicio'] for x in b})
+            base['inicio'], base['fin'] = dates[0], max(x.get('fin') or x['inicio'] for x in b)
+            base['sesiones'] = dates[:40] if len(b) > 1 else [base['inicio']] if base['inicio'] == base['fin'] else []
+            base['fuentes'] = list(fuentes.values())
+            eventos.append(base)
+
+    find, save = geocoder(city)
+    placed = 0
+    for e in eventos:
+        if not (e.get('lat') and e.get('lng')):
+            for q in [x for x in ((e.get('lugar') or '') + ', ' + city['name'] if e.get('lugar') else None,
+                                  (e.get('direccion') or '') + ', ' + city['name'] if e.get('direccion') else None) if x]:
+                g = find(q)
+                if g:
+                    e['lat'], e['lng'], e['distrito'] = g[0], g[1], g[2]; placed += 1
+                    break
+        e.setdefault('distrito', None)
+        e['cats'] = []
+        e['descripcion'] = (e.get('descripcion') or '')[:420]
+        for k in ('municipio', 'url', 'direccion'):
+            e.pop(k, None)
+    save()
+    out = os.path.join(os.environ.get('BUREO_OUT', 'out'), cid)
+    os.makedirs(out, exist_ok=True)
+    meta = {'ciudad': city['name'], 'generado': dt.datetime.now().isoformat(timespec='minutes'), 'por_fuente': per,
+            'eventos': len(eventos), 'situados_ahora': placed, 'coste_ia_usd': round(usd(), 3)}
+    json.dump({'meta': meta, 'eventos': eventos}, open(os.path.join(out, 'events.json'), 'w'), ensure_ascii=False)
+    print(json.dumps(meta, ensure_ascii=False, indent=1))
+
+
+if __name__ == '__main__':
+    main(sys.argv[1] if len(sys.argv) > 1 else 'bilbao')

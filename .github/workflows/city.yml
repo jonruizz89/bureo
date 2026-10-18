@@ -1,0 +1,124 @@
+name: Ciudades (motor genérico)
+
+# Alta manual de una ciudad: 1) crear la fila en `cities` (status borrador) · 2) lanzar este flujo con steps=discover,probe,extract,load,classify
+# Cada noche se vuelven a leer las fuentes activas de todas las ciudades menos Madrid (que tiene su propio flujo).
+
+on:
+  schedule:
+    - cron: "47 3 * * *"
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "Id de la ciudad (tabla cities), p. ej. bilbao"
+        required: true
+        default: "bilbao"
+      steps:
+        description: "Pasos separados por comas: discover, probe, retry, extract, load, classify"
+        required: true
+        default: "extract,load,classify"
+      max_usd:
+        description: "Tope de gasto en IA por ejecución (USD)"
+        required: false
+        default: "2"
+
+concurrency:
+  group: city-${{ inputs.city || 'nightly' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      cities: ${{ steps.c.outputs.cities }}
+    steps:
+      - id: c
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+          INPUT_CITY: ${{ inputs.city }}
+        run: |
+          if [ -n "$INPUT_CITY" ]; then
+            echo "cities=[\"$INPUT_CITY\"]" >> "$GITHUB_OUTPUT"
+          else
+            list=$(curl -sf "$SUPABASE_URL/rest/v1/cities?select=id&id=neq.madrid" -H "apikey: $SUPABASE_SECRET" -H "Authorization: Bearer $SUPABASE_SECRET" | python3 -c 'import json,sys; print(json.dumps([c["id"] for c in json.load(sys.stdin)]))')
+            echo "cities=$list" >> "$GITHUB_OUTPUT"
+          fi
+
+  run:
+    needs: plan
+    if: needs.plan.outputs.cities != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        city: ${{ fromJson(needs.plan.outputs.cities) }}
+    defaults:
+      run:
+        working-directory: engine
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      BUREO_CITY: ${{ matrix.city }}
+      BUREO_CITY_MAX_USD: ${{ inputs.max_usd || '1' }}
+      BUREO_RAW: raw
+      STEPS: ${{ inputs.steps || 'extract,load,classify' }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Recuperar la caché de geolocalización
+        uses: actions/cache/restore@v4
+        with:
+          path: engine/raw/geo_${{ matrix.city }}.json
+          key: geo-${{ matrix.city }}-${{ github.run_id }}
+          restore-keys: geo-${{ matrix.city }}-
+
+      - name: 1 · Descubrir fuentes
+        if: contains(env.STEPS, 'discover')
+        working-directory: engine/src/generic
+        run: python3 discover.py "$BUREO_CITY"
+
+      - name: 2 · Probar fuentes y guardar recetas
+        if: contains(env.STEPS, 'probe') || contains(env.STEPS, 'retry')
+        working-directory: engine/src/generic
+        run: python3 probe.py "$BUREO_CITY" ${{ contains(env.STEPS, 'retry') && '--retry' || '' }}
+
+      - name: 3 · Extraer eventos
+        if: contains(env.STEPS, 'extract')
+        working-directory: engine/src/generic
+        env:
+          BUREO_OUT: ../../out
+          BUREO_RAW: ../../raw
+        run: python3 extract.py "$BUREO_CITY"
+
+      - name: Guardar la caché de geolocalización
+        if: always() && contains(env.STEPS, 'extract')
+        uses: actions/cache/save@v4
+        with:
+          path: engine/raw/geo_${{ matrix.city }}.json
+          key: geo-${{ matrix.city }}-${{ github.run_id }}
+
+      - name: Subir el resultado para revisarlo
+        if: contains(env.STEPS, 'extract')
+        uses: actions/upload-artifact@v4
+        with:
+          name: events-${{ matrix.city }}
+          path: engine/out/${{ matrix.city }}/events.json
+          retention-days: 7
+
+      - name: 4 · Cargar en Supabase
+        if: contains(env.STEPS, 'load')
+        env:
+          BUREO_OUT: out/${{ matrix.city }}
+        run: python3 src/load_supabase.py
+
+      - name: 5 · Clasificar con IA
+        if: contains(env.STEPS, 'classify')
+        run: python3 src/classify.py
