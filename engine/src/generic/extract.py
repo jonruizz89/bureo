@@ -68,7 +68,7 @@ def geocoder(city):
     dists = city.get('districts') or []
 
     def district(addr):
-        for k in ('city_district', 'suburb', 'quarter', 'neighbourhood'):
+        for k in ('city_district', 'borough', 'suburb', 'quarter', 'neighbourhood'):
             v = fold(addr.get(k))
             for d in dists:
                 if v and (fold(d) == v or fold(d).split(' ')[0] == v.split(' ')[0]):
