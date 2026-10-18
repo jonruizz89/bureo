@@ -107,6 +107,13 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .fpanel { gap: 14px }
 .streetwarn { font-size: 13px; background: #FFF0EE; color: #A4251C; border-radius: 8px; padding: 6px 10px; font-weight: 500 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .streetwarn { background: #3B1A17; color: #FFB4A8 } }
+.rainwarn { font-size: 13px; background: #E8F1FB; color: #1D4F8C; border-radius: 8px; padding: 6px 10px; font-weight: 500 }
+.routewarn { font-size: 13px; background: var(--accent-soft); color: var(--ink); border-radius: 8px; padding: 8px 10px; margin-top: 8px }
+.crew { font-size: 13px; color: var(--accent-text); font-weight: 500 }
+.crew button { font: inherit; color: inherit; text-decoration: underline; background: none; border: 0; padding: 0; cursor: pointer }
+.btnlink { font: inherit; color: var(--accent-text); text-decoration: underline; background: none; border: 0; padding: 0; cursor: pointer; text-align: left }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rainwarn { background: #14273D; color: #A9CBF2 } }
+:root[data-theme="dark"] .rainwarn { background: #14273D; color: #A9CBF2 }
 .badge { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--quiet) }
 .badge.publicado { background: var(--ok-soft); color: var(--ok) }
 .badge.revision { background: var(--accent-soft); color: var(--accent-text) }
@@ -277,6 +284,7 @@ table.cov td.n, table.cov th.n { text-align: right }
       </form>
       <div class="seg" id="ca-mine"></div>
     </div>
+    <div id="ca-big" class="view"></div>
     <div id="ca-list" class="view"></div>
     <p class="note">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
   </section>
@@ -292,6 +300,7 @@ table.cov td.n, table.cov th.n { text-align: right }
   </section>
 
   <section class="view" id="v-explorar" hidden>
+    <div class="panel" id="quedar" hidden></div>
     <h1>Explorar</h1>
     <button class="btn" id="near-go" style="align-self:flex-start">📍 Ahora cerca de ti</button>
     <div class="panel" id="near" hidden>
@@ -612,7 +621,11 @@ function startApp(DATA, TAX, sync) {
         <div class="acts">
           <button class="act" data-dismiss="${e.id}" aria-pressed="${isDismissed(e)}">${isDismissed(e) ? 'Volver a mostrar' : 'No me interesa'}</button>
           ${(occ && (occ.ongoing || +occ.date <= +today)) || went.includes(e.id) ? `<button class="act" data-went="${e.id}" aria-pressed="${went.includes(e.id)}">${went.includes(e.id) ? '✓ Fui' : 'Ya fui'}</button>` : ''}
+          ${occ && parse(e.fin) >= today ? `<button class="act" data-invite="${e.id}">Proponer plan</button>` : ''}
+          ${e.lat ? `<button class="act" data-route="${e.id}">¿Cortes en el camino?</button>` : ''}
         </div>
+        ${state.inviting === e.id ? inviteForm(e) : ''}
+        ${state.route && state.route[e.id] ? `<div class="routewarn">${state.route[e.id]}</div>` : ''}
       </div>` : '';
     return `<article class="card">
       <div class="row1">${dateBox(e, occ)}
@@ -620,7 +633,7 @@ function startApp(DATA, TAX, sync) {
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
           <div class="meta">${esc(whenText(e, occ))}</div>
           <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}${userPos && e.lat ? ` · <span class="dist">a ${fmtDist(km(userPos, [e.lat, e.lng]))}</span>` : ''}</div>
-          ${streetWarn(e, occ)}
+          ${streetWarn(e, occ)}${rainWarn(e, occ)}${crewHtml(e)}
           ${e.serie ? `<button class="serie link" data-f-serie="${esc(e.serie)}" aria-label="Ver todo el ciclo: ${esc(e.serie)}">${esc(e.serie)} ›</button>` : ''}
         </div></div>
       <div class="tags">${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${(e.temas || []).slice(0, 2).map(t => `<button class="tag tema link" data-f-tema="${esc(t)}" aria-label="Más planes sobre ${esc(t)}">${esc(t)}</button>`).join('')}${cats.map(c => `<button class="tag link" data-f-cat="${esc(c)}" aria-label="Más planes de ${esc(labelOf(c))}">${esc(labelOf(c))}</button>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
@@ -690,6 +703,7 @@ function startApp(DATA, TAX, sync) {
       <div class="when">${esc(when)}</div>
       <h3 class="title" style="padding-right:0">${esc(c.title)}</h3>
       ${c.summary ? `<p class="meta" style="margin:0">${esc(c.summary)}</p>` : ''}
+      ${(() => { const st = stadiumOf(c.title + ' ' + (c.summary || '')); const m = st && CA_DATE ? bigEventsOn(CA_DATE, st) : []; return m.length ? `<div class="why">Por: ${m.map(e => `<button class="btnlink" data-goev="${e.id}">${esc(e.titulo)}${e.hora && e.hora.length < 12 ? ' · ' + esc(e.hora) : ''}</button>`).join(' · ')}</div>` : ''; })()}
       ${((c.lines || []).length || (c.stations || []).length) ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l, c.kind) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
       <div class="tags">${sts.slice(0, 10).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}${sts.length > 10 ? `<span class="street">y ${sts.length - 10} más</span>` : ''}</div>
       ${c.geom ? `<button class="maplink" data-cutmap="${i}">Ver en el mapa</button>` : ''}
@@ -701,18 +715,27 @@ function startApp(DATA, TAX, sync) {
     if (!state.caDay || !days.some(x => x.id === state.caDay)) state.caDay = 'hoy';
     $('ca-days').innerHTML = days.map(x => `<button class="pill" data-caday="${x.id}" aria-pressed="${x.id === state.caDay}">${esc(x.label)}</button>`).join('');
     const d = days.find(x => x.id === state.caDay).d;
+    CA_DATE = d;
     const kinds = [['todo', 'Todo'], ['calles', 'Calles'], ['transporte', 'Metro, tren y bus']];
     $('ca-kinds').innerHTML = kinds.map(k => `<button class="pill" data-cakind="${k[0]}" aria-pressed="${state.caKind === k[0]}">${k[1]}</button>`).join('');
     const list = cutsOn(d).filter(x => state.caKind === 'todo' || (state.caKind === 'transporte') === TRANS.includes(x.c.kind));
     const mine = list.filter(x => x.mine).length;
     $('ca-count').textContent = list.length ? `${list.length} avisos ${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}` + (streets.length ? ` · ${mine} te afectan` : '') : '';
     $('ca-list').innerHTML = list.map(cutCard).join('') || '<div class="empty">No hay cortes anunciados para ese día.</div>';
+    // partidos y conciertos en estadios sin aviso oficial todavía: aviso anticipado
+    const big = bigEventsOn(d).filter(e => !cutsOn(d).some(x => stadiumOf(x.c.title + ' ' + (x.c.summary || '')) === stadiumOf(e.lugar)));
+    $('ca-big').innerHTML = big.map(e => { const st = stadiumOf(e.lugar); return `<article class="card cut">
+      <div class="tags"><span class="tag">Previsto</span><span class="tag">${esc(st.name)}</span></div>
+      <div class="when">${esc(e.hora && e.hora.length < 30 ? e.hora : 'Hora por confirmar')}</div>
+      <h3 class="title" style="padding-right:0">${esc(e.titulo)}</h3>
+      <p class="meta" style="margin:0">En días de partido o concierto suele haber desvíos de autobuses EMT y cortes alrededor del ${esc(st.name)} desde unas horas antes hasta después del final. El aviso oficial se publica uno o dos días antes y aparecerá aquí.</p>
+      <button class="maplink" data-goev="${e.id}">Ver el evento</button></article>`; }).join('');
     CUTS_NOW = list;
     drawMap(list);
     $('ca-mine').innerHTML = streets.map((st, i) => `<button class="filterchip" data-rmstreet="${i}" aria-label="Quitar ${esc(st)}">${esc(st)} <span aria-hidden="true">✕</span></button>`).join('') || '<span class="note">Aún no has añadido ninguna.</span>';
   }
   // ---------- mapa de cortes (Leaflet + teselas de CARTO sobre OpenStreetMap; se carga solo al abrir Calle)
-  let MAP = null, LAYER = null, CUTS_NOW = [], SHAPES = {};
+  let MAP = null, LAYER = null, CUTS_NOW = [], SHAPES = {}, CA_DATE = null;
   const KCOLOR = { autobus: '#1E5BA8', obras: '#E8590C', cercanias: '#C92A2A', metro_ligero: '#3A86C8' };
   const dark = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   function loadLeaflet() {
@@ -830,12 +853,143 @@ function startApp(DATA, TAX, sync) {
         const where = trans ? g.c.title : (g.segs.length ? 'corte en ' + ((g.c.geom.segs[0] || {}).n || g.c.title) : g.c.title);
         out.push({ m, t: where + (m > 60 ? ` (a ${Math.round(m / 50) * 50} m)` : '') + (r.start ? `, ${r.start}${r.end ? '–' + r.end : ''}` : '') });
       }
+      // estadios: avisos sin calles concretas (desvíos EMT) y partidos o conciertos aún sin aviso oficial
+      for (const st of STADIUMS) {
+        const m = km(o, st.ll) * 1000; if (m > 1200) continue;
+        const cs = CLOSURES.filter(c => stadiumOf(c.title + ' ' + (c.summary || '')) === st && activeOn(c, d));
+        cs.forEach(c => { const r = activeOn(c, d); out.push({ m: m - 1, t: c.title + (r.start ? `, ${r.start}${r.end ? '–' + r.end : ''}` : '') }); });
+        if (!cs.length) bigEventsOn(d, st).filter(x => x.id !== e.id).slice(0, 1).forEach(x => out.push({ m, t: `${x.titulo} en el ${st.name}${x.hora && x.hora.length < 12 ? ' (' + x.hora + ')' : ''}: puede haber cortes y desvíos` }));
+      }
       out.sort((a, b) => a.m - b.m);
       const seenW = new Set();
       out = out.filter(x => { const key = x.t.replace(/ \(a .*$|, \d.*$/, ''); if (seenW.has(key)) return false; seenW.add(key); return true; });
       warnCache[k] = out.length ? `<div class="streetwarn">⚠ ${+d === +today ? 'Hoy' : 'Ese día'}: ${esc(out.slice(0, 2).map(x => x.t).join(' · '))}${out.length > 2 ? ` y ${out.length - 2} más` : ''}</div>` : '';
     }
     return warnCache[k];
+  }
+
+  // ---------- estadios: unir cortes con el partido o concierto de ese día
+  const STADIUMS = [
+    { re: /bernab[eé]u/i, name: 'Bernabéu', ll: [40.45306, -3.68835] },
+    { re: /metropolitano/i, name: 'Metropolitano', ll: [40.43619, -3.59978] },
+    { re: /movistar arena|wizink/i, name: 'Movistar Arena', ll: [40.42392, -3.67202] }];
+  const stadiumOf = t => STADIUMS.find(st => st.re.test(t || ''));
+  function bigEventsOn(d, st) {
+    const k = ymd(d);
+    return EV.filter(e => {
+      const s2 = stadiumOf(e.lugar); if (!s2 || (st && s2 !== st)) return false;
+      if (e.sesiones.length > 1) return e.sesiones.includes(k);
+      return e.inicio === k && e.fin === k;  // las exposiciones largas no cuentan
+    });
+  }
+
+  // ---------- lluvia: previsión de Open-Meteo (centro de Madrid) para planes al aire libre, próximos 7 días
+  const OUTDOOR = new Set(['aire_libre', 'mercadillos', 'fiestas', 'desfiles', 'religiosas', 'calle', 'rutas', 'carreras', 'maratones', 'trail', 'bici', 'triatlon',
+    'natacion', 'tematicas', 'solidarias', 'foodtrucks', 'carreras_perro', 'quedadas_perro', 'aves', 'excursiones', 'huertos', 'itinerarios', 'jardines', 'senderismo', 'g:naturaleza', 'beneficos']);
+  const isOutdoor = e => e.cats.some(c => OUTDOOR.has(c)) || /al aire libre/i.test(e.descripcion || '');
+  let RAIN = null;
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=40.4168&longitude=-3.7038&hourly=precipitation_probability&daily=precipitation_probability_max&timezone=Europe%2FMadrid&forecast_days=8')
+    .then(r => r.ok ? r.json() : null).then(j => {
+      if (!j || !j.daily) return;
+      const R = { daily: {}, hourly: {} };
+      j.daily.time.forEach((d, i) => { R.daily[d] = j.daily.precipitation_probability_max[i] || 0; });
+      j.hourly.time.forEach((t, i) => { const d = t.slice(0, 10); (R.hourly[d] = R.hourly[d] || [])[+t.slice(11, 13)] = j.hourly.precipitation_probability[i] || 0; });
+      RAIN = R; renderAll();
+    }).catch(() => { });
+  function rainWarn(e, occ) {
+    if (!RAIN || !occ || !isOutdoor(e)) return '';
+    const d = occ.ongoing ? today : occ.date, k = ymd(d);
+    if (!(k in RAIN.daily)) return '';
+    const h = occ.ongoing ? null : startHour(e);
+    const p = h != null && RAIN.hourly[k] ? Math.max(...RAIN.hourly[k].slice(Math.floor(h), Math.floor(h) + 3).map(x => x || 0)) : RAIN.daily[k];
+    if (p < 50) return '';
+    return `<div class="rainwarn">☔ ${p} % de probabilidad de lluvia ${+d === +today ? 'hoy' : 'ese día'}${h != null ? ' a esa hora' : ''}</div>`;
+  }
+
+  // ---------- ¿cortes en el camino? ruta en coche (OSRM) contra los cortes con calles en el mapa
+  async function checkRoute(e) {
+    state.route = state.route || {};
+    const put = h => { state.route[e.id] = h; renderAll(); };
+    let pos = userPos;
+    if (!pos) {
+      if (!navigator.geolocation) { put('Tu navegador no permite saber dónde estás.'); return; }
+      put('Buscando dónde estás…');
+      try { pos = await new Promise((ok, ko) => navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), ko, { timeout: 10000, maximumAge: 300000 })); userPos = pos; }
+      catch (x) { put('Sin permiso de ubicación no puedo calcular la ruta.'); return; }
+    }
+    if (km(pos, [e.lat, e.lng]) > 60) { put('Estás lejos de Madrid: no puedo comprobar la ruta desde ahí.'); return; }
+    put('Calculando la ruta…');
+    const occ = occurs(e, today, addDays(today, 400)), d = occ ? (occ.ongoing ? today : occ.date) : today;
+    try {
+      const j = await fetch(`https://router.project-osrm.org/route/v1/driving/${pos[1].toFixed(5)},${pos[0].toFixed(5)};${e.lng},${e.lat}?overview=full&geometries=geojson`).then(r => r.json());
+      const rt = j.routes && j.routes[0]; if (!rt) throw new Error('sin ruta');
+      const line = rt.geometry.coordinates.map(c => [c[1], c[0]]);
+      const hits = [];
+      for (const g of GEOCUTS) {
+        if (TRANS.includes(g.c.kind) || !g.segs.length) continue;
+        const r = activeOn(g.c, d); if (!r) continue;
+        const gs = { segs: g.segs, pts: [] };
+        if (line.some(p => cutDistance(p, gs) < 25)) hits.push(`${(g.c.geom.segs[0] || {}).n || g.c.title}${r.start ? ` (${r.start}${r.end ? '–' + r.end : ''})` : ''}`);
+      }
+      const day = +d === +today ? 'hoy' : 'ese día';
+      put(`🚗 En coche: ${fmtDist(rt.distance / 1000)}, unos ${Math.max(1, Math.round(rt.duration / 60))} min. ` +
+        (hits.length ? `<b>${hits.length === 1 ? 'Hay un corte' : 'Hay ' + hits.length + ' cortes'} en la ruta ${day}:</b> ${esc([...new Set(hits)].slice(0, 4).join(' · '))}. Mejor en transporte público o rodeando.` : `Sin cortes anunciados en la ruta ${day}.`) +
+        ` <span class="note">Solo se comprueban los avisos que nombran calles concretas.</span>`);
+    } catch (x) { put('No he podido calcular la ruta ahora. Prueba en un rato.'); }
+  }
+
+  // ---------- quedar: proponer un plan con un enlace y ver quién se apunta
+  let INV = {};  // id de evento → invitaciones que he creado, con respuestas
+  async function loadInvites() {
+    const db = window.limonDB, u = db && db.user(); INV = {};
+    if (!u) return;
+    const { data } = await db.sb.from('plan_invites').select('id,token,event_id,on_date,plan_rsvps(name,status)').eq('owner', u.id).order('created_at');
+    (data || []).forEach(x => { (INV['e' + x.event_id] = INV['e' + x.event_id] || []).push(x); });
+    renderAll();
+  }
+  const ST_RSVP = { voy: 'va', quizas: 'quizá', no: 'no puede' };
+  function crewHtml(e) {
+    const inv = INV[e.id]; if (!inv) return '';
+    const rs = inv.flatMap(x => x.plan_rsvps || []);
+    const yes = rs.filter(r => r.status === 'voy').length;
+    return `<div class="crew">👥 ${rs.length ? (yes ? `Os apuntáis ${yes + 1}: ` : '') + esc(rs.map(r => r.name + ' ' + ST_RSVP[r.status]).join(' · ')) : 'Aún no ha respondido nadie'} · <button data-reshare="${inv[inv.length - 1].token}" data-ev="${e.id}">Compartir otra vez</button></div>`;
+  }
+  const inviteUrl = t => location.origin + location.pathname + '?quedar=' + t;
+  async function shareInvite(e, token, from) {
+    const url = inviteUrl(token), occ = occurs(e, today, addDays(today, 400));
+    const text = `${from ? from + ' te propone' : 'Te propongo'} ir a «${e.titulo}» (${whenText(e, occ)}). ¿Te apuntas?`;
+    if (navigator.share) { try { await navigator.share({ title: e.titulo, text, url }); return; } catch (x) { if (x && x.name === 'AbortError') return; } }
+    try { await navigator.clipboard.writeText(text + ' ' + url); toast('Enlace copiado: pégalo en WhatsApp o donde quieras.'); }
+    catch (x) { prompt('Copia este enlace:', url); }
+  }
+  function inviteForm(e) {
+    return `<form class="form" data-invite-form="${e.id}" style="margin-top:8px">
+      <label>Tu nombre<input class="search" name="from" required maxlength="60" value="${esc(store.get('myname', ''))}"></label>
+      <label>Mensaje (opcional)<input class="search" name="note" maxlength="280" placeholder="¿Vamos juntos?"></label>
+      <div class="seg full"><button class="btn" type="submit">Crear enlace y compartir</button><button class="btn ghost" type="button" data-invite-cancel>Cancelar</button></div>
+      <p class="note full">Quien lo abra podrá decir si se apunta, sin necesidad de cuenta. Verás las respuestas aquí y te avisaremos por correo.</p></form>`;
+  }
+  let QD = null;  // invitación abierta desde un enlace ?quedar=
+  function renderQuedar() {
+    const box = $('quedar');
+    if (!QD) { box.hidden = true; return; }
+    box.hidden = false;
+    const e = BYID['e' + QD.data.event_id];
+    const rs = QD.data.rsvps || [], mineR = store.get('rsvp:' + QD.token, null);
+    if (!e) { box.innerHTML = `<h2 style="margin:0">${esc(QD.data.from_name)} te propuso un plan</h2><p class="note">Ese plan ya ha pasado o ya no está en Limón.</p>`; return; }
+    box.innerHTML = `<h2 style="margin:0">${QD.data.mine ? 'Tu propuesta' : esc(QD.data.from_name) + ' te propone un plan'}</h2>
+      ${QD.data.note ? `<p style="margin:0">«${esc(QD.data.note)}»</p>` : ''}
+      <p class="note" style="margin:0"><b>${esc(e.titulo)}</b> · ${esc(whenText(e, occurs(e, today, addDays(today, 400))))} · ${esc(e.lugar || '')}</p>
+      ${QD.data.mine ? '' : `<form class="seg" id="q-form" style="align-items:flex-end">
+        <label class="note" style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">Tu nombre<input class="search" name="name" required maxlength="60" value="${esc(store.get('myname', ''))}"></label>
+        <button class="btn" name="s" value="voy" aria-pressed="${mineR === 'voy'}">Me apunto</button><button class="btn ghost" name="s" value="quizas" aria-pressed="${mineR === 'quizas'}">Quizá</button><button class="btn ghost" name="s" value="no" aria-pressed="${mineR === 'no'}">No puedo</button></form>`}
+      <p class="note" style="margin:0">${rs.length ? 'Respuestas: ' + esc(rs.map(r => r.name + ' ' + ST_RSVP[r.status]).join(' · ')) : 'Aún no ha respondido nadie.'}</p>
+      ${QD.data.mine ? '' : '<p class="note" style="margin:0">Tu nombre y tu respuesta los verá quien tenga este enlace.</p>'}`;
+  }
+  function deviceKey() {
+    let k = store.get('device', null);
+    if (!k) { k = (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); })); store.set('device', k); }
+    return k;
   }
 
   // ---------- «Ahora cerca de ti»: lo que empieza en las próximas 3 horas cerca, y lo abierto hoy
@@ -932,13 +1086,15 @@ function startApp(DATA, TAX, sync) {
       <div class="seg"><a class="btn" href="${esc(webcal)}" style="display:inline-flex;align-items:center;text-decoration:none">Suscribirme</a>
       <a class="btn ghost" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Google Calendar</a>
       <button class="btn ghost" data-copy="${esc(ics)}">Copiar enlace</button></div>`;
-    const nt = Object.assign({ semanal: false, calle: false, organizador: true, admin: true }, me.notify || {});
+    const nt = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true }, me.notify || {});
     const box = (k, txt) => `<label class="toggle">${txt}<input type="checkbox" data-notify="${k}" ${nt[k] ? 'checked' : ''}></label>`;
     mail.hidden = false;
     mail.innerHTML = `<h2 style="margin:0">Avisos por correo</h2>
       <p class="note">Solo te escribimos si lo activas. Cada correo trae un enlace para darte de baja.</p>
       ${box('semanal', 'Resumen semanal: los planes de la semana elegidos según tus gustos (los jueves)')}
       ${box('calle', 'Cortes de calle: si hoy o mañana hay cortes junto a tus planes guardados o en tus calles (por la mañana)')}
+      ${box('lluvia', 'Lluvia: si va a llover en un plan al aire libre que tienes guardado para hoy o mañana (por la mañana)')}
+      ${box('quedadas', 'Quedadas: cuando alguien responde a un plan que has propuesto')}
       ${me.role === 'editor' || me.role === 'admin' || me.editor_status ? box('organizador', 'Organizador: cuando revisamos tu solicitud o tus eventos') : ''}
       ${me.role === 'admin' ? box('admin', 'Admin: solicitudes y eventos pendientes de revisión') : ''}
       ${nt.semanal ? '<div class="seg"><button class="btn ghost" data-mail-test>Enviarme ahora un resumen de prueba</button></div>' : ''}`;
@@ -973,7 +1129,7 @@ function startApp(DATA, TAX, sync) {
   document.addEventListener('change', async ev => {
     const cb = ev.target.closest('[data-notify]'); if (!cb || !me) return;
     const db = window.limonDB, u = db && db.user(); if (!u) return;
-    me.notify = Object.assign({ semanal: false, calle: false, organizador: true, admin: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
+    me.notify = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
     const { error } = await db.sb.from('profiles').update({ notify: me.notify }).eq('id', u.id);
     toast(error ? 'No se ha podido guardar: ' + error.message
       : cb.dataset.notify === 'calle' && cb.checked && !streets.length && !saved.length ? 'Activado. Guarda planes o añade tus calles en «Calle» para recibir avisos.'
@@ -1002,6 +1158,33 @@ function startApp(DATA, TAX, sync) {
   }
   document.addEventListener('submit', async ev => {
     const db = window.limonDB, u = db && db.user();
+    const inf = ev.target.closest('[data-invite-form]');
+    if (inf) {
+      ev.preventDefault(); if (!u) return;
+      const e = BYID[inf.dataset.inviteForm], f = new FormData(inf), from = String(f.get('from') || '').trim(), note = String(f.get('note') || '').trim();
+      store.set('myname', from);
+      const occ = occurs(e, today, addDays(today, 400));
+      const { data, error } = await db.sb.from('plan_invites').insert({ owner: u.id, event_id: +e.id.slice(1), on_date: occ && !occ.ongoing ? ymd(occ.date) : null, from_name: from, note: note || null }).select('token').single();
+      if (error) { toast('No se ha podido crear: ' + error.message); return; }
+      if (!saved.includes(e.id)) { saved = saved.concat(e.id); store.set('saved', saved); learn(e, 'save'); }
+      state.inviting = null; await loadInvites();
+      shareInvite(e, data.token, from);
+      return;
+    }
+    if (ev.target.id === 'q-form') {
+      ev.preventDefault();
+      const f = new FormData(ev.target), name = String(f.get('name') || '').trim(), st = ev.submitter && ev.submitter.value;
+      if (!name || !st) return;
+      store.set('myname', name);
+      const { data, error } = await db.sb.rpc('invite_reply', { p_token: QD.token, p_device: deviceKey(), p_name: name, p_status: st });
+      if (error) { toast(error.message); return; }
+      QD.data = data; store.set('rsvp:' + QD.token, st);
+      const e = BYID['e' + data.event_id];
+      if (st === 'voy' && e && !saved.includes(e.id)) { saved = saved.concat(e.id); store.set('saved', saved); learn(e, 'save'); }
+      toast(st === 'voy' ? '¡Apuntado! Lo tienes en tu agenda.' : st === 'quizas' ? 'Anotado como «quizá».' : 'Anotado: no puedes ir.');
+      renderQuedar(); renderAll();
+      return;
+    }
     if (ev.target.id === 'ed-form') {
       ev.preventDefault(); const f = new FormData(ev.target);
       const { error } = await db.sb.from('profiles').update({ organizer: { nombre: f.get('nombre'), web: f.get('web'), que: f.get('que') }, editor_status: 'solicitado' }).eq('id', u.id);
@@ -1307,6 +1490,18 @@ function startApp(DATA, TAX, sync) {
       if (on) toast('Anotado. Te recomendaremos más planes así.');
       renderAll(); return;
     }
+    const gv = ev.target.closest('[data-goev]');
+    if (gv && BYID[gv.dataset.goev]) { const x = BYID[gv.dataset.goev]; state.filter = { kind: 'id', value: x.id, label: x.titulo }; state.open[x.id] = true; $('ex-when').value = 'todo'; go('explorar'); return; }
+    const rb = ev.target.closest('[data-route]');
+    if (rb && BYID[rb.dataset.route]) { checkRoute(BYID[rb.dataset.route]); return; }
+    const ib = ev.target.closest('[data-invite]');
+    if (ib) {
+      if (!logged) { toast('Entra con tu cuenta (en Perfil) para proponer planes y ver quién se apunta.'); return; }
+      state.inviting = state.inviting === ib.dataset.invite ? null : ib.dataset.invite; renderAll(); return;
+    }
+    if (ev.target.closest('[data-invite-cancel]')) { state.inviting = null; renderAll(); return; }
+    const rs = ev.target.closest('[data-reshare]');
+    if (rs) { shareInvite(BYID[rs.dataset.ev], rs.dataset.reshare, store.get('myname', '')); return; }
     let o = ev.target.closest('[data-open]');
     if (!o) {
       const c = ev.target.closest('.card');
@@ -1327,14 +1522,24 @@ function startApp(DATA, TAX, sync) {
   renderAccountExtras();
   if (QS.get('baja') && window.limonDB) {
     window.limonDB.sb.functions.invoke('limon-mail', { body: { action: 'unsub', t: QS.get('baja'), k: QS.get('k') } }).then(({ data }) => {
-      toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
+      toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', lluvia: 'Ya no recibirás avisos de lluvia.', quedadas: 'Ya no recibirás avisos de quedadas.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
       if (data && data.ok && me && me.notify) { me.notify[data.k] = false; renderAccountExtras(); }
     });
   }
-  if (QS.has('ev') || QS.has('baja') || QS.has('tab')) history.replaceState(null, '', location.pathname);
+  if (QS.get('quedar') && /^[0-9a-f-]{36}$/i.test(QS.get('quedar')) && window.limonDB) {
+    const tk = QS.get('quedar');
+    window.limonDB.sb.rpc('invite_get', { p_token: tk }).then(({ data }) => {
+      if (!data) { toast('Esa invitación no existe o se ha borrado.'); return; }
+      QD = { token: tk, data };
+      const e = BYID['e' + data.event_id];
+      if (e) { state.filter = { kind: 'id', value: e.id, label: e.titulo }; state.open[e.id] = true; $('ex-when').value = 'todo'; }
+      go('explorar'); renderQuedar();
+    });
+  }
+  if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar')) history.replaceState(null, '', location.pathname);
   return {
     get: () => ({ prefs, opts, saved, streets, dismissed, went, learned, taste }),
-    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); },
+    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); },
     set(p) {
       if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
       if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.learned) learned = p.learned;

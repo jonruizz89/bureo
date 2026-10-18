@@ -170,9 +170,10 @@
     $('acc-export').addEventListener('click', async () => {
       if (!user) return;
       const uid = user.id, q = (t, col) => sb.from(t).select('*').eq(col || 'user_id', uid);
-      const [p, i, sv, at, di, se] = await Promise.all([q('profiles', 'id'), q('user_interests'), q('saved_events'), q('attendance'), q('dismissed_events'), q('submitted_events', 'owner')]);
+      const [p, i, sv, at, di, se, inv, rs] = await Promise.all([q('profiles', 'id'), q('user_interests'), q('saved_events'), q('attendance'), q('dismissed_events'), q('submitted_events', 'owner'),
+        sb.from('plan_invites').select('*, plan_rsvps(name,status,created_at)').eq('owner', uid), q('plan_rsvps')]);
       const out = { exportado: new Date().toISOString(), email: user.email, perfil: p.data, intereses: i.data, guardados: sv.data,
-        asistencias: at.data, descartados: di.data, eventos_publicados: se.data };
+        asistencias: at.data, descartados: di.data, eventos_publicados: se.data, planes_propuestos: inv.data, mis_respuestas_a_planes: rs.data };
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
       a.download = 'limon-mis-datos.json'; document.body.appendChild(a); a.click(); a.remove();

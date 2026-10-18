@@ -1,7 +1,8 @@
 // Limón · correos.
-//  - flush:  envía lo que hay en la cola (decisiones sobre organizadores y avisos para admins). Lo puede pedir cualquiera:
+//  - flush:  envía lo que hay en la cola (decisiones sobre organizadores, quedadas y avisos para admins). Lo puede pedir cualquiera:
 //            solo envía lo que ya está en cola.
-//  - daily:  cortes de calle de hoy y mañana que afectan a tus planes guardados o a tus calles (requiere la clave secreta).
+//  - daily:  cortes de calle de hoy y mañana junto a tus planes guardados o en tus calles, y lluvia en tus planes al aire libre
+//            (requiere la clave secreta).
 //  - weekly: resumen de la semana según tus gustos (requiere la clave secreta).
 //  - unsub:  darse de baja de un tipo de aviso con el enlace del correo (también One-Click, RFC 8058).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -24,7 +25,7 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const fold = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const KINDS = ['semanal', 'calle', 'organizador', 'admin'];
+const KINDS = ['semanal', 'calle', 'lluvia', 'organizador', 'admin', 'quedadas'];
 
 // ---------- fechas en Madrid
 function madridToday() {
@@ -85,16 +86,17 @@ async function send(p: Prof, subject: string, html: string, k: string) {
   await sleep(550);  // Resend: 2 envíos por segundo
   if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
-// resumen y cortes solo si se activan; organizador y admin salvo que se desactiven
-const wants = (p: Prof, k: string) => !!p.email && (k === 'semanal' || k === 'calle' ? (p.notify || {})[k] === true : (p.notify || {})[k] !== false);
+// resumen, cortes y lluvia solo si se activan; organizador, admin y quedadas salvo que se desactiven
+const OPT_IN = ['semanal', 'calle', 'lluvia'];
+const wants = (p: Prof, k: string) => !!p.email && (OPT_IN.includes(k) ? (p.notify || {})[k] === true : (p.notify || {})[k] !== false);
 
-// ---------- cola: organizadores y admins
+// ---------- cola: organizadores, quedadas y admins
 async function flush() {
   const { data: rows } = await admin.from('mail_outbox').select('*').is('sent_at', null).is('error', null).order('created_at').limit(50);
   let sent = 0, skipped = 0;
   for (const m of rows || []) {
     const { data: p } = await admin.from('profiles').select('id,email,notify,mail_token,role').eq('id', m.user_id).maybeSingle();
-    const k = m.kind.startsWith('admin') ? 'admin' : 'organizador';
+    const k = m.kind.startsWith('admin') ? 'admin' : m.kind === 'rsvp' ? 'quedadas' : 'organizador';
     let mail: { subject: string; html: string } | null = null;
     const pl = m.payload || {};
     if (p && wants(p, k)) {
@@ -110,6 +112,14 @@ async function flush() {
           html: layout({ title: ok ? 'Tu evento ya está en Limón' : 'Tu evento no se ha publicado',
             intro: ok ? `<b>${esc(pl.title)}</b> ya aparece en Limón para quien busque planes así.` : `Hemos revisado <b>${esc(pl.title)}</b> y no lo hemos publicado.${pl.nota ? ' ' + esc(pl.nota) : ' Puedes editarlo desde tu perfil y volver a enviarlo.'}`,
             cta: { label: ok ? 'Verlo en Limón' : 'Ir a mis eventos', url: ok ? link : APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por un evento que publicaste.') }) };
+      } else if (m.kind === 'rsvp') {
+        const { data: ev } = await admin.from('events').select('id,title').eq('id', pl.event_id).maybeSingle();
+        const { data: all } = await admin.from('plan_rsvps').select('name,status').eq('invite_id', pl.invite);
+        const VERB: Record<string, string> = { voy: 'se apunta', quizas: 'quizá se apunta', no: 'no puede ir' };
+        const list = (all || []).map((r) => `${r.name}: ${({ voy: 'va', quizas: 'quizá', no: 'no puede' } as Record<string, string>)[r.status]}`).join(' · ');
+        if (ev) mail = { subject: `${pl.name} ${VERB[pl.status] || 'ha respondido'} a «${ev.title}»`,
+          html: layout({ title: `${pl.name} ${VERB[pl.status] || 'ha respondido'}`, intro: `A tu propuesta de ir a <b>${esc(ev.title)}</b>.${list ? '<br><br>Respuestas: ' + esc(list) : ''}`,
+            cta: { label: 'Ver el plan', url: evUrl(ev.id) }, footer: footer(p, k, 'Te escribimos porque propusiste este plan en Limón.') }) };
       } else if (m.kind === 'admin_editor') {
         mail = { subject: `Solicitud de organizador: ${pl.nombre || 'sin nombre'}`, html: layout({ title: 'Nueva solicitud de organizador', intro: `<b>${esc(pl.nombre)}</b>${pl.web ? ' · ' + esc(pl.web) : ''}<br>${esc(pl.que || '')}`, cta: { label: 'Revisar', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_event') {
@@ -162,24 +172,55 @@ const TRANS = ['metro', 'cercanias', 'metro_ligero'];
 const hours = (r: Range) => r.start ? `de ${r.start}${r.end ? ' a ' + r.end : ''}` : 'todo el día';
 const streetKey = (s: string) => fold(s).replace(/^(calle|avenida|paseo|plaza|glorieta|ronda|camino|carretera|travesia|costanilla|cuesta|puerta|pasaje|via) (de la |de los |de las |del |de )?/, '');
 
+// ---------- lluvia (Open-Meteo, previsión para el centro de Madrid)
+const OUTDOOR = new Set(['aire_libre', 'mercadillos', 'fiestas', 'desfiles', 'religiosas', 'calle', 'rutas', 'carreras', 'maratones', 'trail', 'bici', 'triatlon',
+  'natacion', 'tematicas', 'solidarias', 'foodtrucks', 'carreras_perro', 'quedadas_perro', 'aves', 'excursiones', 'huertos', 'itinerarios', 'jardines', 'senderismo', 'g:naturaleza', 'beneficos']);
+const isOutdoor = (cats: string[], text: string) => cats.some((c) => OUTDOOR.has(c)) || /al aire libre/i.test(text || '');
+type Rain = { daily: Record<string, number>; hourly: Record<string, number[]> };
+async function rainForecast(): Promise<Rain | null> {
+  try {
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=40.4168&longitude=-3.7038&hourly=precipitation_probability&daily=precipitation_probability_max&timezone=Europe%2FMadrid&forecast_days=8');
+    if (!r.ok) return null;
+    const j = await r.json(), out: Rain = { daily: {}, hourly: {} };
+    (j.daily.time as string[]).forEach((d, i) => { out.daily[d] = j.daily.precipitation_probability_max[i] ?? 0; });
+    (j.hourly.time as string[]).forEach((t, i) => { const d = t.slice(0, 10); (out.hourly[d] ||= [])[+t.slice(11, 13)] = j.hourly.precipitation_probability[i] ?? 0; });
+    return out;
+  } catch { return null; }
+}
+function rainAt(r: Rain, d: string, time: string | null) {
+  const m = String(time || '').match(/(\d{1,2})[:.h](\d{2})/);
+  if (m && r.hourly[d]) { const h = +m[1]; return Math.max(...r.hourly[d].slice(h, h + 3).map((x) => x || 0)); }
+  return r.daily[d] ?? 0;
+}
+
 async function daily() {
   const today = madridToday(), days = [today, addDays(today, 1)];
   // el registro de envíos se guarda 12 meses como mucho (política de privacidad)
   await admin.from('mail_outbox').delete().lt('created_at', new Date(Date.now() - 365 * 864e5).toISOString());
-  const { data: profs } = await admin.from('profiles').select('id,email,notify,mail_token,my_streets').eq('notify->>calle', 'true');
+  const { data: profs } = await admin.from('profiles').select('id,email,notify,mail_token,my_streets').or('notify->>calle.eq.true,notify->>lluvia.eq.true');
   if (!profs || !profs.length) return { users: 0, sent: 0 };
+  const rain = await rainForecast();
   const { data: cl } = await admin.from('closures').select('id,title,kind,streets,ranges,geom');
   const closures = (cl || []) as Closure[];
   let sent = 0;
   for (const p of profs as (Prof & { my_streets: string[] | null })[]) {
     if (!p.email) continue;
     const sections: { h: string; items: Item[] }[] = [];
+    const wantCalle = (p.notify || {}).calle === true, wantRain = (p.notify || {}).lluvia === true;
     // tus planes guardados con sesión hoy o mañana
-    const { data: sv } = await admin.from('saved_events').select('event_id, events(id,title,lat,lng,time_text,venues(name), event_sessions(on_date))').eq('user_id', p.id);
-    const planItems: Item[] = [];
+    const { data: sv } = await admin.from('saved_events').select('event_id, events(id,title,description,lat,lng,time_text,venues(name), event_sessions(on_date), event_categories(category_id))').eq('user_id', p.id);
+    const planItems: Item[] = [], rainItems: Item[] = [];
     for (const row of sv || []) {
-      const e = row.events as unknown as { id: number; title: string; lat: number; lng: number; time_text: string; venues: { name: string } | null; event_sessions: { on_date: string }[] } | null;
-      if (!e || !e.lat) continue;
+      const e = row.events as unknown as { id: number; title: string; description: string | null; lat: number; lng: number; time_text: string; venues: { name: string } | null; event_sessions: { on_date: string }[]; event_categories: { category_id: string }[] } | null;
+      if (!e) continue;
+      if (wantRain && rain && isOutdoor((e.event_categories || []).map((c) => c.category_id), e.title + ' ' + (e.description || ''))) {
+        for (const d of days) {
+          if (!(e.event_sessions || []).some((s) => s.on_date === ymd(d))) continue;
+          const pr = rainAt(rain, ymd(d), e.time_text);
+          if (pr >= 60) rainItems.push({ title: e.title, meta: `${d === today ? 'Hoy' : 'Mañana'}${e.time_text ? ' · ' + e.time_text : ''}${e.venues?.name ? ' · ' + e.venues.name : ''}`, url: evUrl(e.id), note: `☔ ${pr} % de probabilidad de lluvia${/\d/.test(e.time_text || '') ? ' a esa hora' : ' ese día'}` });
+        }
+      }
+      if (!wantCalle || !e.lat) continue;
       for (const d of days) {
         if (!(e.event_sessions || []).some((s) => s.on_date === ymd(d))) continue;
         const near: { m: number; t: string }[] = [];
@@ -198,9 +239,10 @@ async function daily() {
         planItems.push({ title: e.title, meta: `${d === today ? 'Hoy' : 'Mañana'}${e.time_text ? ' · ' + e.time_text : ''}${e.venues?.name ? ' · ' + e.venues.name : ''}`, url: evUrl(e.id), note: '⚠ ' + uniq.slice(0, 2).map((x) => x.t).join(' · ') });
       }
     }
-    if (planItems.length) sections.push({ h: 'Tus planes', items: planItems });
+    if (planItems.length) sections.push({ h: 'Cortes junto a tus planes', items: planItems });
+    if (rainItems.length) sections.push({ h: 'Puede llover en tus planes al aire libre', items: rainItems });
     // tus calles
-    const mine = new Set((p.my_streets || []).map(streetKey).filter(Boolean));
+    const mine = new Set((wantCalle ? p.my_streets || [] : []).map(streetKey).filter(Boolean));
     if (mine.size) {
       const streetItems: Item[] = [];
       for (const c of closures) {
@@ -213,8 +255,11 @@ async function daily() {
     if (!sections.length) continue;
     const { data: ins } = await admin.from('mail_outbox').insert({ user_id: p.id, kind: 'calle', ref: ymd(today), payload: { n: sections.reduce((a, s) => a + s.items.length, 0) } }).select('id');
     if (!ins || !ins.length) continue;  // ya se envió hoy
-    const html = layout({ title: 'Cortes que te afectan hoy y mañana', intro: `Lo que hemos visto en el calendario municipal para el ${human(ymd(today))} y el día siguiente.`, sections, cta: { label: 'Ver el mapa de cortes', url: APP + '?tab=calle' }, footer: footer(p, 'calle', 'Recibes este aviso porque activaste los cortes de calle en Limón.') });
-    try { await send(p, planItems.length ? `Cortes cerca de tus planes: ${planItems[0].title}` : 'Cortes en tus calles hoy y mañana', html, 'calle'); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', ins[0].id); sent++; }
+    const onlyRain = !planItems.length && sections.length === 1 && rainItems.length > 0, kk = onlyRain ? 'lluvia' : 'calle';
+    const html = layout({ title: onlyRain ? 'Puede llover en tus planes' : 'Avisos para hoy y mañana', intro: onlyRain ? `Según la previsión de Open-Meteo para Madrid, ${human(ymd(today))} y el día siguiente.` : `Lo que hemos visto en los avisos municipales y en la previsión del tiempo para el ${human(ymd(today))} y el día siguiente.`, sections,
+      cta: onlyRain ? { label: 'Ver mis planes', url: APP + '?tab=agenda' } : { label: 'Ver el mapa de cortes', url: APP + '?tab=calle' },
+      footer: footer(p, kk, `Recibes este aviso porque activaste los avisos de ${onlyRain ? 'lluvia' : 'cortes de calle'} en Limón. Puedes cambiar qué avisos recibes en tu perfil.`) });
+    try { await send(p, planItems.length ? `Cortes cerca de tus planes: ${planItems[0].title}` : rainItems.length ? `Puede llover: ${rainItems[0].title}` : 'Cortes en tus calles hoy y mañana', html, kk); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', ins[0].id); sent++; }
     catch (e) { await admin.from('mail_outbox').update({ error: String(e).slice(0, 300) }).eq('id', ins[0].id); }
   }
   return { users: profs.length, sent };
