@@ -378,6 +378,7 @@ table.cov td.n, table.cov th.n { text-align: right }
       <div class="legend"><span>■ Me interesa</span><span style="color:var(--accent-text)">▢ No me muestres</span><span>Sin marcar</span></div>
       <input class="search" id="in-q" type="search" placeholder="Buscar categoría" aria-label="Buscar categoría">
       <div id="in-groups"></div>
+      <div class="seg"><button class="btn ghost" id="in-reset">Probar con un perfil de ejemplo</button><button class="btn ghost" id="in-clear">Empezar de cero</button></div>
     </div>
     <div class="panel" id="opts-panel">
       <h2 style="margin:0">Con quién y cómo</h2>
@@ -420,7 +421,6 @@ table.cov td.n, table.cov th.n { text-align: right }
           <p class="note" id="acc-del-msg" role="status"></p></details>
       </div>
     </div>
-    <div class="seg"><button class="btn ghost" id="in-reset">Probar con un perfil de ejemplo</button><button class="btn ghost" id="in-clear">Empezar de cero</button></div>
       <button class="btn ghost" data-goto="fuentes" style="align-self:flex-start">Fuentes y cobertura ›</button>
       <p class="note"><a href="?ideas">Ideas y sugerencias</a> · <a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones de uso</a> · <a href="mailto:hola@limonplanes.com">hola@limonplanes.com</a></p>
   </section>
@@ -1981,7 +1981,7 @@ function startApp(DATA, TAX, sync) {
         } catch (x) { if (x && x.name !== 'AbortError') toast('No he podido abrir tus contactos.'); }
       })(); return;
     }
-    if (ev.target.closest('[data-year]')) { state.year = state.year ? '' : buildYear(); renderYear(); return; }
+    if (ev.target.closest('[data-year]')) { state.year = state.year ? '' : buildYear(); renderYear(); if (state.year) openFold('year', true); return; }
     if (ev.target.closest('[data-year-share]')) { shareLink(ORIGIN, 'Mi año en planes', 'Mi año en planes con Limón: ' + (SOC.yearText || '')); return; }
     const lp = ev.target.closest('[data-list-pub]');
     if (lp) { const l = MYLISTS.find(x => x.id === +lp.dataset.listPub); sbx().from('user_lists').update({ is_public: !l.is_public, updated_at: new Date().toISOString() }).eq('id', l.id).then(() => loadSocial()); return; }
