@@ -4,7 +4,7 @@
 <title>Limón · Madrid</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Limón: los planes de Madrid que van contigo, y las calles y líneas cortadas antes de salir.">
+<meta name="description" content="Limón: los planes de tu ciudad que van contigo, y en Madrid también las calles y líneas cortadas antes de salir.">
 <link rel="icon" href="limon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="limon-180.png">
 <meta name="theme-color" content="#FFD43B" media="(prefers-color-scheme: light)">
@@ -124,6 +124,10 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .stars { color: #E0A800; letter-spacing: 1px }
 .star { background: none; border: 0; font-size: 24px; line-height: 1; color: #E0A800; cursor: pointer; padding: 2px }
 .diary { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft) }
+.citybtn { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; font-weight: 600; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px }
+.citylist { display: flex; flex-direction: column; gap: 8px }
+.citylist button { text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer }
+.citylist button[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft) }
 .pwdlg::backdrop { background: rgba(20, 18, 8, .55) }
 .pwdlg form { display: flex; flex-direction: column; gap: 12px; padding: 24px 22px }
 .pwdlg h2 { margin: 0; font-size: 20px }
@@ -262,7 +266,7 @@ table.cov td.n, table.cov th.n { text-align: right }
   <section class="view" id="v-parati">
     <div class="segtabs" role="tablist" aria-label="Recomendaciones">
       <button role="tab" data-goto="parati" aria-selected="true">Para ti</button>
-      <button role="tab" data-goto="unicos" aria-selected="false">Únicos en Madrid<span class="n n-unicos"></span></button>
+      <button role="tab" data-goto="unicos" aria-selected="false">Únicos en <span class="cityname">Madrid</span><span class="n n-unicos"></span></button>
     </div>
     <h1 id="pt-h"></h1>
     <p class="lead" id="pt-lead"></p>
@@ -316,9 +320,9 @@ table.cov td.n, table.cov th.n { text-align: right }
   <section class="view" id="v-unicos" hidden>
     <div class="segtabs" role="tablist" aria-label="Recomendaciones">
       <button role="tab" data-goto="parati" aria-selected="false">Para ti</button>
-      <button role="tab" data-goto="unicos" aria-selected="true">Únicos en Madrid<span class="n n-unicos"></span></button>
+      <button role="tab" data-goto="unicos" aria-selected="true">Únicos en <span class="cityname">Madrid</span><span class="n n-unicos"></span></button>
     </div>
-    <h1>Únicos en Madrid</h1>
+    <h1>Únicos en <span class="cityname">Madrid</span></h1>
     <p class="lead">Citas de ciudad que pasan una vez al año. Salen aunque no encajen con tus intereses.</p>
     <div id="un-list" class="view"></div>
   </section>
@@ -477,6 +481,10 @@ function startApp(DATA, TAX, sync) {
   let logged = false;
   const aiReco = {};   // por rango de fechas: { loading, planes, error }
   const CLOSURES = DATA.closures || [];
+  // ciudad elegida: centro, distritos, estadios y secciones disponibles vienen de la tabla de ciudades
+  const CITY = DATA.city || { id: 'madrid', name: 'Madrid', lat: 40.4168, lng: -3.7038, districts: [], stadiums: [], features: { calle: true } };
+  const CENTER = [CITY.lat, CITY.lng];
+  const HAS_CALLE = !!(CITY.features && CITY.features.calle);
   let state = { caKind: 'todo', caDay: null, filter: null, tab: 'parati', when: 'semana', free: false, ptShown: 12, exShown: 20, open: {}, groupsOpen: { arte: true } };
 
   // ---------- fechas
@@ -542,7 +550,7 @@ function startApp(DATA, TAX, sync) {
     if (opts.dist) askPos(true);
     else if (navigator.permissions) navigator.permissions.query({ name: 'geolocation' }).then(r => { if (r.state === 'granted') askPos(true); }).catch(() => { });
   } catch (e) { }
-  const DISTRITOS = ['Arganzuela', 'Barajas', 'Carabanchel', 'Centro', 'Chamartín', 'Chamberí', 'Ciudad Lineal', 'Fuencarral-El Pardo', 'Hortaleza', 'Latina', 'Moncloa-Aravaca', 'Moratalaz', 'Puente de Vallecas', 'Retiro', 'Salamanca', 'San Blas-Canillejas', 'Tetuán', 'Usera', 'Vicálvaro', 'Villa de Vallecas', 'Villaverde'];
+  const DISTRITOS = (CITY.districts || []).slice().sort((a, b) => a.localeCompare(b, 'es'));
   const nf = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const startHour = e => { const m = String(e.hora || '').match(/(\d{1,2})[:.h](\d{2})/); return m ? +m[1] + m[2] / 60 : null; };
   const minPrice = e => { if (e.gratis) return 0; const m = String(e.precio || '').replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(?:€|euros?)/i) || String(e.precio || '').match(/^\D{0,12}(\d+(?:[.,]\d+)?)/); return m ? parseFloat(m[1]) : null; };
@@ -809,7 +817,7 @@ function startApp(DATA, TAX, sync) {
     $('ca-mapnote').textContent = withGeo < list.length ? `${list.length - withGeo} de ${list.length} avisos no se pueden situar en el mapa porque no nombran calles ni estaciones concretas.` : '';
     loadLeaflet().then(() => {
       if (!MAP) {
-        MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5 }).setView([40.4168, -3.7038], 12);
+        MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5 }).setView(CENTER, 12);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(MAP);
@@ -840,8 +848,7 @@ function startApp(DATA, TAX, sync) {
         all.push(...pts);
       });
       const mineB = list.map((x, i) => x.mine ? SHAPES[i] || [] : []).flat();
-      const SOL = [40.4169, -3.7035];
-      const centro = all.filter(p => Math.abs(p[0] - SOL[0]) < 0.065 && Math.abs(p[1] - SOL[1]) < 0.085);  // ~7 km alrededor de Sol
+      const centro = all.filter(p => Math.abs(p[0] - CENTER[0]) < 0.065 && Math.abs(p[1] - CENTER[1]) < 0.085);  // ~7 km alrededor del centro
       const b = mineB.length ? mineB : centro.length ? centro : all;
       if (b.length) MAP.fitBounds(b, { padding: [24, 24], maxZoom: 15 });
     }).catch(() => { $('ca-mapwrap').hidden = true; });
@@ -917,10 +924,7 @@ function startApp(DATA, TAX, sync) {
   }
 
   // ---------- estadios: unir cortes con el partido o concierto de ese día
-  const STADIUMS = [
-    { re: /bernab[eé]u/i, name: 'Bernabéu', ll: [40.45306, -3.68835], big: true },
-    { re: /metropolitano/i, name: 'Metropolitano', ll: [40.43619, -3.59978], big: true },
-    { re: /movistar arena|wizink/i, name: 'Movistar Arena', ll: [40.42392, -3.67202] }];
+  const STADIUMS = (CITY.stadiums || []).map(x => ({ re: new RegExp(x.re, 'i'), name: x.name, ll: x.ll, big: !!x.big }));
   const stadiumOf = t => STADIUMS.find(st => st.re.test(t || ''));
   function bigEventsOn(d, st) {
     const k = ymd(d), seen = new Set();
@@ -932,12 +936,12 @@ function startApp(DATA, TAX, sync) {
     });
   }
 
-  // ---------- lluvia: previsión de Open-Meteo (centro de Madrid) para planes al aire libre, próximos 7 días
+  // ---------- lluvia: previsión de Open-Meteo (centro de la ciudad) para planes al aire libre, próximos 7 días
   const OUTDOOR = new Set(['aire_libre', 'mercadillos', 'fiestas', 'desfiles', 'religiosas', 'calle', 'rutas', 'carreras', 'maratones', 'trail', 'bici', 'triatlon',
     'natacion', 'tematicas', 'solidarias', 'foodtrucks', 'carreras_perro', 'quedadas_perro', 'aves', 'excursiones', 'huertos', 'itinerarios', 'jardines', 'senderismo', 'g:naturaleza', 'beneficos']);
   const isOutdoor = e => e.cats.some(c => OUTDOOR.has(c)) || /al aire libre/i.test(e.descripcion || '');
   let RAIN = null;
-  fetch('https://api.open-meteo.com/v1/forecast?latitude=40.4168&longitude=-3.7038&hourly=precipitation_probability&daily=precipitation_probability_max&timezone=Europe%2FMadrid&forecast_days=8')
+  fetch(`https://api.open-meteo.com/v1/forecast?latitude=${CENTER[0]}&longitude=${CENTER[1]}&hourly=precipitation_probability&daily=precipitation_probability_max&timezone=Europe%2FMadrid&forecast_days=8`)
     .then(r => r.ok ? r.json() : null).then(j => {
       if (!j || !j.daily) return;
       const R = { daily: {}, hourly: {} };
@@ -966,7 +970,7 @@ function startApp(DATA, TAX, sync) {
       try { pos = await new Promise((ok, ko) => navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), ko, { timeout: 10000, maximumAge: 300000 })); userPos = pos; }
       catch (x) { put('Sin permiso de ubicación no puedo calcular la ruta.'); return; }
     }
-    if (km(pos, [40.4168, -3.7038]) > 35) { put('Estás lejos de Madrid: no puedo comprobar la ruta desde ahí.'); return; }
+    if (km(pos, CENTER) > 35) { put(`Estás lejos de ${CITY.name}: no puedo comprobar la ruta desde ahí.`); return; }
     put('Calculando la ruta…');
     const occ = occurs(e, today, addDays(today, 400)), d = occ ? (occ.ongoing ? today : occ.date) : today;
     try {
@@ -1200,7 +1204,7 @@ function startApp(DATA, TAX, sync) {
   }
   function renderLists() {
     const box = $('ag-lists'); if (!box) return;
-    if (!logged) { box.innerHTML = '<h2 style="margin:0">Mis listas</h2><p class="note">Entra con tu cuenta para hacer listas de planes («Madrid con niños», «Jazz en salas pequeñas»…) y compartirlas.</p>'; return; }
+    if (!logged) { box.innerHTML = '<h2 style="margin:0">Mis listas</h2><p class="note">Entra con tu cuenta para hacer listas de planes («${esc(CITY.name)} con niños», «Jazz en salas pequeñas»…) y compartirlas.</p>'; return; }
     box.innerHTML = `<h2 style="margin:0">Mis listas</h2>
       <p class="note" style="margin:0">Desde cualquier plan, «Añadir a lista». Las públicas las puede ver y seguir cualquiera con el enlace.</p>
       ${MYLISTS.map(l => `<div class="row-item"><div style="min-width:0;flex:1"><button class="btnlink" data-list="${l.id}"><b>${esc(l.title)}</b></button><div class="note">${l.items.length} planes · ${l.is_public ? 'pública' : 'privada'}</div></div>
@@ -1666,7 +1670,7 @@ function startApp(DATA, TAX, sync) {
       if (row.ends_on < row.starts_on) { $('org-msg').textContent = 'La fecha de fin es anterior a la de inicio.'; return; }
       $('org-msg').textContent = 'Guardando…';
       const r = id ? await db.sb.from('submitted_events').update(row).eq('id', +id).select('id').single()
-        : await db.sb.from('submitted_events').insert(Object.assign({ owner: u.id }, row)).select('id').single();
+        : await db.sb.from('submitted_events').insert(Object.assign({ owner: u.id, city_id: CITY.id }, row)).select('id').single();
       if (r.error) { $('org-msg').textContent = 'No se ha podido guardar: ' + r.error.message; return; }
       $('org-msg').textContent = 'Revisando…';
       const res = await db.fn('limon-org', { id: r.data.id });
@@ -1815,7 +1819,7 @@ function startApp(DATA, TAX, sync) {
     $('fu-notes').innerHTML = `<h2 style="margin:0">Cómo se ha montado</h2>
       <p class="note">Las sesiones de un mismo evento se agrupan en una sola tarjeta. Si el mismo evento aparece en varias fuentes se une en uno y se conservan todos los enlaces: ahora hay ${m.multifuente} eventos con más de una fuente.</p>
       <p class="note">Las categorías, temas y ciclos los asigna la IA a partir del título y la descripción. ${m.sin_categoria} eventos (${Math.round(100 * m.sin_categoria / Math.max(1, m.eventos))} %) se quedan sin categoría.</p>
-      <p class="note">Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, licencia CC BY 4.0), de esMadrid.com, de la Agenda Cultural del Ministerio de Cultura y de las webs de cada recinto. Cada tarjeta enlaza a su fuente original.</p>`;
+      <p class="note">${CITY.id === 'madrid' ? 'Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, licencia CC BY 4.0), de esMadrid.com, de la Agenda Cultural del Ministerio de Cultura y de las webs de cada recinto.' : 'Contiene información de las fuentes de la tabla, encontradas y leídas automáticamente.'} Cada tarjeta enlaza a su fuente original.</p>`;
     const au = DATA.audit;
     if (au && au.runs.length) {
       const when = new Date(au.runs[0].run_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
@@ -1830,7 +1834,7 @@ function startApp(DATA, TAX, sync) {
     }
   }
   function renderAll() {
-    $('stamp').textContent = 'Madrid · ' + META.eventos.toLocaleString('es-ES') + ' eventos';
+    $('stamp').innerHTML = `<button class="citybtn" id="city-btn" aria-haspopup="dialog" aria-label="Cambiar de ciudad (ahora ${esc(CITY.name)})">${esc(CITY.name)} <span aria-hidden="true">▾</span></button> · ${META.eventos.toLocaleString('es-ES')} eventos`;
     document.querySelectorAll('.n-unicos').forEach(n => { n.textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || ''; });
     $('n-unicos').textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || '';
     renderFilters();
@@ -1842,7 +1846,11 @@ function startApp(DATA, TAX, sync) {
   }
 
   // ---------- eventos de interfaz
-  const tabs = ['parati', 'calle', 'unicos', 'explorar', 'agenda', 'intereses', 'fuentes'];
+  const tabs = ['parati', 'calle', 'unicos', 'explorar', 'agenda', 'intereses', 'fuentes'].filter(t => t !== 'calle' || HAS_CALLE);
+  // nombre de la ciudad en textos fijos; sin datos de cortes, la pestaña Calle no aparece
+  document.querySelectorAll('.cityname').forEach(x => { x.textContent = CITY.name; });
+  document.title = 'Limón · ' + CITY.name;
+  if (!HAS_CALLE) { ['t-calle'].forEach(id => { const el = $(id); if (el) el.hidden = true; }); document.querySelectorAll('[data-bnav="calle"]').forEach(b => { b.hidden = true; b.style.display = 'none'; }); }
   function go(t) {
     state.tab = t;
     tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === t); });
@@ -1896,7 +1904,7 @@ function startApp(DATA, TAX, sync) {
     navigator.geolocation.getCurrentPosition(p => {
       nearPos = [p.coords.latitude, p.coords.longitude]; userPos = nearPos;
       $('near-go').disabled = false; $('near-go').textContent = '📍 Ahora cerca de ti';
-      if (km(nearPos, [40.4168, -3.7038]) > 25) toast('Pareces estar fuera de Madrid: te enseño lo que hay cerca del centro.'), nearPos = [40.4168, -3.7038];
+      if (km(nearPos, CENTER) > 25) toast(`Pareces estar fuera de ${CITY.name}: te enseño lo que hay cerca del centro.`), nearPos = CENTER;
       $('near').hidden = false; $('near-go').hidden = true; renderNear(); $('near').scrollIntoView({ behavior: 'smooth' });
     }, () => { $('near-go').disabled = false; $('near-go').textContent = '📍 Ahora cerca de ti'; toast('Sin permiso de ubicación no puedo saber qué tienes cerca.'); }, { timeout: 12000, maximumAge: 120000 });
   });
@@ -1960,6 +1968,14 @@ function startApp(DATA, TAX, sync) {
       renderAll(); return;
     }
     if (ev.target.closest('[data-sheet-close]')) { closeSheets(); return; }
+    if (ev.target.closest('#city-btn')) {
+      const isAdm = me && me.role === 'admin', list = (DATA.cities || []).filter(c => c.status === 'publicada' || isAdm || c.id === CITY.id);
+      openSheet(`<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Elige ciudad</h2><button class="btn ghost" data-sheet-close>Cerrar</button></div>
+        <div class="citylist">${list.map(c => `<button data-city="${esc(c.id)}" aria-current="${c.id === CITY.id}"><b>${esc(c.name)}</b>${c.region ? ` <span class="note">${esc(c.region)}</span>` : ''}${c.status !== 'publicada' ? ' <span class="badge revision">borrador</span>' : ''}</button>`).join('')}</div>
+        <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las ciudades.${isAdm ? ' Las ciudades en borrador solo las ves tú.' : ''}</p>`);
+      return;
+    }
+    const cb2 = ev.target.closest('[data-city]'); if (cb2) { if (cb2.dataset.city !== CITY.id) window.limonCity.set(cb2.dataset.city); else closeSheets(); return; }
     if (ev.target.closest('[data-vote],[data-idea-tab],[data-idea-del]')) { ideasClick(ev.target); return; }
     const pf = ev.target.closest('[data-prof]'); if (pf) { openProfile(pf.dataset.prof); return; }
     const ol = ev.target.closest('[data-list]'); if (ol) { openList(ol.dataset.list); return; }
@@ -1969,7 +1985,7 @@ function startApp(DATA, TAX, sync) {
     const rate = ev.target.closest('[data-rate]'); if (rate) { saveDiary(rate.dataset.rate, { rating: +rate.dataset.n }).then(() => { renderAll(); }); return; }
     if (ev.target.closest('[data-soc-edit]')) { SOC.editing = true; renderSocial(); return; }
     if (ev.target.closest('[data-soc-cancel]')) { SOC.editing = false; renderSocial(); return; }
-    if (ev.target.closest('[data-soc-share]') && SOC.me) { shareLink(ORIGIN + '?u=' + SOC.me.username, 'Limón', `Sígueme en Limón para ver a qué planes voy en Madrid:`); return; }
+    if (ev.target.closest('[data-soc-share]') && SOC.me) { shareLink(ORIGIN + '?u=' + SOC.me.username, 'Limón', `Sígueme en Limón para ver a qué planes voy en ${CITY.name}:`); return; }
     if (ev.target.closest('[data-soc-contacts]')) {
       (async () => {
         try {

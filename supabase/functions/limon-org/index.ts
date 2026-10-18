@@ -1,5 +1,5 @@
 // Limón · revisión de eventos enviados por organizadores.
-// Sitúa la dirección en el mapa, la IA comprueba que es un evento real en Madrid y le pone categorías.
+// Sitúa la dirección en el mapa, la IA comprueba que es un evento real en la ciudad del evento y le pone categorías.
 // Si el organizador está aprobado y la IA no ve problemas, se publica; si no, queda para revisión del admin.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -16,26 +16,25 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
-const DISTRITOS = ['Arganzuela', 'Barajas', 'Carabanchel', 'Centro', 'Chamartín', 'Chamberí', 'Ciudad Lineal', 'Fuencarral-El Pardo',
-  'Hortaleza', 'Latina', 'Moncloa-Aravaca', 'Moratalaz', 'Puente de Vallecas', 'Retiro', 'Salamanca', 'San Blas-Canillejas', 'Tetuán',
-  'Usera', 'Vicálvaro', 'Villa de Vallecas', 'Villaverde'];
+type City = { id: string; name: string; lat: number; lng: number; districts: string[] };
 const fold = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, ' ').trim();
 
-async function geocode(q: string) {
-  const pick = (d: string) => DISTRITOS.find((x) => fold(x) === fold(d) || fold(d).startsWith(fold(x).split(' ')[0])) || null;
+async function geocode(q: string, city: City) {
+  const pick = (d: string) => (city.districts || []).find((x) => fold(x) === fold(d) || fold(d).startsWith(fold(x).split(' ')[0])) || null;
+  const same = (c?: string) => !!c && fold(c) === fold(city.name);
   try {  // Photon (OpenStreetMap)
-    const r = await fetch('https://photon.komoot.io/api/?' + new URLSearchParams({ q: q + ' Madrid', lat: '40.4168', lon: '-3.7038', limit: '5' }));
+    const r = await fetch('https://photon.komoot.io/api/?' + new URLSearchParams({ q: q + ' ' + city.name, lat: String(city.lat), lon: String(city.lng), limit: '5' }));
     if (r.ok) {
-      const f = ((await r.json()).features || []).find((x: { properties: { city?: string } }) => x.properties.city === 'Madrid');
+      const f = ((await r.json()).features || []).find((x: { properties: { city?: string } }) => same(x.properties.city));
       if (f) return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], district: pick(f.properties.district || '') };
     }
   } catch (_e) { /* siguiente servicio */ }
   try {  // Nominatim (OpenStreetMap)
     const r = await fetch('https://nominatim.openstreetmap.org/search?' + new URLSearchParams({
-      q: q + ', Madrid', format: 'jsonv2', limit: '5', addressdetails: '1', countrycodes: 'es' }),
+      q: q + ', ' + city.name, format: 'jsonv2', limit: '5', addressdetails: '1', countrycodes: 'es' }),
       { headers: { 'User-Agent': 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)' } });
     if (r.ok) {
-      const x = (await r.json()).find((y: { address?: { city?: string } }) => (y.address || {}).city === 'Madrid');
+      const x = (await r.json()).find((y: { address?: { city?: string; town?: string } }) => same((y.address || {}).city || (y.address || {}).town));
       if (x) return { lat: Number(x.lat), lng: Number(x.lon), district: pick(x.address.city_district || x.address.suburb || '') };
     }
   } catch (_e) { /* sin ubicación */ }
@@ -48,7 +47,7 @@ const TOOL = {
   input_schema: {
     type: 'object', required: ['ok', 'motivo', 'categorias'],
     properties: {
-      ok: { type: 'boolean', description: 'true si es un evento presencial y público en Madrid, con datos coherentes y sin contenido ofensivo, engañoso o publicitario sin evento' },
+      ok: { type: 'boolean', description: 'true si es un evento presencial y público en el municipio indicado, con datos coherentes y sin contenido ofensivo, engañoso o publicitario sin evento' },
       motivo: { type: 'string', description: 'Si ok es false, qué falla, en una frase para el organizador. Si es true, vacío.' },
       categorias: { type: 'array', items: { type: 'string' }, description: 'De 1 a 3 ids de la taxonomía' },
     },
@@ -68,9 +67,11 @@ Deno.serve(async (req) => {
     if (s.owner !== u.user.id && !(me && me.role === 'admin')) return json({ error: 'No es tuyo.' }, 403);
 
     // 1) dónde
+    const { data: cityRow } = await admin.from('cities').select('id,name,lat,lng,districts').eq('id', s.city_id || 'madrid').maybeSingle();
+    const city: City = cityRow || { id: 'madrid', name: 'Madrid', lat: 40.4168, lng: -3.7038, districts: [] };
     let geo = null;
     for (const q of [s.address, s.venue_name && s.address ? s.venue_name + ', ' + s.address : null, s.venue_name]) {
-      if (!geo && q) geo = await geocode(q);
+      if (!geo && q) geo = await geocode(q, city);
     }
 
     // 2) qué es (IA)
@@ -83,9 +84,9 @@ Deno.serve(async (req) => {
         headers: { 'x-api-key': AKEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
           model: MODEL, max_tokens: 3000,
-          system: [{ type: 'text', cache_control: { type: 'ephemeral' }, text: 'Revisas eventos que los organizadores publican en Limón, una agenda de planes en Madrid. ' +
-            'Acepta cualquier evento presencial abierto al público en el municipio de Madrid, aunque sea pequeño o de pago. ' +
-            'Rechaza solo lo que no sea un evento (anuncios, ofertas, spam), lo que esté fuera de Madrid, lo ofensivo o lo incoherente. ' +
+          system: [{ type: 'text', cache_control: { type: 'ephemeral' }, text: 'Revisas eventos que los organizadores publican en Limón, una agenda de planes por ciudades. ' +
+            `Este evento es para ${city.name}. Acepta cualquier evento presencial abierto al público en el municipio de ${city.name}, aunque sea pequeño o de pago. ` +
+            `Rechaza solo lo que no sea un evento (anuncios, ofertas, spam), lo que esté fuera de ${city.name}, lo ofensivo o lo incoherente. ` +
             'Asigna de 1 a 3 categorías de esta lista (id = nombre):\n' + (cats || []).map((c: { id: string; label: string }) => `${c.id} = ${c.label}`).join('\n') }],
           tools: [TOOL], tool_choice: { type: 'tool', name: 'revisar_evento' },
           messages: [{ role: 'user', content: JSON.stringify({ titulo: s.title, descripcion: s.description, desde: s.starts_on, hasta: s.ends_on,
@@ -99,13 +100,13 @@ Deno.serve(async (req) => {
       const usd = ((us.input_tokens || 0) + (us.cache_creation_input_tokens || 0) * 1.25 + (us.cache_read_input_tokens || 0) * 0.1) * 0.10 / 1e6 + (us.output_tokens || 0) * 0.50 / 1e6;
       if (usd > 0) await admin.rpc('ai_usage_add', { p_user: u.user.id, p_usd: usd });
     }
-    const fueraDeMadrid = (s.address || s.venue_name) && !geo;
+    const fueraDeCiudad = (s.address || s.venue_name) && !geo;
     const trusted = me && (me.role === 'admin' || (me.role === 'editor' && me.editor_status === 'aprobado'));
-    const publish = review.ok && trusted && !fueraDeMadrid;
+    const publish = review.ok && trusted && !fueraDeCiudad;
     await admin.from('submitted_events').update({
       lat: geo ? geo.lat : null, lng: geo ? geo.lng : null, district: geo ? geo.district : null,
       categories: review.categorias, status: publish ? 'revision' : (review.ok ? 'revision' : 'rechazado'),
-      ai_review: { ...review, sin_ubicacion: !!fueraDeMadrid, at: new Date().toISOString() },
+      ai_review: { ...review, sin_ubicacion: !!fueraDeCiudad, at: new Date().toISOString() },
     }).eq('id', s.id);
     if (!review.ok && s.event_id) await admin.rpc('publish_submission', { p_id: s.id, p_publish: false });
     if (publish) {
@@ -118,7 +119,7 @@ Deno.serve(async (req) => {
     }
     return json({
       estado: publish ? 'publicado' : review.ok ? 'revision' : 'rechazado',
-      motivo: !review.ok ? review.motivo : fueraDeMadrid ? 'No encuentro esa dirección en Madrid: revísala o la revisará el equipo.' : !trusted ? 'Lo revisará el equipo de Limón antes de publicarlo.' : '',
+      motivo: !review.ok ? review.motivo : fueraDeCiudad ? `No encuentro esa dirección en ${city.name}: revísala o la revisará el equipo.` : !trusted ? 'Lo revisará el equipo de Limón antes de publicarlo.' : '',
       categorias: review.categorias, distrito: geo && geo.district,
     });
   } catch (e) {

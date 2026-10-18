@@ -193,9 +193,16 @@ const OUTDOOR = new Set(['aire_libre', 'mercadillos', 'fiestas', 'desfiles', 're
   'natacion', 'tematicas', 'solidarias', 'foodtrucks', 'carreras_perro', 'quedadas_perro', 'aves', 'excursiones', 'huertos', 'itinerarios', 'jardines', 'senderismo', 'g:naturaleza', 'beneficos']);
 const isOutdoor = (cats: string[], text: string) => cats.some((c) => OUTDOOR.has(c)) || /al aire libre/i.test(text || '');
 type Rain = { daily: Record<string, number>; hourly: Record<string, number[]> };
-async function rainForecast(): Promise<Rain | null> {
+type CityRow = { id: string; name: string; lat: number; lng: number };
+async function loadCities(): Promise<Record<string, CityRow>> {
+  const { data } = await admin.from('cities').select('id,name,lat,lng');
+  return Object.fromEntries((data || []).map((c: CityRow) => [c.id, c]));
+}
+const rainCache: Record<string, Promise<Rain | null>> = {};
+const rainFor = (c: CityRow | undefined) => { const k = c ? c.id : 'madrid'; return (rainCache[k] ||= rainForecast(c ? c.lat : 40.4168, c ? c.lng : -3.7038)); };
+async function rainForecast(lat: number, lng: number): Promise<Rain | null> {
   try {
-    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=40.4168&longitude=-3.7038&hourly=precipitation_probability&daily=precipitation_probability_max&timezone=Europe%2FMadrid&forecast_days=8');
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=precipitation_probability&daily=precipitation_probability_max&timezone=Europe%2FMadrid&forecast_days=8`);
     if (!r.ok) return null;
     const j = await r.json(), out: Rain = { daily: {}, hourly: {} };
     (j.daily.time as string[]).forEach((d, i) => { out.daily[d] = j.daily.precipitation_probability_max[i] ?? 0; });
@@ -213,14 +220,15 @@ async function daily() {
   const today = madridToday(), days = [today, addDays(today, 1)];
   // el registro de envíos se guarda 12 meses como mucho (política de privacidad)
   await admin.from('mail_outbox').delete().lt('created_at', new Date(Date.now() - 365 * 864e5).toISOString());
-  const { data: profs } = await admin.from('profiles').select('id,email,notify,mail_token,my_streets').or('notify->>calle.eq.true,notify->>lluvia.eq.true');
+  const { data: profs } = await admin.from('profiles').select('id,email,notify,mail_token,my_streets,city_id').or('notify->>calle.eq.true,notify->>lluvia.eq.true');
   if (!profs || !profs.length) return { users: 0, sent: 0 };
-  const rain = await rainForecast();
-  const { data: cl } = await admin.from('closures').select('id,title,kind,streets,ranges,geom');
-  const closures = (cl || []) as Closure[];
+  const cities = await loadCities();
+  const { data: cl } = await admin.from('closures').select('id,city_id,title,kind,streets,ranges,geom');
+  const allClosures = (cl || []) as (Closure & { city_id: string })[];
   let sent = 0;
-  for (const p of profs as (Prof & { my_streets: string[] | null })[]) {
+  for (const p of profs as (Prof & { my_streets: string[] | null; city_id: string | null })[]) {
     if (!p.email) continue;
+    const cityId = p.city_id || 'madrid', closures = allClosures.filter((c) => c.city_id === cityId), rain = await rainFor(cities[cityId]);
     const sections: { h: string; items: Item[] }[] = [];
     const wantCalle = (p.notify || {}).calle === true, wantRain = (p.notify || {}).lluvia === true;
     // tus planes guardados con sesión hoy o mañana
@@ -272,7 +280,7 @@ async function daily() {
     const { data: ins } = await admin.from('mail_outbox').insert({ user_id: p.id, kind: 'calle', ref: ymd(today), payload: { n: sections.reduce((a, s) => a + s.items.length, 0) } }).select('id');
     if (!ins || !ins.length) continue;  // ya se envió hoy
     const onlyRain = !planItems.length && sections.length === 1 && rainItems.length > 0, kk = onlyRain ? 'lluvia' : 'calle';
-    const html = layout({ title: onlyRain ? 'Puede llover en tus planes' : 'Avisos para hoy y mañana', intro: onlyRain ? `Según la previsión de Open-Meteo para Madrid, ${human(ymd(today))} y el día siguiente.` : `Lo que hemos visto en los avisos municipales y en la previsión del tiempo para el ${human(ymd(today))} y el día siguiente.`, sections,
+    const html = layout({ title: onlyRain ? 'Puede llover en tus planes' : 'Avisos para hoy y mañana', intro: onlyRain ? `Según la previsión de Open-Meteo para ${(cities[cityId] || { name: 'tu ciudad' }).name}, ${human(ymd(today))} y el día siguiente.` : `Lo que hemos visto en los avisos municipales y en la previsión del tiempo para el ${human(ymd(today))} y el día siguiente.`, sections,
       cta: onlyRain ? { label: 'Ver mis planes', url: APP + '?tab=agenda' } : { label: 'Ver el mapa de cortes', url: APP + '?tab=calle' },
       footer: footer(p, kk, `Recibes este aviso porque activaste los avisos de ${onlyRain ? 'lluvia' : 'cortes de calle'} en Limón. Puedes cambiar qué avisos recibes en tu perfil.`) });
     try { await send(p, planItems.length ? `Cortes cerca de tus planes: ${planItems[0].title}` : rainItems.length ? `Puede llover: ${rainItems[0].title}` : 'Cortes en tus calles hoy y mañana', html, kk); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', ins[0].id); sent++; }
@@ -287,19 +295,25 @@ type Ev = { id: number; title: string; starts_on: string; ends_on: string; time_
   event_categories: { category_id: string }[]; event_sessions: { on_date: string }[] };
 async function weekly(only?: string) {
   const today = madridToday(), from = ymd(today), to = ymd(addDays(today, 7));
-  let q = admin.from('profiles').select('id,email,notify,mail_token,taste,learned,with_kids').eq('notify->>semanal', 'true');
+  let q = admin.from('profiles').select('id,email,notify,mail_token,taste,learned,with_kids,city_id').eq('notify->>semanal', 'true');
   if (only) q = q.eq('id', only);
   const { data: profs } = await q;
   if (!profs || !profs.length) return { users: 0, sent: 0 };
-  const evs: Ev[] = [];
-  for (let off = 0; ; off += 1000) {
-    const { data, error } = await admin.from('events')
-      .select('id,title,starts_on,ends_on,time_text,is_free,price_text,district,is_unique,is_featured,topics,series,description,venues(name),event_categories(category_id),event_sessions(on_date)')
-      .eq('city_id', 'madrid').lte('starts_on', to).gte('ends_on', from).order('id').range(off, off + 999);
-    if (error) throw error;
-    evs.push(...((data || []) as unknown as Ev[]));
-    if (!data || data.length < 1000) break;
-  }
+  const cities = await loadCities();
+  const evCache: Record<string, Ev[]> = {};
+  const eventsOf = async (cityId: string) => {
+    if (evCache[cityId]) return evCache[cityId];
+    const evs: Ev[] = [];
+    for (let off = 0; ; off += 1000) {
+      const { data, error } = await admin.from('events')
+        .select('id,title,starts_on,ends_on,time_text,is_free,price_text,district,is_unique,is_featured,topics,series,description,venues(name),event_categories(category_id),event_sessions(on_date)')
+        .eq('city_id', cityId).lte('starts_on', to).gte('ends_on', from).order('id').range(off, off + 999);
+      if (error) throw error;
+      evs.push(...((data || []) as unknown as Ev[]));
+      if (!data || data.length < 1000) break;
+    }
+    return (evCache[cityId] = evs);
+  };
   const { data: cats } = await admin.from('categories').select('id,label,group_id');
   const GROUP: Record<string, string> = {}, LABEL: Record<string, string> = {};
   for (const c of cats || []) { GROUP[c.id] = c.group_id; LABEL[c.id] = c.label; }
@@ -308,8 +322,9 @@ async function weekly(only?: string) {
     return ss[0] || (e.starts_on > from ? e.starts_on : null);
   };
   let sent = 0;
-  for (const p of profs as (Prof & { taste: any; learned: Record<string, number> | null; with_kids: boolean | null })[]) {
+  for (const p of profs as (Prof & { taste: any; learned: Record<string, number> | null; with_kids: boolean | null; city_id: string | null })[]) {
     if (!p.email) continue;
+    const cityId = p.city_id || 'madrid', evs = await eventsOf(cityId), cityName = (cities[cityId] || { name: 'tu ciudad' }).name;
     const [ui, dis, sv, tf, fr] = await Promise.all([
       admin.from('user_interests').select('category_id,value').eq('user_id', p.id),
       admin.from('dismissed_events').select('event_id').eq('user_id', p.id),
@@ -395,7 +410,7 @@ async function weekly(only?: string) {
     const ref = only ? 'prueba:' + Date.now() : 'semana:' + from;
     const { data: ins } = await admin.from('mail_outbox').insert({ user_id: p.id, kind: 'semanal', ref, payload: { n: pick.length } }).select('id');
     if (!ins || !ins.length) continue;
-    const html = layout({ title: 'Tu semana en Madrid', intro: `Planes del ${human(from)} al ${human(to)} elegidos según lo que te gusta.${pick.length && !Object.keys(prefs).length && !(taste.categorias || []).length ? ' Cuéntanos tus gustos en tu perfil y afinaremos más.' : ''}`,
+    const html = layout({ title: `Tu semana en ${cityName}`, intro: `Planes del ${human(from)} al ${human(to)} elegidos según lo que te gusta.${pick.length && !Object.keys(prefs).length && !(taste.categorias || []).length ? ' Cuéntanos tus gustos en tu perfil y afinaremos más.' : ''}`,
       sections: [{ h: 'Tus planes guardados', items: savedItems }, { h: 'Tus amigos van a', items: friendItems }, { h: 'De lo que sigues', items: followItems },
         { h: savedItems.length || friendItems.length || followItems.length ? 'Te pueden gustar' : '', items: pick.map(fmt) }],
       cta: { label: 'Ver más planes', url: APP }, footer: footer(p, 'semanal', 'Recibes el resumen semanal porque lo activaste en Limón.') });

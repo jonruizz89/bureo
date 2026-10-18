@@ -12,7 +12,7 @@ const MODEL = Deno.env.get('LIMON_AI_MODEL') || 'claude-haiku-5-5';
 const PRICE_IN = 0.10 / 1e6, PRICE_OUT = 0.50 / 1e6;
 const MAX_CALLS_USER_DAY = 30;
 const MAX_USD_DAY = Number(Deno.env.get('LIMON_AI_MAX_USD_DAY') || '1');
-const CITY = 'madrid';
+const cityOf = (c: unknown) => (typeof c === 'string' && /^[a-z0-9-]{2,40}$/.test(c) ? c : 'madrid');
 
 const admin = createClient(URL, SECRET, { auth: { persistSession: false } });
 const CORS = {
@@ -81,7 +81,7 @@ async function taste(uid: string, text: string) {
   const { data: cats } = await admin.from('categories').select('id,label,group_id').eq('is_generic', false);
   const ids = new Set((cats || []).map((c: { id: string }) => c.id));
   const list = (cats || []).map((c: { id: string; label: string; group_id: string }) => `${c.id} = ${c.label} (${c.group_id})`).join('\n');
-  const system = 'Eres el asistente de Limón, una app que recomienda planes en Madrid. Conviertes lo que alguien cuenta de sus gustos ' +
+  const system = 'Eres el asistente de Limón, una app que recomienda planes en tu ciudad. Conviertes lo que alguien cuenta de sus gustos ' +
     'en un perfil: categorías de esta taxonomía con peso, temas concretos que buscar en los eventos y categorías que evitar. ' +
     'No inventes gustos que no se deduzcan del texto. Usa solo ids de la lista. Si dice que algo no le gusta o no lo quiere ver ' +
     '(«nada de reguetón», «odio las discotecas»), pon esas categorías en evitar. En temas pon solo nombres concretos que aparecerían ' +
@@ -139,7 +139,7 @@ const RECO_TOOL = {
   },
 };
 
-async function recommend(uid: string, when: string, force: boolean) {
+async function recommend(uid: string, when: string, force: boolean, city = 'madrid') {
   const [from, to] = windowOf(when);
   const { data: prof } = await admin.from('profiles').select('taste,learned,with_kids,with_dog').eq('id', uid).maybeSingle();
   const [{ data: ints }, { data: dis }] = await Promise.all([
@@ -148,7 +148,7 @@ async function recommend(uid: string, when: string, force: boolean) {
   ]);
   const taste = (prof && prof.taste) || null;
   const learned: Record<string, number> = (prof && prof.learned) || {};
-  const key = when + ':' + from;
+  const key = (city === 'madrid' ? '' : city + ':') + when + ':' + from;
   const sig = JSON.stringify([taste && taste.at, ints, learned, (dis || []).length]);
   if (!force) {
     const { data: c } = await admin.from('reco_cache').select('items,created_at').eq('user_id', uid).eq('key', key).maybeSingle();
@@ -164,7 +164,7 @@ async function recommend(uid: string, when: string, force: boolean) {
   const cols = 'id,title,description,starts_on,ends_on,time_text,district,topics,series,is_unique,ai_unique,is_free,venues(name),event_sessions(on_date),event_categories(category_id)';
   const evs: Ev[] = [];
   for (let off = 0; ; off += 1000) {
-    const { data, error } = await admin.from('events').select(cols).eq('city_id', CITY).gte('ends_on', from).lte('starts_on', to).order('id').range(off, off + 999);
+    const { data, error } = await admin.from('events').select(cols).eq('city_id', city).gte('ends_on', from).lte('starts_on', to).order('id').range(off, off + 999);
     if (error) throw error;
     evs.push(...(data as unknown as Ev[]));
     if (!data || data.length < 1000) break;
@@ -206,7 +206,7 @@ async function recommend(uid: string, when: string, force: boolean) {
     const when = sess.length ? sess.join(',') : (e.starts_on === e.ends_on ? e.starts_on : `${e.starts_on}→${e.ends_on}`);
     return `${e.id} | ${when}${e.time_text && e.time_text.length < 30 ? ' ' + e.time_text : ''} | ${e.title.slice(0, 110)} | ${e.venues ? e.venues.name.slice(0, 50) : ''} | ${(e.event_categories || []).map((c) => c.category_id).join(',')} | ${(e.topics || []).join(', ')}${e.description ? ' | ' + e.description.slice(0, 160).replace(/\s+/g, ' ') : ''}`;
   }).join('\n');
-  const system = 'Eres el recomendador de Limón, una app de planes en Madrid. Eliges entre 6 y 10 planes para una persona a partir de su perfil. ' +
+  const system = 'Eres el recomendador de Limón, una app de planes en la ciudad. Eliges entre 6 y 10 planes para una persona a partir de su perfil. ' +
     'Prioriza lo que conecta con un interés concreto suyo sobre lo genérico; varía tipos de plan y días; no repitas un mismo ciclo; ' +
     'descarta lo que choque con lo que evita. El motivo, de menos de 100 caracteres y sin repetir el título ni la fecha, debe citar ' +
     'el interés concreto (no "porque te gusta la cultura").';
@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
       if (text.length < 8) return json({ error: 'Cuéntame un poco más.' }, 400);
       res = await taste(uid, text);
     } else if (body.action === 'recommend') {
-      res = await recommend(uid, ['semana', 'finde', 'mes'].includes(body.when) ? body.when : 'semana', !!body.force);
+      res = await recommend(uid, ['semana', 'finde', 'mes'].includes(body.when) ? body.when : 'semana', !!body.force, cityOf(body.city));
     } else return json({ error: 'Acción desconocida' }, 400);
     if (res.usd > 0) await admin.rpc('ai_usage_add', { p_user: uid, p_usd: res.usd });
     const { usd: _u, ...out } = res;

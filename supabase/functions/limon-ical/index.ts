@@ -7,7 +7,7 @@ const SECRET = (() => {
   try { return JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}').default; } catch { return undefined; }
 })() || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const admin = createClient(URL, SECRET, { auth: { persistSession: false } });
-const WEB = 'https://jonruizz89.github.io/bureo/';
+const WEB = 'https://limonplanes.com/';
 
 const esc = (t: string) => String(t || '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 const fold = (line: string) => {  // líneas de 75 octetos como pide el estándar
@@ -32,10 +32,10 @@ Deno.serve(async (req) => {
   const u = new globalThis.URL(req.url);
   const t = u.searchParams.get('t') || '';
   if (!/^[0-9a-f-]{36}$/.test(t)) return new Response('Enlace no válido', { status: 404 });
-  const { data: p } = await admin.from('profiles').select('id,my_streets').eq('ical_token', t).maybeSingle();
+  const { data: p } = await admin.from('profiles').select('id,my_streets,city_id').eq('ical_token', t).maybeSingle();
   if (!p) return new Response('Enlace no válido', { status: 404 });
   const today = new Date().toISOString().slice(0, 10);
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Limón//Planes de Madrid//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Limón//Planes//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     'X-WR-CALNAME:Limón · mis planes', 'X-WR-TIMEZONE:Europe/Madrid', 'REFRESH-INTERVAL;VALUE=DURATION:PT6H', 'X-PUBLISHED-TTL:PT6H'];
   const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
 
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
   // cortes en mis calles y líneas (próximas 3 semanas)
   const mine = (p.my_streets || []) as string[];
   if (mine.length && u.searchParams.get('cortes') !== '0') {
-    const { data: cs } = await admin.from('closures').select('id,title,kind,summary,streets,lines,stations,ranges,source_url').eq('city_id', 'madrid');
+    const { data: cs } = await admin.from('closures').select('id,title,kind,summary,streets,lines,stations,ranges,source_url').eq('city_id', p.city_id || 'madrid');
     const sk = mine.map(key).filter((k) => k.length >= 3), lk = mine.map(lineKey).filter(Boolean);
     const end = new Date(Date.now() + 21 * 864e5).toISOString().slice(0, 10);
     for (const c of cs || []) {

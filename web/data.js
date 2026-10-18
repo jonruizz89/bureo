@@ -74,7 +74,7 @@
   }
 
   async function loadSources() {
-    const r = await sb.from('sources').select('name,url,method,license,last_run_at').eq('city_id', C.city).order('id');
+    const r = await sb.from('sources').select('name,url,method,license,last_run_at').eq('city_id', C.city).eq('status', 'activa').order('id');
     if (r.error) throw r.error;
     return r.data;
   }
@@ -126,7 +126,7 @@
     const [i, s, p, d, w] = await Promise.all([
       sb.from('user_interests').select('category_id,value').eq('user_id', uid),
       sb.from('saved_events').select('event_id').eq('user_id', uid),
-      sb.from('profiles').select('with_kids,with_dog,my_streets,learned,taste,taste_text').eq('id', uid).maybeSingle(),
+      sb.from('profiles').select('with_kids,with_dog,my_streets,learned,taste,taste_text,city_id').eq('id', uid).maybeSingle(),
       sb.from('dismissed_events').select('event_id').eq('user_id', uid),
       sb.from('attendance').select('event_id').eq('user_id', uid).eq('went', true)
     ]);
@@ -141,6 +141,11 @@
       taste: (p.data && p.data.taste) || null,
       taste_text: (p.data && p.data.taste_text) || ''
     };
+    // en un navegador nuevo, se abre la ciudad que la persona tiene en su cuenta
+    const pc = p.data && p.data.city_id;
+    let chosen = null; try { chosen = localStorage.getItem('bureo.city'); } catch (e) { }
+    if (pc && !chosen && !new URLSearchParams(location.search).get('c') && pc !== C.city && CITIES.some((c) => c.id === pc && c.status === 'publicada')) { window.limonCity.set(pc); return; }
+    if (!pc || (chosen && chosen !== pc)) sb.from('profiles').update({ city_id: C.city }).eq('id', uid);
     const local = app.get();
     const remoteEmpty = !Object.keys(remote.prefs).length && !remote.saved.length && !remote.streets.length && !remote.dismissed.length && !Object.keys(remote.learned).length;
     if (remoteEmpty && (Object.keys(local.prefs).length || local.saved.length)) {
@@ -280,7 +285,7 @@
   // IA en el servidor (función limon-ai): solo con sesión
   window.limonAI = async function (payload) {
     if (!user) return { error: 'Entra con tu cuenta para usar la IA.' };
-    const { data, error } = await sb.functions.invoke('limon-ai', { body: payload });
+    const { data, error } = await sb.functions.invoke('limon-ai', { body: Object.assign({ city: C.city }, payload) });
     if (error) {
       try { const b = await error.context.json(); return { error: b.error || 'No se ha podido contactar con la IA.' }; }
       catch (e) { return { error: 'No se ha podido contactar con la IA.' }; }
@@ -288,9 +293,30 @@
     return data;
   };
 
+  // ciudades: la elegida en este navegador, la de ?c= (vista previa, también de ciudades en borrador) o Madrid
+  let CITIES = [], CITY = null;
+  async function loadCities() {
+    const r = await sb.from('cities').select('id,name,region,lat,lng,bbox,districts,stadiums,features,status,position').order('position');
+    CITIES = r.data || [];
+    const qs = new URLSearchParams(location.search).get('c');
+    let saved = null; try { saved = localStorage.getItem('bureo.city'); } catch (e) { }
+    const pick = (id) => CITIES.find((c) => c.id === id);
+    CITY = (qs && pick(qs)) || (saved && pick(saved) && pick(saved).status === 'publicada' && pick(saved)) || pick(C.city) || CITIES[0] || { id: C.city, name: 'Madrid', lat: 40.4168, lng: -3.7038, districts: [], stadiums: [], features: { calle: true } };
+    C.city = CITY.id;
+  }
+  window.limonCity = {
+    list: () => CITIES, current: () => CITY,
+    async set(id) {
+      try { localStorage.setItem('bureo.city', id); } catch (e) { }
+      if (user) await sb.from('profiles').update({ city_id: id }).eq('id', user.id);
+      location.href = location.pathname;
+    }
+  };
+
   window.bootBureo = async function (startApp) {
     $('pt-h').textContent = 'Cargando planes…';
     try {
+      await loadCities();
       const [tax, evs, srcs, cuts, audit] = await Promise.all([loadTaxonomy(), loadEvents(), loadSources(), loadClosures(), loadAudit().catch(() => null)]);
       const last = srcs.map((s) => s.last_run_at).filter(Boolean).sort().pop();
       const meta = {
@@ -300,7 +326,7 @@
         sin_categoria: evs.filter((e) => !e.cats.length || (e.cats.length === 1 && e.cats[0] === 'sin_categoria')).length,
         generado: last ? new Date(last).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' }) : 'sin datos'
       };
-      app = startApp({ eventos: evs, meta, closures: cuts, audit }, tax, sync);
+      app = startApp({ eventos: evs, meta, closures: cuts, audit, city: CITY, cities: CITIES }, tax, sync);
       wireAccount();
     } catch (e) {
       console.error(e);
