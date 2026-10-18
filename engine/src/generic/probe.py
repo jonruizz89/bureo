@@ -8,6 +8,7 @@ La receta se guarda en sources.config y la usa extract.py cada noche. Si no sale
 import datetime as dt, re, sys, urllib.parse
 from lib import sb, fetch, parse_page, load_city, domain, usd, over_budget, fold
 import formats as F
+import connectors
 
 HOY = dt.date.today()
 HASTA = HOY + dt.timedelta(days=120)
@@ -75,6 +76,10 @@ def common_prefix(urls):
 
 
 def probe(src, city):
+    cfg = src.get('config') or {}
+    if cfg.get('method') in connectors.CONNECTORS:
+        ev = vivos(connectors.read(cfg) or [])
+        return ({'method': cfg['method']}, None, ev) if ev else (None, 'La API no devuelve eventos próximos', [])
     url = src['url']
     st, ct, txt, final = fetch(url)
     if st == 'robots':
@@ -144,7 +149,7 @@ def probe(src, city):
 
 
 LABEL = {'ical': 'Calendario iCal', 'datos': 'Datos abiertos', 'jsonld': 'schema.org en la página', 'jsonld_fichas': 'schema.org en cada ficha',
-         'rss': 'RSS leído con IA', 'ia': 'Página leída con IA'}
+         'rss': 'RSS leído con IA', 'ia': 'Página leída con IA', 'kulturklik': 'API Kulturklik (Open Data Euskadi)'}
 
 
 def main(cid, retry=False):

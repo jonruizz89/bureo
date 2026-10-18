@@ -6,6 +6,7 @@ Los agregadores (Eventbrite, Fever, Time Out…) se descartan: como mucho sirven
 """
 import datetime as dt, sys
 from lib import sb, tool_call, load_city, domain, is_aggregator, usd, over_budget
+import connectors
 
 AMBITOS = [
     ('municipal', 'la agenda oficial del ayuntamiento y de sus áreas de cultura, juventud, deportes y fiestas, y la agenda de turismo de la ciudad'),
@@ -37,6 +38,10 @@ def main(cid):
         known_dom.setdefault(domain(s.get('url') or ''), 0)
         known_dom[domain(s.get('url') or '')] += 1
     found, rows = 0, []
+    for r in connectors.suggest(city):  # APIs públicas conocidas del territorio (p. ej. Kulturklik en Euskadi)
+        if r['url'].rstrip('/') not in known:
+            known.add(r['url'].rstrip('/')); rows.append(r); found += 1
+            print('conector:', r['name'])
     for key, que in AMBITOS:
         if over_budget():
             print('Presupuesto agotado:', round(usd(), 2), '$'); break

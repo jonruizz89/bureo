@@ -13,7 +13,7 @@ TZ = ZoneInfo('Europe/Madrid')
 
 
 def clean(t, n=None):
-    t = html.unescape(re.sub(r'<[^>]+>', ' ', str(t or '')))
+    t = re.sub(r'<[^>]+>', ' ', html.unescape(html.unescape(str(t or ''))))
     t = re.sub(r'\s+', ' ', t).strip()
     return t[:n] if n else t
 
@@ -63,6 +63,19 @@ def _walk(o):
                 yield from _walk(o[k])
 
 
+def _is_now(v):
+    """¿La fecha es «ahora mismo» (con segundos)? Señal de que la web no tiene la fecha real en el JSON-LD."""
+    m = re.match(r'^\d{4}-\d\d-\d\dT\d\d:\d\d:(\d\d)', str(v or ''))
+    if not m or m.group(1) == '00':
+        return False
+    try:
+        t = dt.datetime.fromisoformat(str(v).replace('Z', '+00:00'))
+        now = dt.datetime.now(t.tzinfo) if t.tzinfo else dt.datetime.now()
+        return abs((t - now).total_seconds()) < 3 * 3600
+    except ValueError:
+        return False
+
+
 def jsonld_events(blocks, base):
     out = []
     for b in blocks:
@@ -76,6 +89,12 @@ def jsonld_events(blocks, base):
         for e in _walk(data):
             ini, hora = parse_when(e.get('startDate'))
             fin, _ = parse_when(e.get('endDate'))
+            if _is_now(e.get('startDate')):  # algunas webs ponen la hora a la que se genera la página
+                m = re.search(r'(20\d\d)-(\d\d)-(\d\d)(?:-(\d\d)-(\d\d))?', str(e.get('url') or '') + ' ' + base)
+                if not m:
+                    continue
+                ini = fin = f'{m.group(1)}-{m.group(2)}-{m.group(3)}'
+                hora = f'{m.group(4)}:{m.group(5)}' if m.group(4) else None
             if not ini or not e.get('name'):
                 continue
             loc = e.get('location') or {}

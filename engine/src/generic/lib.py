@@ -11,6 +11,7 @@ AKEY = os.environ.get('ANTHROPIC_API_KEY')
 MODEL = os.environ.get('BUREO_AI_MODEL', 'claude-haiku-5-5')
 MAX_USD = float(os.environ.get('BUREO_CITY_MAX_USD', '2.0'))
 UA = 'LimonBot/1.0 (+https://limonplanes.com; hola@limonplanes.com)'
+UA_API = 'Limon/1.0 (+https://limonplanes.com; hola@limonplanes.com)'  # APIs de datos abiertos que rechazan «bot»
 COST = {'in': 0, 'out': 0, 'search': 0}
 AGREGADORES = ('eventbrite.', 'meetup.', 'timeout.', 'feverup.', 'fever.', 'ticketmaster.', 'entradas.com', 'correrjuntos.',
                'instagram.', 'facebook.', 'x.com', 'twitter.', 'tiktok.', 'youtube.', 'google.', 'wikipedia.', 'tripadvisor.',
@@ -88,7 +89,7 @@ def allowed(url):
 _last = {}
 
 
-def fetch(url, limit=4_000_000):
+def fetch(url, limit=4_000_000, accept='text/html,application/xhtml+xml,application/json,text/calendar,*/*;q=0.8', ua=UA):
     """(estado, tipo de contenido, texto, url final). Respeta robots.txt y espera 1 s entre peticiones al mismo sitio."""
     if not allowed(url):
         return 'robots', '', '', url
@@ -97,7 +98,7 @@ def fetch(url, limit=4_000_000):
     if wait > 0:
         time.sleep(wait)
     _last[d] = time.time()
-    req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/json,text/calendar,*/*;q=0.8',
+    req = urllib.request.Request(url, headers={'User-Agent': ua, 'Accept': accept,
                                                'Accept-Language': 'es-ES,es;q=0.9', 'Accept-Encoding': 'gzip'})
     try:
         with urllib.request.urlopen(req, timeout=40) as r:

@@ -6,6 +6,7 @@ Solo se quedan los eventos del municipio (por el municipio que indica la fuente 
 import datetime as dt, json, os, re, sys, time, urllib.parse, urllib.request
 from lib import sb, fetch, parse_page, load_city, fold, usd, over_budget, UA
 import formats as F
+import connectors
 
 HOY = dt.date.today()
 HASTA = HOY + dt.timedelta(days=120)
@@ -16,6 +17,8 @@ MAX_GEO = int(os.environ.get('BUREO_GEOCODE_MAX', '150'))
 def read_source(s, city):
     c = s.get('config') or {}
     m = c.get('method')
+    if m in connectors.CONNECTORS:
+        return connectors.read(c)
     if m == 'ical':
         st, _, txt, f = fetch(c['feed'])
         return F.ical_events(txt, f) if st == 200 else None
@@ -101,6 +104,9 @@ def geocoder(city):
     return find, save
 
 
+STOPW = {'de', 'del', 'la', 'el', 'los', 'las', 'y', 'sala', 'teatro', 'antzokia', 'museo', 'museoa', 'bilbao', 'bilboko', 'aretoa'}
+
+
 def in_city(e, city):
     name = fold(city['name'])
     if e.get('municipio'):
@@ -145,9 +151,24 @@ def main(cid):
         print(f'✓ {s["name"]}: {len(keep)} eventos')
 
     # el mismo evento en varias fuentes o con varias sesiones → una sola tarjeta
+    def same_place(a, b):
+        ta, tb = set(a.split()) - STOPW, set(b.split()) - STOPW
+        return bool(ta and tb) and (ta <= tb or tb <= ta or a.split()[:2] == b.split()[:2])
+    by_title = {}
+    for e in raw:
+        by_title.setdefault(fold(e['titulo'])[:70], []).append(e)
+    for lst in by_title.values():  # «Teatro Campos Elíseos» y «Teatro Campos Elíseos Antzokia» son el mismo sitio
+        names = sorted({fold(x.get('lugar') or '') for x in lst if x.get('lugar')}, key=len, reverse=True)
+        for x in lst:
+            v = fold(x.get('lugar') or '')
+            if not v and len({next((n for n in names if same_place(m, n)), m) for m in names}) == 1:
+                v = names[0]  # sin lugar en una fuente, pero el título solo aparece en un sitio: es el mismo evento
+            x['_lugar'] = next((n for n in names if v and same_place(v, n)), v)
+            if not x.get('lugar') and v:
+                x['lugar'] = next(y['lugar'] for y in lst if fold(y.get('lugar') or '') == v)
     groups = {}
     for e in raw:
-        k = (fold(e['titulo'])[:70], fold(e.get('lugar') or '')[:40])
+        k = (fold(e['titulo'])[:70], e.pop('_lugar')[:40])
         groups.setdefault(k, []).append(e)
     eventos = []
     for (_, _), lst in groups.items():
@@ -184,7 +205,7 @@ def main(cid):
         e.setdefault('distrito', None)
         e['cats'] = []
         e['descripcion'] = (e.get('descripcion') or '')[:420]
-        for k in ('municipio', 'url', 'direccion'):
+        for k in ('municipio', 'url', 'direccion', 'tipo'):
             e.pop(k, None)
     save()
     out = os.path.join(os.environ.get('BUREO_OUT', 'out'), cid)

@@ -111,6 +111,10 @@ for tbl, rws, conflict in (('event_sessions', sess, 'event_id,on_date'), ('event
     for part in chunks(rws, 1000):
         api('POST', f'{tbl}?on_conflict={conflict}', part, 'resolution=merge-duplicates,return=minimal')
     print(tbl, len(rws))
+# 4) ciudades del motor genérico: retirar lo que ya no publica ninguna de sus fuentes (si todas se leyeron bien)
+leidas = [sources[n] for n in (data.get('meta') or {}).get('por_fuente', {}) if n in sources]
+if PFX and leidas:
+    print('retirados', api('POST', 'rpc/retire_stale_events', {'p_city': CITY, 'p_keep': [r['ext_key'] for r in rows], 'p_sources': leidas}))
 import datetime as _dt
 api('PATCH', f'sources?city_id=eq.{CITY}&status=eq.activa', {'last_run_at': _dt.datetime.now(_dt.timezone.utc).isoformat()}, 'return=minimal')
 print('ok')
