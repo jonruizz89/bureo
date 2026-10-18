@@ -3,5 +3,6 @@
 window.BUREO_CONFIG = {
   supabaseUrl: 'https://pxeqbxxfsrvsxcdfiddc.supabase.co',
   supabaseKey: 'sb_publishable_1oeCUB3vf4XFVH-BS_Km5w_V6NgQgUY',
-  city: 'madrid'
+  city: 'madrid',
+  google: true
 };
