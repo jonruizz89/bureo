@@ -157,6 +157,13 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .fpanel .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
 .fcount:not(:empty) { margin-left: 2px; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 7px; font-size: 12px; font-weight: 700 }
 .ai { display: flex; flex-direction: column; gap: 10px; background: var(--accent-soft); border-radius: 16px; padding: 14px }
+.consent { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 16px; padding: 14px; font-size: 14px }
+.consent .seg { align-items: center }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px }
+.stat-grid > div { border: 1px solid var(--line); border-radius: 12px; padding: 10px }
+.stat-grid b { display: block; font: 600 22px var(--f-body) }
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 60px }
+.bars span { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px }
 .ai h2 { margin: 0; display: flex; align-items: center; gap: 8px }
 .ai .why { background: var(--surface); color: var(--ink); font-weight: 400 }
 .ai .why b { color: var(--accent-text) }
@@ -389,6 +396,7 @@ table.cov td.n, table.cov th.n { text-align: right }
       <label class="toggle" for="o-ninos">Voy con niños (muestra planes familiares e infantiles)<input type="checkbox" id="o-ninos"></label>
       <label class="toggle" for="o-perro">Voy con mi perro (sube planes con mascotas)<input type="checkbox" id="o-perro"></label>
       <label class="toggle" for="o-dist">Mostrar a qué distancia está cada plan (usa tu ubicación; no se guarda)<input type="checkbox" id="o-dist"></label>
+      <label class="toggle" for="o-stats">Ayudar a mejorar Limón con estadísticas de uso (qué planes abres, guardas o compartes; <a href="privacidad.html#estadisticas">más info</a>)<input type="checkbox" id="o-stats"></label>
     </div>
     <div class="panel" id="social"></div>
     <div class="panel" id="seguir"></div>
@@ -397,6 +405,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <div class="panel" id="ideas"></div>
     <div class="panel" id="org" hidden></div>
     <div class="panel" id="adm" hidden></div>
+    <div class="panel" id="stats" hidden></div>
     <div class="panel" id="mail" hidden></div>
     <div class="panel" id="account">
       <h2 style="margin:0">Tu cuenta</h2>
@@ -517,7 +526,11 @@ function startApp(DATA, TAX, sync) {
 
   // ---------- aprendizaje: guardar, descartar y «fui» mueven pesos por categoría y tema
   const SIGNAL = { save: [0.5, 1], unsave: [-0.5, -1], dismiss: [-0.6, -1.2], undismiss: [0.6, 1.2], went: [1, 1.5], unwent: [-1, -1.5] };
+  // estadísticas de uso (solo si la persona ha dado permiso; ver data.js)
+  const track = (kind, id, ctx) => { try { if (window.limonTrack) window.limonTrack(kind, id, Object.assign({ tab: state.tab }, ctx || {})); } catch (x) { } };
+  const TRACK_KIND = { save: 'guardar', unsave: 'quitar', dismiss: 'descartar', undismiss: 'recuperar', went: 'voy', unwent: 'novoy' };
   function learn(e, kind) {
+    track(TRACK_KIND[kind], e.id);
     const [wc, wt] = SIGNAL[kind];
     e.cats.filter(c => c !== 'sin_categoria').forEach(c => { learned['cat:' + c] = +(((learned['cat:' + c] || 0) + wc).toFixed(2)); });
     (e.temas || []).forEach(t => { learned['tema:' + t] = +(((learned['tema:' + t] || 0) + wt).toFixed(2)); });
@@ -594,6 +607,7 @@ function startApp(DATA, TAX, sync) {
         () => { F.near = 0; toast('Sin permiso de ubicación: elige un distrito.'); renderAll(); }, { timeout: 10000, maximumAge: 300000 });
     }
     store.set('filters', { dist: F.dist, franja: F.franja, dias: F.dias, precio: F.precio });
+    track('filtro', null, { k, v: F[k] || null });
     state.ptShown = 12; state.exShown = 20; renderAll();
   }
 
@@ -622,6 +636,11 @@ function startApp(DATA, TAX, sync) {
     const fr = friendsOf(e).filter(x => x.kind === 'guardado');
     if (fr.length) { s += Math.min(3, 1.2 * fr.length); hits.push(fr.length === 1 ? fr[0].name + ' lo tiene guardado' : fr.length + ' amigos lo tienen guardado'); }
     for (const c of e.cats) { const w = FRIEND_CATS[c]; if (w) s += w; }
+    if (Object.keys(AFF).length) {
+      const liked = likedCats(); let best = 0, from = null;
+      for (const c of e.cats) { if (liked.has(c) || prefs[c] === 2) continue; for (const a of liked) { const l = AFF[a] && AFF[a][c]; if (l > best) { best = l; from = a; } } }
+      if (best > 1.3) { s += Math.min(1.5, (best - 1) * 0.6); hits.push('suele gustar a quien le gusta ' + labelOf(from).toLowerCase()); }
+    }
     const tf = topicHit(e); if (tf) { s += 2.5; hits.push('sigues ' + tf); }
     if (isFamily(e) && !opts.ninos) return { s: -1, hits: [] };
     if (opts.perro && isPet(e)) { s += 2; hits.push('vas con tu perro'); }
@@ -683,7 +702,7 @@ function startApp(DATA, TAX, sync) {
         ${state.inviting === e.id ? inviteForm(e) : ''}
         ${state.route && state.route[e.id] ? `<div class="routewarn">${state.route[e.id]}</div>` : ''}
       </div>` : '';
-    return `<article class="card">
+    return `<article class="card" data-eid="${e.id}">
       <div class="row1">${dateBox(e, occ)}
         <div class="body">
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
@@ -1049,6 +1068,22 @@ function startApp(DATA, TAX, sync) {
   let SOC = { me: null, net: null, results: null, editing: false };
   let FRIENDS = {};      // 'e123' → [{ name, username, kind: 'guardado' | 'fue', rating }]
   let FRIEND_CATS = {};  // categoría → peso, por los planes que tus amigos valoraron bien
+  // afinidad colectiva: «a quien le gusta A le gusta B» (lift calculado cada noche con los datos de uso consentidos)
+  let AFF = {};
+  async function loadAffinity() {
+    const db = window.limonDB; if (!db) return;
+    const since = new Date(Date.now() - 3 * 864e5).toISOString();
+    const { data } = await db.sb.from('category_affinity').select('a,b,lift,users_ab').gte('updated_at', since).gte('users_ab', 5).limit(5000);
+    if (!data || !data.length) return;
+    AFF = {}; data.forEach(r => { (AFF[r.a] = AFF[r.a] || {})[r.b] = r.lift; });
+    renderAll();
+  }
+  function likedCats() {
+    const l = new Set(Object.keys(prefs).filter(k => prefs[k] === 1));
+    ((taste && taste.categorias) || []).forEach(c => { if (c.peso >= 2) l.add(c.id); });
+    Object.keys(learned).forEach(k => { if (k.startsWith('cat:') && learned[k] >= 1) l.add(k.slice(4)); });
+    return l;
+  }
   let TOPICS = store.get('topics', []);  // [{ kind: 'sala' | 'ciclo' | 'tema' | 'artista', value }]
   let DIARY = store.get('diary', {});    // 'e123' → { rating, note }
   let DIARY_ROWS = [];                   // de la base de datos, con título y fecha (incluye planes ya pasados)
@@ -1488,8 +1523,53 @@ function startApp(DATA, TAX, sync) {
       <div class="seg full"><button class="btn" type="submit">${x.id ? 'Guardar cambios' : 'Enviar evento'}</button><button class="btn ghost" type="button" data-org-cancel>Cancelar</button><span class="note" id="org-msg" role="status"></span></div>
     </form>`;
   }
+  // ---------- estadísticas (solo administradores): agregados de los últimos 30 días
+  let STATS = null, statsDays = 30;
+  async function loadStats() {
+    const db = window.limonDB; if (!db) return;
+    STATS = { loading: true }; renderStats();
+    const { data, error } = await db.sb.rpc('admin_stats', { p_city: CITY.id, p_days: statsDays });
+    STATS = error ? { error: error.message } : data; renderStats();
+  }
+  function renderStats() {
+    const el = $('stats'); if (!el) return;
+    const isAdm = logged && me && me.role === 'admin'; el.hidden = !isAdm; if (!isAdm) return;
+    if (!STATS) { loadStats(); return; }
+    const head = `<h2 style="margin:0">Estadísticas de uso</h2>`;
+    if (STATS.loading) { el.innerHTML = head + '<p class="note">Cargando…</p>'; return; }
+    if (STATS.error) { el.innerHTML = head + `<p class="note">${esc(STATS.error)}</p>`; return; }
+    const u = STATS.usuarios || {}, ac = STATS.acciones || {}, n = k => (ac[k] || 0).toLocaleString('es-ES');
+    const days = STATS.por_dia || [], mx = Math.max(1, ...days.map(d => d.personas));
+    const tbl = (rows, cols) => rows.length ? `<div class="tablewrap"><table class="cov"><thead><tr>${cols.map(c => `<th${c[2] ? ' class="n"' : ''}>${c[0]}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${cols.map(c => `<td${c[2] ? ' class="n"' : ''}>${c[1](r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="note">Aún sin datos.</p>';
+    const abrir = ac.abrir || 0, guardar = ac.guardar || 0;
+    el.innerHTML = head + `
+      <div class="seg"><span class="note">${esc(CITY.name)} · últimos</span>${[7, 30, 90].map(d => `<button class="act" data-stats-days="${d}" aria-pressed="${d === statsDays}">${d} días</button>`).join('')}</div>
+      <div class="stat-grid">
+        <div><b>${u.total || 0}</b><span class="note">cuentas (${u.nuevos || 0} nuevas)</span></div>
+        <div><b>${(u.activos_cuenta || 0) + (u.activos_anonimos || 0)}</b><span class="note">personas activas (${u.activos_anonimos || 0} sin cuenta)</span></div>
+        <div><b>${u.con_estadisticas || 0}</b><span class="note">cuentas comparten estadísticas (${u.sin_estadisticas || 0} no)</span></div>
+        <div><b>${n('abrir')}</b><span class="note">fichas abiertas</span></div>
+        <div><b>${n('guardar')}</b><span class="note">guardados${abrir ? ` (${Math.round(100 * guardar / abrir)} % de las abiertas)` : ''}</span></div>
+        <div><b>${n('voy')}</b><span class="note">«voy»</span></div>
+        <div><b>${((ac.web || 0) + (ac.compartir || 0) + (ac.quedar || 0)).toLocaleString('es-ES')}</b><span class="note">salidas a la web, compartir o quedar</span></div>
+        <div><b>${n('descartar')}</b><span class="note">descartados</span></div>
+      </div>
+      ${days.length ? `<h3 style="margin:6px 0 0;font:600 14px var(--f-body)">Personas activas por día</h3><div class="bars" aria-label="Personas activas por día">${days.map(d => `<span title="${esc(d.dia)}: ${d.personas}" style="height:${Math.round(100 * d.personas / mx)}%"></span>`).join('')}</div>` : ''}
+      <h3 style="margin:6px 0 0;font:600 14px var(--f-body)">Planes con más interés</h3>
+      ${tbl(STATS.top_eventos || [], [['Plan', r => BYID['e' + r.id] ? `<button class="btnlink" data-goto-ev="e${r.id}">${esc(r.title.slice(0, 70))}</button>` : esc(r.title.slice(0, 70))], ['Abiertos', r => r.abiertos, 1], ['Guardados', r => r.guardados, 1], ['Voy', r => r.voy, 1], ['Salidas', r => r.salidas, 1]])}
+      <h3 style="margin:6px 0 0;font:600 14px var(--f-body)">Categorías que más interesan</h3>
+      ${tbl(STATS.categorias || [], [['Categoría', r => esc(labelOf(r.cat))], ['Personas', r => r.personas, 1], ['Acciones', r => r.acciones, 1]])}
+      <h3 style="margin:6px 0 0;font:600 14px var(--f-body)">Lo más buscado</h3>
+      ${tbl(STATS.busquedas || [], [['Búsqueda', r => esc(r.q)], ['Veces', r => r.n, 1]])}
+      <h3 style="margin:6px 0 0;font:600 14px var(--f-body)">Afinidades entre gustos</h3>
+      <p class="note" style="margin:0">«A quien le gusta A le gusta B» varias veces más de lo normal. Solo aparecen parejas con al menos 5 personas en común; con ellas se ajustan las recomendaciones de todos.</p>
+      ${tbl(STATS.afinidad || [], [['A', r => esc(labelOf(r.a))], ['B', r => esc(labelOf(r.b))], ['Personas', r => r.users_ab, 1], ['Veces más', r => String(r.lift).replace('.', ','), 1]])}
+      <p class="note" style="margin:0">Solo cuenta a quien ha dado permiso. Edad y sexo se añadirán cuando haya usuarios suficientes para que el desglose sea anónimo.</p>`;
+  }
   function renderAccountExtras() {
     const org = $('org'), adm = $('adm'), cal = $('ag-cal'), mail = $('mail');
+    renderStats();
+    if ($('o-stats')) $('o-stats').checked = !!(window.limonConsent && window.limonConsent.get() === '1');
     if (!logged || !me) {
       org.hidden = true; adm.hidden = true; mail.hidden = true;
       cal.innerHTML = `<h2 style="margin:0">En tu calendario</h2><p class="note">Entra con tu cuenta (en Perfil) y tus planes guardados y los cortes de tus calles aparecerán en Google Calendar, Apple u Outlook, y se actualizarán solos.</p>`;
@@ -1640,6 +1720,7 @@ function startApp(DATA, TAX, sync) {
       if (error) { toast('No se ha podido crear: ' + error.message); return; }
       if (!saved.includes(e.id)) { saved = saved.concat(e.id); store.set('saved', saved); learn(e, 'save'); }
       state.inviting = null; await loadInvites();
+      track('quedar', e.id);
       shareInvite(e, data.token, from);
       return;
     }
@@ -1681,6 +1762,20 @@ function startApp(DATA, TAX, sync) {
 
   // ---------- vistas
   const $ = id => document.getElementById(id);
+  // qué planes se enseñaron (para saber qué se ve y no se elige); como mucho uno cada 3 s
+  let listTimer = null, lastList = '';
+  function logList(ids) {
+    clearTimeout(listTimer);
+    const tab = state.tab, when = state.when;
+    listTimer = setTimeout(() => { const k = when + ids.join(','); if (k === lastList || !ids.length) return; lastList = k; track('lista', null, { tab, when, ids: ids.slice(0, 40).map(x => +String(x).slice(1)) }); }, 3000);
+  }
+  // permiso para estadísticas: se pregunta una vez, dentro de la lista (sin ventanas emergentes)
+  function consentCard() {
+    if (!window.limonConsent || window.limonConsent.get() !== null) return '';
+    return `<div class="consent" role="region" aria-label="Estadísticas de uso">
+      <p style="margin:0"><b>¿Nos ayudas a mejorar Limón?</b> Si nos dejas, guardamos qué planes abres, guardas o compartes para mejorar las recomendaciones de todos y saber qué tipo de planes interesan en la ciudad. Sin anuncios y sin vender datos de nadie.</p>
+      <div class="seg"><button class="btn" data-consent="1">Vale</button><button class="btn ghost" data-consent="0">No, gracias</button><a class="note" href="privacidad.html#estadisticas">Más información</a></div></div>`;
+  }
   function renderParaTi() {
     const [a, b] = range(state.when);
     if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1) && !(taste && ((taste.categorias || []).length || (taste.temas || []).length)) && !Object.keys(FRIENDS).length && !TOPICS.length) {
@@ -1695,7 +1790,8 @@ function startApp(DATA, TAX, sync) {
       items.sort((x, y) => y.s - x.s || x.occ.date - y.occ.date);
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
-      $('pt-list').innerHTML = streetBanner() + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
+      logList(items.slice(0, state.ptShown).map(x => x.e.id));
+      $('pt-list').innerHTML = streetBanner() + consentCard() + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -1716,7 +1812,8 @@ function startApp(DATA, TAX, sync) {
     $('pt-lead').textContent = items.length ? `Los ${top.length} que mejor encajan con tus intereses. Toca el título para ver más.` : 'Prueba con un rango más amplio o marca más intereses.';
     const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
       (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
-    $('pt-list').innerHTML = streetBanner() + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
+    logList(top.map(x => x.e.id));
+    $('pt-list').innerHTML = streetBanner() + consentCard() + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
   }
@@ -1852,6 +1949,7 @@ function startApp(DATA, TAX, sync) {
   document.title = 'Limón · ' + CITY.name;
   if (!HAS_CALLE) { ['t-calle'].forEach(id => { const el = $(id); if (el) el.hidden = true; }); document.querySelectorAll('[data-bnav="calle"]').forEach(b => { b.hidden = true; b.style.display = 'none'; }); }
   function go(t) {
+    if (state.tab !== t) track('pestana', null, { a: t });
     state.tab = t;
     tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === t); });
     const nav = (t === 'unicos') ? 'parati' : (t === 'fuentes') ? 'intereses' : t;
@@ -1875,7 +1973,9 @@ function startApp(DATA, TAX, sync) {
     if (v && !streets.some(x => streetKey(x) === streetKey(v))) { streets = streets.concat(v); store.set('streets', streets); }
     $('ca-street').value = ''; renderAll();
   });
+  let qTimer = null;
   $('q-global').addEventListener('input', () => {
+    clearTimeout(qTimer); qTimer = setTimeout(() => { const q = $('q-global').value.trim(); if (q.length >= 3) track('buscar', null, { q: q.slice(0, 80) }); }, 1500);
     $('ex-q').value = $('q-global').value;
     if ($('q-global').value.trim()) $('ex-when').value = 'todo';
     state.exShown = 20;
@@ -1884,6 +1984,8 @@ function startApp(DATA, TAX, sync) {
   });
   $('ex-q').addEventListener('input', () => { $('q-global').value = $('ex-q').value; });
   $('o-ninos').addEventListener('change', e => { opts.ninos = e.target.checked; store.set('opts', opts); });
+  $('o-stats').checked = !!(window.limonConsent && window.limonConsent.get() === '1');
+  $('o-stats').addEventListener('change', async e => { await window.limonConsent.set(e.target.checked); toast(e.target.checked ? 'Gracias por ayudar.' : 'Hecho: dejamos de guardar estadísticas de tu uso.'); renderAll(); });
   $('o-perro').addEventListener('change', e => { opts.perro = e.target.checked; store.set('opts', opts); });
   $('o-dist').addEventListener('change', e => { opts.dist = e.target.checked; store.set('opts', opts); if (opts.dist) askPos(false); else { userPos = null; renderAll(); } });
   $('in-reset').addEventListener('click', () => { prefs = Object.assign({}, SAMPLE); store.set('prefs', prefs); renderIntereses(); });
@@ -2024,12 +2126,18 @@ function startApp(DATA, TAX, sync) {
     if (ev.target.closest('[data-invite-cancel]')) { state.inviting = null; renderAll(); return; }
     const rs = ev.target.closest('[data-reshare]');
     if (rs) { shareInvite(BYID[rs.dataset.ev], rs.dataset.reshare, store.get('myname', '')); return; }
+    const sd = ev.target.closest('[data-stats-days]');
+    if (sd) { statsDays = +sd.dataset.statsDays; loadStats(); return; }
+    const ge = ev.target.closest('[data-goto-ev]');
+    if (ge) { const id = ge.dataset.gotoEv; state.open[id] = true; $('ex-q').value = $('q-global').value = BYID[id].titulo; $('ex-when').value = 'todo'; go('explorar'); return; }
+    const cs = ev.target.closest('[data-consent]');
+    if (cs) { window.limonConsent.set(cs.dataset.consent === '1'); $('o-stats').checked = cs.dataset.consent === '1'; toast(cs.dataset.consent === '1' ? 'Gracias. Puedes cambiarlo cuando quieras en Perfil.' : 'Entendido: no guardamos nada. Puedes cambiarlo en Perfil.'); renderAll(); return; }
     let o = ev.target.closest('[data-open]');
     if (!o) {
       const c = ev.target.closest('.card');
       if (c && !ev.target.closest('a, button, .more')) o = c.querySelector('[data-open]');
     }
-    if (o) { const id = o.dataset.open; state.open[id] = !state.open[id]; renderAll(); const el = document.querySelector(`[data-open="${id}"]`); if (el) el.focus(); return; }
+    if (o) { const id = o.dataset.open; state.open[id] = !state.open[id]; if (state.open[id]) { const all = [...document.querySelectorAll('#v-' + state.tab + ' [data-open]')].map(x => x.dataset.open); track('abrir', id, { pos: all.indexOf(id) + 1 || null }); } renderAll(); const el = document.querySelector(`[data-open="${id}"]`); if (el) el.focus(); return; }
     const g = ev.target.closest('[data-grp]');
     if (g) { state.groupsOpen[g.dataset.grp] = !state.groupsOpen[g.dataset.grp]; renderIntereses(); return; }
     const c = ev.target.closest('[data-cat]');
@@ -2077,9 +2185,15 @@ function startApp(DATA, TAX, sync) {
   document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('#v-intereses .panel.fold h2')) { ev.preventDefault(); openFold(ev.target.closest('.panel').id); } });
   // los apartados se repintan a menudo: se vuelve a marcar el título como botón
   new MutationObserver(() => setupFolds()).observe($('v-intereses'), { childList: true, subtree: false });
-  ['social', 'seguir', 'ventajas', 'year', 'ideas', 'org', 'adm', 'mail'].forEach(id => { const el = $(id); if (el) new MutationObserver(() => { const h = el.querySelector('h2'); if (h && !h.hasAttribute('role')) { h.setAttribute('role', 'button'); h.tabIndex = 0; h.setAttribute('aria-expanded', !!FOLDS[id]); } }).observe(el, { childList: true }); });
+  ['social', 'seguir', 'ventajas', 'year', 'ideas', 'org', 'adm', 'stats', 'mail'].forEach(id => { const el = $(id); if (el) new MutationObserver(() => { const h = el.querySelector('h2'); if (h && !h.hasAttribute('role')) { h.setAttribute('role', 'button'); h.tabIndex = 0; h.setAttribute('aria-expanded', !!FOLDS[id]); } }).observe(el, { childList: true }); });
   setupFolds();
-  renderSocialAll(); loadIdeas();
+  // enlaces que sacan de Limón (web del organizador, fuente, cómo llegar): señal fuerte de interés
+  document.addEventListener('click', ev => {
+    const a = ev.target.closest('.card a[target="_blank"]'); if (!a) return;
+    const c = a.closest('[data-eid]'); if (!c) return;
+    track('web', c.dataset.eid, { tipo: /google\.com\/maps/.test(a.href) ? 'mapa' : /organizador/i.test(a.textContent) ? 'organizador' : 'fuente' });
+  }, true);
+  renderSocialAll(); loadIdeas(); loadAffinity();
   document.addEventListener('input', ev => { if (ev.target.id === 'idea-title') { IDEAS_SIM = similarIdeas(ev.target.value); const b = $('idea-sim'); if (b) b.innerHTML = IDEAS_SIM.length ? '<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>' + IDEAS_SIM.map(ideaRow).join('') : ''; } });
   if (QS.get('ideas') !== null) { go('intereses'); openFold('ideas', true); setTimeout(() => { const b = $('ideas'); if (b) b.scrollIntoView({ behavior: 'smooth' }); }, 400); }
   if (QS.get('u') && /^[a-z0-9_.]{3,20}$/i.test(QS.get('u'))) { const un = QS.get('u'); go('intereses'); setTimeout(() => openProfile(un), 300); }

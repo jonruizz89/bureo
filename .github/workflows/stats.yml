@@ -1,0 +1,32 @@
+name: Estadísticas
+
+# Cada noche recalcula la afinidad entre categorías («a quien le gusta A le gusta B») con los datos de uso consentidos.
+on:
+  schedule:
+    - cron: "33 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Afinidad entre categorías
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+        run: |
+          code=$(curl -sS -o out.json -w '%{http_code}' -m 300 -X POST "$SUPABASE_URL/rest/v1/rpc/refresh_affinity" \
+            -H "apikey: $SUPABASE_SECRET" -H "Authorization: Bearer $SUPABASE_SECRET" -H "Content-Type: application/json" -d '{}')
+          echo "parejas actualizadas: $(cat out.json)"
+          test "$code" = "200"
+      - name: Borrar el detalle de uso de hace más de 18 meses
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+        run: |
+          limit=$(date -u -d '18 months ago' +%Y-%m-%dT%H:%M:%SZ)
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$SUPABASE_URL/rest/v1/activity?created_at=lt.$limit" \
+            -H "apikey: $SUPABASE_SECRET" -H "Authorization: Bearer $SUPABASE_SECRET" -H "Prefer: return=minimal")
+          echo "anterior a $limit: $code"
+          test "$code" = "204"

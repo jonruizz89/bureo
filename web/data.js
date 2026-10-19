@@ -79,9 +79,38 @@
     return r.data;
   }
 
+  const toDbId = (id) => Number(String(id).replace(/^e/, ''));
+  // ---------- estadísticas de uso: solo con permiso (bureo.analytics = '1'), sin datos de contacto
+  const TQ = []; let tTimer = null;
+  const consent = () => { try { return localStorage.getItem('bureo.analytics'); } catch (e) { return null; } };
+  function anonId() {
+    // identificador aleatorio de este navegador, distinto del de «Quedar»: no se puede cruzar con nada más
+    try { let d = localStorage.getItem('bureo.anon'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()).slice(0, 36); localStorage.setItem('bureo.anon', d); } return d; } catch (e) { return 'sin-almacen'; }
+  }
+  async function flushTrack() {
+    if (!TQ.length || !sb) return;
+    const rows = TQ.splice(0, 100).map((r) => (user ? Object.assign(r, { user_id: user.id }) : Object.assign(r, { device: anonId() })));
+    const { error } = await sb.from('activity').insert(rows);
+    if (error) console.warn('estadísticas', error.message);
+  }
+  window.limonTrack = function (kind, eventId, ctx) {
+    if (consent() !== '1' || !sb) return;
+    const id = eventId ? toDbId(eventId) : null;
+    TQ.push({ kind, event_id: id || null, city_id: C.city, ctx: ctx || null });
+    clearTimeout(tTimer); tTimer = setTimeout(flushTrack, TQ.length >= 20 ? 0 : 4000);
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushTrack(); });
+  window.limonConsent = {
+    get: consent,
+    async set(on) {
+      try { localStorage.setItem('bureo.analytics', on ? '1' : '0'); } catch (e) { }
+      if (!on) TQ.length = 0;
+      if (user) await sb.from('profiles').update({ analytics: !!on }).eq('id', user.id);
+    }
+  };
+
   // ---------- cuenta
   let app = null, user = null, timers = {};
-  const toDbId = (id) => Number(String(id).replace(/^e/, ''));
 
   async function pushKey(k, v) {
     if (!user) return;
@@ -126,7 +155,7 @@
     const [i, s, p, d, w] = await Promise.all([
       sb.from('user_interests').select('category_id,value').eq('user_id', uid),
       sb.from('saved_events').select('event_id').eq('user_id', uid),
-      sb.from('profiles').select('with_kids,with_dog,my_streets,learned,taste,taste_text,city_id').eq('id', uid).maybeSingle(),
+      sb.from('profiles').select('with_kids,with_dog,my_streets,learned,taste,taste_text,city_id,analytics').eq('id', uid).maybeSingle(),
       sb.from('dismissed_events').select('event_id').eq('user_id', uid),
       sb.from('attendance').select('event_id').eq('user_id', uid).eq('went', true)
     ]);
@@ -141,6 +170,10 @@
       taste: (p.data && p.data.taste) || null,
       taste_text: (p.data && p.data.taste_text) || ''
     };
+    // el permiso de estadísticas va con la cuenta; si se dio antes de entrar, se guarda en ella
+    const pa = p.data ? p.data.analytics : null;
+    if (pa === true || pa === false) { try { localStorage.setItem('bureo.analytics', pa ? '1' : '0'); } catch (e) { } }
+    else if (consent() === '1' || consent() === '0') sb.from('profiles').update({ analytics: consent() === '1' }).eq('id', uid);
     // en un navegador nuevo, se abre la ciudad que la persona tiene en su cuenta
     const pc = p.data && p.data.city_id;
     let chosen = null; try { chosen = localStorage.getItem('bureo.city'); } catch (e) { }
@@ -245,10 +278,10 @@
       const [p, i, sv, at, di, se, inv, rs] = await Promise.all([q('profiles', 'id'), q('user_interests'), q('saved_events'), q('attendance'), q('dismissed_events'), q('submitted_events', 'owner'),
         sb.from('plan_invites').select('*, plan_rsvps(name,status,created_at)').eq('owner', uid), q('plan_rsvps')]);
       const [fw, tf, ls, lf] = await Promise.all([sb.from('follows').select('*'), q('topic_follows'), sb.from('user_lists').select('*, list_items(event_id,note,added_at)').eq('owner', uid), q('list_follows')]);
-      const [idd, idv] = await Promise.all([q('ideas', 'author'), q('idea_votes')]);
+      const [idd, idv, act] = await Promise.all([q('ideas', 'author'), q('idea_votes'), q('activity').order('created_at', { ascending: false }).limit(5000)]);
       const out = { exportado: new Date().toISOString(), email: user.email, perfil: p.data, intereses: i.data, guardados: sv.data,
         asistencias: at.data, descartados: di.data, eventos_publicados: se.data, planes_propuestos: inv.data, mis_respuestas_a_planes: rs.data,
-        seguidores_y_seguidos: fw.data, lo_que_sigues: tf.data, mis_listas: ls.data, listas_que_sigo: lf.data, mis_ideas: idd.data, mis_votos: idv.data };
+        seguidores_y_seguidos: fw.data, lo_que_sigues: tf.data, mis_listas: ls.data, listas_que_sigo: lf.data, mis_ideas: idd.data, mis_votos: idv.data, estadisticas_de_uso: act.data };
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
       a.download = 'limon-mis-datos.json'; document.body.appendChild(a); a.click(); a.remove();
