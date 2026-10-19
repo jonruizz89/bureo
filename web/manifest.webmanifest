@@ -1,0 +1,26 @@
+{
+  "name": "Limón · planes de tu ciudad",
+  "short_name": "Limón",
+  "description": "Los planes de tu ciudad que van contigo: recomendaciones, agenda, amigos y avisos de calle.",
+  "lang": "es",
+  "dir": "ltr",
+  "id": "/",
+  "start_url": "/?pwa=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF3C4",
+  "theme_color": "#FFD43B",
+  "categories": ["entertainment", "lifestyle", "travel"],
+  "icons": [
+    { "src": "limon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "limon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "limon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "limon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Para ti", "url": "/?tab=parati", "icons": [{ "src": "limon-192.png", "sizes": "192x192" }] },
+    { "name": "Mi agenda", "url": "/?tab=agenda", "icons": [{ "src": "limon-192.png", "sizes": "192x192" }] },
+    { "name": "Calle", "url": "/?tab=calle", "icons": [{ "src": "limon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -6,6 +6,7 @@
 //  - weekly: resumen de la semana según tus gustos, lo que sigues y tus amigos (requiere la clave secreta).
 //  - unsub:  darse de baja de un tipo de aviso con el enlace del correo (también One-Click, RFC 8058).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { pushTo } from '../_shared/push.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
 const KEYS: string[] = (() => {
@@ -89,6 +90,14 @@ async function send(p: Prof, subject: string, html: string, k: string) {
 // resumen, cortes y lluvia solo si se activan; organizador, admin, quedadas, amigos e ideas salvo que se desactiven
 const OPT_IN = ['semanal', 'calle', 'lluvia'];
 const wants = (p: Prof, k: string) => !!p.email && (OPT_IN.includes(k) ? (p.notify || {})[k] === true : (p.notify || {})[k] !== false);
+// avisos en el móvil: solo los tipos que la persona activa en «En este móvil» (notify.push)
+const wantsPush = (p: Prof, k: string) => !!((p.notify || {}) as Record<string, unknown>).push && ((p.notify as unknown as { push: Record<string, boolean> }).push[k] === true);
+// el aviso push sale del mismo correo: asunto, primera frase y botón
+function pushOf(subject: string, html: string, tag: string) {
+  const intro = (html.match(/color:#3D3517">([\s\S]*?)<\/p>/) || [])[1] || '';
+  const url = ((html.match(/<p style="margin:24px 0 0"><a href="([^"]+)"/) || [])[1] || APP).replace(/&amp;/g, '&');
+  return { title: subject, body: textOf(intro).replace(/\s+/g, ' ').slice(0, 200), url, tag };
+}
 
 // ---------- cola: organizadores, quedadas, amigos, ideas y admins
 async function flush() {
@@ -99,7 +108,7 @@ async function flush() {
     const k = m.kind.startsWith('admin') ? 'admin' : m.kind === 'rsvp' ? 'quedadas' : m.kind.startsWith('follow') ? 'amigos' : m.kind === 'idea_status' ? 'ideas' : 'organizador';
     let mail: { subject: string; html: string } | null = null;
     const pl = m.payload || {};
-    if (p && wants(p, k)) {
+    if (p && (wants(p, k) || wantsPush(p, k))) {
       if (m.kind === 'org_editor') {
         mail = pl.status === 'aprobado'
           ? { subject: 'Ya puedes publicar tus eventos en Limón', html: layout({ title: '¡Bienvenido a Limón como organizador!', intro: 'Hemos aprobado tu solicitud. Desde <b>Perfil → Mis eventos</b> puedes crear tus eventos: la IA los revisa, los sitúa en el mapa y salen en Limón con enlace a tu web.', cta: { label: 'Crear mi primer evento', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por tu solicitud de organizador.') }) }
@@ -147,6 +156,8 @@ async function flush() {
       }
     }
     if (!mail || !p) { await admin.from('mail_outbox').update({ sent_at: new Date().toISOString(), error: 'omitido' }).eq('id', m.id); skipped++; continue; }
+    const viaPush = wantsPush(p, k) ? await pushTo(admin, p.id, pushOf(mail.subject, mail.html, m.kind)).catch(() => 0) : 0;
+    if (!wants(p, k)) { await admin.from('mail_outbox').update({ sent_at: new Date().toISOString(), error: viaPush ? 'solo push' : 'omitido' }).eq('id', m.id); viaPush ? sent++ : skipped++; continue; }
     try { await send(p, mail.subject, mail.html, k); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', m.id); sent++; }
     catch (e) { await admin.from('mail_outbox').update({ error: String(e).slice(0, 300) }).eq('id', m.id); }
   }
@@ -220,7 +231,7 @@ async function daily() {
   const today = madridToday(), days = [today, addDays(today, 1)];
   // el registro de envíos se guarda 12 meses como mucho (política de privacidad)
   await admin.from('mail_outbox').delete().lt('created_at', new Date(Date.now() - 365 * 864e5).toISOString());
-  const { data: profs } = await admin.from('profiles').select('id,email,notify,mail_token,my_streets,city_id').or('notify->>calle.eq.true,notify->>lluvia.eq.true');
+  const { data: profs } = await admin.from('profiles').select('id,email,notify,mail_token,my_streets,city_id').or('notify->>calle.eq.true,notify->>lluvia.eq.true,notify->push->>calle.eq.true,notify->push->>lluvia.eq.true');
   if (!profs || !profs.length) return { users: 0, sent: 0 };
   const cities = await loadCities();
   const { data: cl } = await admin.from('closures').select('id,city_id,title,kind,streets,ranges,geom');
@@ -230,7 +241,7 @@ async function daily() {
     if (!p.email) continue;
     const cityId = p.city_id || 'madrid', closures = allClosures.filter((c) => c.city_id === cityId), rain = await rainFor(cities[cityId]);
     const sections: { h: string; items: Item[] }[] = [];
-    const wantCalle = (p.notify || {}).calle === true, wantRain = (p.notify || {}).lluvia === true;
+    const wantCalle = (p.notify || {}).calle === true || wantsPush(p, 'calle'), wantRain = (p.notify || {}).lluvia === true || wantsPush(p, 'lluvia');
     // tus planes guardados con sesión hoy o mañana
     const { data: sv } = await admin.from('saved_events').select('event_id, events(id,title,description,lat,lng,time_text,venues(name), event_sessions(on_date), event_categories(category_id))').eq('user_id', p.id);
     const planItems: Item[] = [], rainItems: Item[] = [];
@@ -283,7 +294,13 @@ async function daily() {
     const html = layout({ title: onlyRain ? 'Puede llover en tus planes' : 'Avisos para hoy y mañana', intro: onlyRain ? `Según la previsión de Open-Meteo para ${(cities[cityId] || { name: 'tu ciudad' }).name}, ${human(ymd(today))} y el día siguiente.` : `Lo que hemos visto en los avisos municipales y en la previsión del tiempo para el ${human(ymd(today))} y el día siguiente.`, sections,
       cta: onlyRain ? { label: 'Ver mis planes', url: APP + '?tab=agenda' } : { label: 'Ver el mapa de cortes', url: APP + '?tab=calle' },
       footer: footer(p, kk, `Recibes este aviso porque activaste los avisos de ${onlyRain ? 'lluvia' : 'cortes de calle'} en Limón. Puedes cambiar qué avisos recibes en tu perfil.`) });
-    try { await send(p, planItems.length ? `Cortes cerca de tus planes: ${planItems[0].title}` : rainItems.length ? `Puede llover: ${rainItems[0].title}` : 'Cortes en tus calles hoy y mañana', html, kk); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', ins[0].id); sent++; }
+    const subject = planItems.length ? `Cortes cerca de tus planes: ${planItems[0].title}` : rainItems.length ? `Puede llover: ${rainItems[0].title}` : 'Cortes en tus calles hoy y mañana';
+    if (wantsPush(p, kk)) {
+      const first = sections[0].items[0];
+      await pushTo(admin, p.id, { title: subject, body: [first.meta, first.note].filter(Boolean).join(' · '), url: onlyRain ? APP + '?tab=agenda' : APP + '?tab=calle', tag: kk }).catch(() => 0);
+    }
+    if (!wants(p, kk)) { await admin.from('mail_outbox').update({ sent_at: new Date().toISOString(), error: 'solo push' }).eq('id', ins[0].id); continue; }
+    try { await send(p, subject, html, kk); await admin.from('mail_outbox').update({ sent_at: new Date().toISOString() }).eq('id', ins[0].id); sent++; }
     catch (e) { await admin.from('mail_outbox').update({ error: String(e).slice(0, 300) }).eq('id', ins[0].id); }
   }
   return { users: profs.length, sent };

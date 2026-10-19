@@ -7,6 +7,11 @@
 <meta name="description" content="Limón: los planes de tu ciudad que van contigo, y en Madrid también las calles y líneas cortadas antes de salir.">
 <link rel="icon" href="limon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="limon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Limón">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#FFD43B" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1320" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1493,6 +1498,7 @@ function startApp(DATA, TAX, sync) {
     if (!u) { me = null; renderAccountExtras(); return; }
     const { data } = await db.sb.from('profiles').select('role,editor_status,organizer,ical_token,notify').eq('id', u.id).maybeSingle();
     me = data || null;
+    if (me && typeof pushSub !== 'undefined' && pushSub && Notification.permission === 'granted') registerSub(pushSub);
     mySubs = [];
     if (me && (me.role === 'editor' || me.role === 'admin')) {
       const r = await db.sb.from('submitted_events').select('*').eq('owner', u.id).order('starts_on', { ascending: false });
@@ -1523,6 +1529,72 @@ function startApp(DATA, TAX, sync) {
       <div class="seg full"><button class="btn" type="submit">${x.id ? 'Guardar cambios' : 'Enviar evento'}</button><button class="btn ghost" type="button" data-org-cancel>Cancelar</button><span class="note" id="org-msg" role="status"></span></div>
     </form>`;
   }
+  // ---------- avisos push en este dispositivo (PWA). En iPhone solo funcionan con Limón añadido a la pantalla de inicio.
+  const PUSH_KINDS = [['quedadas', 'Quedadas: alguien responde a un plan que propusiste'], ['amigos', 'Amigos: te quieren seguir o aceptan tu solicitud'],
+    ['calle', 'Cortes junto a tus planes de hoy o mañana, o en tus calles (por la mañana)'], ['lluvia', 'Lluvia en un plan al aire libre que tienes guardado'],
+    ['ideas', 'Ideas: cambia el estado de una idea tuya'], ['organizador', 'Organizador: revisamos tu solicitud o tus eventos'], ['admin', 'Admin: algo pendiente de revisión']];
+  const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let pushSub = null, pushBusy = false;
+  const b64u8 = b => { const p = '='.repeat((4 - b.length % 4) % 4), r = atob((b + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+  const deviceName = () => (isIOS ? 'iPhone/iPad' : /Android/.test(navigator.userAgent) ? 'Android' : /Mac/.test(navigator.platform) ? 'Mac' : /Win/.test(navigator.platform) ? 'Windows' : 'Navegador') + (standalone() ? ' (app)' : '');
+  async function registerSub(sub) {
+    const db = window.limonDB, u = db && db.user(); if (!u || !sub) return null;
+    const j = sub.toJSON();
+    const { error } = await db.sb.rpc('push_register', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_device: deviceName() });
+    return error;
+  }
+  async function refreshPush() {
+    if (!pushOk()) return;
+    try { const reg = await navigator.serviceWorker.ready; pushSub = await reg.pushManager.getSubscription(); } catch (e) { pushSub = null; }
+    if (pushSub && Notification.permission === 'granted') registerSub(pushSub);  // la suscripción queda con la cuenta abierta ahora
+    if (logged && me) renderAccountExtras();
+  }
+  function pushBlock() {
+    if (!pushOk()) return isIOS && !standalone()
+      ? '<p class="note">Para recibir avisos en el iPhone: en Safari pulsa Compartir → «Añadir a pantalla de inicio» y abre Limón desde ese icono. Ahí aparecerá el botón para activarlos.</p>'
+      : '<p class="note">Este navegador no permite avisos. Prueba con Chrome, Edge, Firefox o Safari actualizados.</p>';
+    if (Notification.permission === 'denied') return `<p class="note">Has bloqueado los avisos de Limón en este dispositivo. Para activarlos, cámbialo en los ajustes de notificaciones${isIOS ? ' del iPhone (Ajustes → Notificaciones → Limón)' : ' del navegador'}.</p>`;
+    if (!pushSub) return `<p class="note" style="margin:0">Te avisamos al momento en este ${isIOS ? 'iPhone' : 'dispositivo'}: quedadas, amigos, cortes y lluvia en tus planes. Puedes elegir cuáles.</p>
+      <div class="seg"><button class="btn" data-push-on ${pushBusy ? 'disabled' : ''}>Activar avisos aquí</button></div>`;
+    const pt = (me.notify && me.notify.push) || {};
+    const kinds = PUSH_KINDS.filter(([k]) => k !== 'organizador' || me.role === 'editor' || me.role === 'admin' || me.editor_status).filter(([k]) => k !== 'admin' || me.role === 'admin');
+    return `<p class="note" style="margin:0">Avisos activados en este dispositivo. Elige cuáles quieres:</p>
+      ${kinds.map(([k, t]) => `<label class="toggle">${t}<input type="checkbox" data-push="${k}" ${pt[k] ? 'checked' : ''}></label>`).join('')}
+      <div class="seg"><button class="btn ghost" data-push-test>Enviarme un aviso de prueba</button><button class="btn ghost" data-push-off>Desactivar aquí</button></div>`;
+  }
+  async function pushOn() {
+    const db = window.limonDB, u = db && db.user(); if (!u || !me) { toast('Entra con tu cuenta para activar los avisos.'); return; }
+    pushBusy = true; renderAccountExtras();
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toast(perm === 'denied' ? 'Has bloqueado los avisos. Puedes cambiarlo en los ajustes de notificaciones.' : 'Sin permiso no podemos avisarte.'); return; }
+      const { data, error } = await db.sb.functions.invoke('limon-push', { body: { action: 'key' } });
+      if (error || !data || !data.key) { toast('No se han podido activar ahora. Prueba en un rato.'); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u8(data.key) });
+      const err = await registerSub(sub);
+      if (err) { toast('No se han podido activar: ' + err.message); return; }
+      pushSub = sub;
+      if (!me.notify || !me.notify.push) {
+        me.notify = Object.assign({}, me.notify || {}, { push: { quedadas: true, amigos: true, calle: true, lluvia: true, ideas: true, organizador: true, admin: true } });
+        await db.sb.from('profiles').update({ notify: me.notify }).eq('id', u.id);
+      }
+      toast('Avisos activados en este dispositivo.');
+    } catch (e) { toast('No se han podido activar: ' + (e && e.message || e)); }
+    finally { pushBusy = false; renderAccountExtras(); }
+  }
+  async function pushOff() {
+    const db = window.limonDB;
+    if (pushSub) { try { await db.sb.from('push_subscriptions').delete().eq('endpoint', pushSub.endpoint); await pushSub.unsubscribe(); } catch (e) { } pushSub = null; }
+    toast('Avisos desactivados en este dispositivo.'); renderAccountExtras();
+  }
+  // el numerito del icono se quita al abrir la app
+  const clearBadge = () => { try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (e) { } };
+  clearBadge(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') clearBadge(); });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(refreshPush).catch(e => console.warn('sw', e));
+
   // ---------- estadísticas (solo administradores): agregados de los últimos 30 días
   let STATS = null, statsDays = 30;
   async function loadStats() {
@@ -1584,7 +1656,10 @@ function startApp(DATA, TAX, sync) {
     const nt = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true, ideas: true }, me.notify || {});
     const box = (k, txt) => `<label class="toggle">${txt}<input type="checkbox" data-notify="${k}" ${nt[k] ? 'checked' : ''}></label>`;
     mail.hidden = false;
-    mail.innerHTML = `<h2 style="margin:0">Avisos por correo</h2>
+    mail.innerHTML = `<h2 style="margin:0">Avisos</h2>
+      <h3 style="margin:0;font:600 14px var(--f-body)">En este dispositivo</h3>
+      ${pushBlock()}
+      <h3 style="margin:8px 0 0;font:600 14px var(--f-body)">Por correo</h3>
       <p class="note">Solo te escribimos si lo activas. Cada correo trae un enlace para darte de baja.</p>
       ${box('semanal', 'Resumen semanal: los planes de la semana elegidos según tus gustos (los jueves)')}
       ${box('calle', 'Cortes de calle: si hoy o mañana hay cortes junto a tus planes guardados o en tus calles (por la mañana)')}
@@ -1637,6 +1712,13 @@ function startApp(DATA, TAX, sync) {
       await sb.from('user_lists').update({ updated_at: new Date().toISOString() }).eq('id', l.id);
       toast(lt.checked ? `Añadido a «${l.title}».` : `Quitado de «${l.title}».`); await loadSocial(); return;
     }
+    const pc = ev.target.closest('[data-push]');
+    if (pc && me) {
+      const db = window.limonDB, u = db && db.user(); if (!u) return;
+      me.notify = Object.assign({}, me.notify || {}); me.notify.push = Object.assign({}, me.notify.push || {}, { [pc.dataset.push]: pc.checked });
+      const { error } = await db.sb.from('profiles').update({ notify: me.notify }).eq('id', u.id);
+      toast(error ? 'No se ha podido guardar: ' + error.message : pc.checked ? 'Activado.' : 'Desactivado.'); return;
+    }
     const cb = ev.target.closest('[data-notify]'); if (!cb || !me) return;
     const db = window.limonDB, u = db && db.user(); if (!u) return;
     me.notify = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true, ideas: true }, me.notify || {}, { [cb.dataset.notify]: cb.checked });
@@ -1649,6 +1731,12 @@ function startApp(DATA, TAX, sync) {
   async function onAccountClick(ev) {
     const db = window.limonDB;
     const t = ev.target;
+    if (t.closest('[data-push-on]')) { pushOn(); return true; }
+    if (t.closest('[data-push-off]')) { pushOff(); return true; }
+    if (t.closest('[data-push-test]')) {
+      const { data, error } = await db.sb.functions.invoke('limon-push', { body: { action: 'test' } });
+      toast(error ? 'No se ha podido enviar ahora.' : data && data.error ? data.error : data && data.sent ? 'Enviado: te llegará en unos segundos.' : 'No hay ningún dispositivo activo: vuelve a activar los avisos.'); return true;
+    }
     if (t.closest('[data-org-new]')) { orgEdit = 'nuevo'; renderAccountExtras(); return true; }
     const ed = t.closest('[data-org-edit]'); if (ed) { orgEdit = +ed.dataset.orgEdit; renderAccountExtras(); $('org').scrollIntoView({ behavior: 'smooth' }); return true; }
     if (t.closest('[data-org-cancel]')) { orgEdit = null; renderAccountExtras(); return true; }
