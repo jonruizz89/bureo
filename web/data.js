@@ -307,6 +307,9 @@
   window.limonCity = {
     list: () => CITIES, current: () => CITY,
     async set(id) {
+      const c = CITIES.find((x) => x.id === id);
+      // una ciudad en borrador solo se ve en vista previa (?c=), sin guardarla como ciudad propia
+      if (c && c.status !== 'publicada') { location.href = location.pathname + '?c=' + encodeURIComponent(id); return; }
       try { localStorage.setItem('bureo.city', id); } catch (e) { }
       if (user) await sb.from('profiles').update({ city_id: id }).eq('id', user.id);
       location.href = location.pathname;
