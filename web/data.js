@@ -139,13 +139,19 @@
       if (ids.length) del = del.not('event_id', 'in', '(' + ids.join(',') + ')');
       await del;
       if (ids.length) await sb.from('saved_events').upsert(ids.map((id) => ({ user_id: uid, event_id: id })), { ignoreDuplicates: true });
-    } else if (k === 'dismissed' || k === 'went') {
+    } else if (k === 'dismissed' || k === 'went' || k === 'nofui') {
+      // attendance guarda «fui» (went = true) y «no pude ir» (went = false, la respuesta a «¿Al final fuiste?»)
       const table = k === 'dismissed' ? 'dismissed_events' : 'attendance';
       const ids = v.map(toDbId).filter(Boolean);
       let del = sb.from(table).delete().eq('user_id', uid);
+      if (k !== 'dismissed') del = del.eq('went', k === 'went');
       if (ids.length) del = del.not('event_id', 'in', '(' + ids.join(',') + ')');
       await del;
-      if (ids.length) await sb.from(table).upsert(ids.map((id) => k === 'went' ? { user_id: uid, event_id: id, went: true } : { user_id: uid, event_id: id }), { ignoreDuplicates: true });
+      if (ids.length) {
+        if (k === 'dismissed') await sb.from(table).upsert(ids.map((id) => ({ user_id: uid, event_id: id })), { ignoreDuplicates: true });
+        else if (k === 'went') await sb.from(table).upsert(ids.map((id) => ({ user_id: uid, event_id: id, went: true })), { onConflict: 'user_id,event_id' });
+        else await sb.from(table).upsert(ids.map((id) => ({ user_id: uid, event_id: id, went: false })), { onConflict: 'user_id,event_id', ignoreDuplicates: true });
+      }
     } else if (k === 'taste') {
       await sb.from('profiles').update({ taste: v }).eq('id', uid);
     } else if (k === 'learned') {
@@ -157,7 +163,7 @@
     }
   }
   function sync(k, v) {
-    if (!user || !['prefs', 'saved', 'opts', 'streets', 'dismissed', 'went', 'learned', 'taste'].includes(k)) return;
+    if (!user || !['prefs', 'saved', 'opts', 'streets', 'dismissed', 'went', 'nofui', 'learned', 'taste'].includes(k)) return;
     clearTimeout(timers[k]);
     timers[k] = setTimeout(() => pushKey(k, v).catch((e) => console.warn('sync', k, e)), 400);
   }
@@ -169,7 +175,7 @@
       sb.from('saved_events').select('event_id').eq('user_id', uid),
       sb.from('profiles').select('with_kids,with_dog,my_streets,learned,taste,taste_text,city_id,analytics').eq('id', uid).maybeSingle(),
       sb.from('dismissed_events').select('event_id').eq('user_id', uid),
-      sb.from('attendance').select('event_id').eq('user_id', uid).eq('went', true)
+      sb.from('attendance').select('event_id,went').eq('user_id', uid)
     ]);
     const remote = {
       prefs: Object.fromEntries((i.data || []).map((r) => [r.category_id, r.value])),
@@ -177,7 +183,8 @@
       opts: { ninos: !!(p.data && p.data.with_kids), perro: !!(p.data && p.data.with_dog) },
       streets: (p.data && p.data.my_streets) || [],
       dismissed: (d.data || []).map((r) => 'e' + r.event_id),
-      went: (w.data || []).map((r) => 'e' + r.event_id),
+      went: (w.data || []).filter((r) => r.went).map((r) => 'e' + r.event_id),
+      nofui: (w.data || []).filter((r) => !r.went).map((r) => 'e' + r.event_id),
       learned: (p.data && p.data.learned) || {},
       taste: (p.data && p.data.taste) || null,
       taste_text: (p.data && p.data.taste_text) || ''
@@ -196,7 +203,7 @@
     if (remoteEmpty && (Object.keys(local.prefs).length || local.saved.length)) {
       // primera vez en este dispositivo con cuenta nueva: subimos lo que ya tenías
       await pushKey('prefs', local.prefs); await pushKey('saved', local.saved); await pushKey('opts', local.opts); await pushKey('streets', local.streets || []);
-      await pushKey('dismissed', local.dismissed || []); await pushKey('went', local.went || []); await pushKey('learned', local.learned || {});
+      await pushKey('dismissed', local.dismissed || []); await pushKey('went', local.went || []); await pushKey('nofui', local.nofui || []); await pushKey('learned', local.learned || {});
     } else {
       app.set(remote);
     }

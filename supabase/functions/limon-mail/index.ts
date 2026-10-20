@@ -306,6 +306,25 @@ async function daily() {
   return { users: profs.length, sent };
 }
 
+// ---------- «¿Al final fuiste?»: aviso en el móvil la mañana siguiente a un plan guardado (solo quien lo activa)
+async function fuiste() {
+  const ayer = ymd(addDays(madridToday(), -1));
+  const { data: profs } = await admin.from('profiles').select('id,notify').eq('notify->push->>fuiste', 'true');
+  let sent = 0;
+  for (const p of profs || []) {
+    const { data: sv } = await admin.from('saved_events').select('event_id, events(id,title,ends_on,event_sessions(on_date))').eq('user_id', p.id);
+    const { data: at } = await admin.from('attendance').select('event_id').eq('user_id', p.id);
+    const done = new Set((at || []).map((a) => a.event_id));
+    const hit = (sv || []).map((r) => r.events as unknown as { id: number; title: string; ends_on: string; event_sessions: { on_date: string }[] } | null)
+      .find((e) => e && !done.has(e.id) && ((e.event_sessions || []).length ? (e.event_sessions || []).map((x) => x.on_date).sort().pop() === ayer : e.ends_on === ayer));
+    if (!hit) continue;
+    const { data: ins } = await admin.from('mail_outbox').insert({ user_id: p.id, kind: 'fuiste', ref: ayer, payload: { event_id: hit.id }, sent_at: new Date().toISOString(), error: 'push' }).select('id');
+    if (!ins || !ins.length) continue;  // ya se preguntó
+    sent += await pushTo(admin, p.id, { title: '¿Al final fuiste?', body: `A «${hit.title}», que tenías guardado para ayer. Cuéntanos y lo apuntamos en tu diario.`, url: `${APP}?fui=e${hit.id}`, tag: 'fuiste' }).catch(() => 0);
+  }
+  return { users: (profs || []).length, sent };
+}
+
 // ---------- resumen semanal
 type Ev = { id: number; title: string; starts_on: string; ends_on: string; time_text: string | null; is_free: boolean; price_text: string | null; district: string | null;
   is_unique: boolean; is_featured: boolean; topics: string[] | null; series: string | null; description: string | null; venues: { name: string } | null;
@@ -460,6 +479,7 @@ Deno.serve(async (req) => {
       if (isService) {
         const out: Record<string, unknown> = { flush: await flush() };
         out[action] = action === 'weekly' ? await weekly() : await daily();
+        if (action === 'daily') out.fuiste = await fuiste();
         return json(out);
       }
       // un usuario puede pedirse una prueba de su propio resumen

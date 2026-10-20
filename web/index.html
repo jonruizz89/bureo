@@ -403,6 +403,7 @@ table.cov td.n, table.cov th.n { text-align: right }
       <label class="toggle" for="o-perro">Voy con mi perro (sube planes con mascotas)<input type="checkbox" id="o-perro"></label>
       <label class="toggle" for="o-dist">Mostrar a qué distancia está cada plan (usa tu ubicación; no se guarda)<input type="checkbox" id="o-dist"></label>
       <label class="toggle" for="o-stats">Ayudar a mejorar Limón con estadísticas de uso (qué planes abres, guardas o compartes; <a href="privacidad.html#estadisticas">más info</a>)<input type="checkbox" id="o-stats"></label>
+      <div id="demo-box"></div>
     </div>
     <div class="panel" id="social"></div>
     <div class="panel" id="seguir"></div>
@@ -490,6 +491,7 @@ function startApp(DATA, TAX, sync) {
   let streets = store.get('streets', []);
   let dismissed = store.get('dismissed', []);
   let went = store.get('went', []);
+  let nofui = store.get('nofui', []);  // planes guardados a los que al final no fue («¿Al final fuiste?» → No)
   let learned = store.get('learned', {});
   let taste = store.get('taste', null);
   let tasteText = store.get('taste_text', '');
@@ -1498,7 +1500,7 @@ function startApp(DATA, TAX, sync) {
   async function loadMe() {
     const db = window.limonDB, u = db && db.user();
     if (!u) { me = null; renderAccountExtras(); return; }
-    const { data } = await db.sb.from('profiles').select('role,editor_status,organizer,ical_token,notify').eq('id', u.id).maybeSingle();
+    const { data } = await db.sb.from('profiles').select('role,editor_status,organizer,ical_token,notify,birth_year,gender').eq('id', u.id).maybeSingle();
     me = data || null;
     if (me && typeof pushSub !== 'undefined' && pushSub && Notification.permission === 'granted') registerSub(pushSub);
     mySubs = [];
@@ -1534,7 +1536,7 @@ function startApp(DATA, TAX, sync) {
   // ---------- avisos push en este dispositivo (PWA). En iPhone solo funcionan con Limón añadido a la pantalla de inicio.
   const PUSH_KINDS = [['quedadas', 'Quedadas: alguien responde a un plan que propusiste'], ['amigos', 'Amigos: te quieren seguir o aceptan tu solicitud'],
     ['calle', 'Cortes junto a tus planes de hoy o mañana, o en tus calles (por la mañana)'], ['lluvia', 'Lluvia en un plan al aire libre que tienes guardado'],
-    ['ideas', 'Ideas: cambia el estado de una idea tuya'], ['organizador', 'Organizador: revisamos tu solicitud o tus eventos'], ['admin', 'Admin: algo pendiente de revisión']];
+    ['fuiste', '«¿Al final fuiste?»: la mañana siguiente a un plan que tenías guardado'], ['ideas', 'Ideas: cambia el estado de una idea tuya'], ['organizador', 'Organizador: revisamos tu solicitud o tus eventos'], ['admin', 'Admin: algo pendiente de revisión']];
   const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -1580,7 +1582,7 @@ function startApp(DATA, TAX, sync) {
       if (err) { toast('No se han podido activar: ' + err.message); return; }
       pushSub = sub;
       if (!me.notify || !me.notify.push) {
-        me.notify = Object.assign({}, me.notify || {}, { push: { quedadas: true, amigos: true, calle: true, lluvia: true, ideas: true, organizador: true, admin: true } });
+        me.notify = Object.assign({}, me.notify || {}, { push: { quedadas: true, amigos: true, calle: true, lluvia: true, fuiste: true, ideas: true, organizador: true, admin: true } });
         await db.sb.from('profiles').update({ notify: me.notify }).eq('id', u.id);
       }
       toast('Avisos activados en este dispositivo.');
@@ -1614,8 +1616,20 @@ function startApp(DATA, TAX, sync) {
   async function loadStats() {
     const db = window.limonDB; if (!db) return;
     STATS = { loading: true }; renderStats();
-    const { data, error } = await db.sb.rpc('admin_stats', { p_city: CITY.id, p_days: statsDays });
-    STATS = error ? { error: error.message } : data; renderStats();
+    const [r1, r2] = await Promise.all([db.sb.rpc('admin_stats', { p_city: CITY.id, p_days: statsDays }), db.sb.rpc('admin_demographics', { p_city: CITY.id, p_days: Math.max(statsDays, 90) })]);
+    STATS = r1.error ? { error: r1.error.message } : Object.assign({}, r1.data, { demo: r2.data || null }); renderStats();
+  }
+  function demoHtml(d, tbl) {
+    if (!d) return '';
+    const as = d.asistencia || {}, tot = (as.fui || 0) + (as.no_fui || 0);
+    const TR = { mujer: 'Mujeres', hombre: 'Hombres', no_binario: 'No binario', otro: 'Otro' };
+    return `<h3 style="margin:6px 0 0;font:600 14px var(--f-body)">«¿Al final fuiste?»</h3>
+      <p class="note" style="margin:0">${tot ? `De ${tot} respuestas, el ${Math.round(100 * (as.fui || 0) / tot)} % fue al plan que tenía guardado.` : 'Aún sin respuestas.'}</p>
+      <h3 style="margin:6px 0 0;font:600 14px var(--f-body)">Edad y sexo</h3>
+      <p class="note" style="margin:0">${d.con_edad} cuentas con edad y ${d.con_sexo} con sexo. Solo se muestran los grupos con al menos ${d.umbral} personas, para que nadie sea identificable.</p>
+      ${(d.tramos || []).length ? tbl(d.tramos, [['Edad', r => esc(r.tramo)], ['Cuentas', r => r.personas, 1], ['Activas', r => r.activas, 1]]) : ''}
+      ${(d.sexo || []).length ? tbl(d.sexo, [['Sexo', r => esc(TR[r.sexo] || r.sexo)], ['Cuentas', r => r.personas, 1]]) : ''}
+      ${(d.categorias_por_tramo || []).length ? tbl(d.categorias_por_tramo, [['Edad', r => esc(r.tramo)], ['Lo que más guardan o a lo que van', r => esc(labelOf(r.cat))], ['Personas', r => r.personas, 1]]) : ''}`;
   }
   function renderStats() {
     const el = $('stats'); if (!el) return;
@@ -1650,11 +1664,25 @@ function startApp(DATA, TAX, sync) {
       <h3 style="margin:6px 0 0;font:600 14px var(--f-body)">Afinidades entre gustos</h3>
       <p class="note" style="margin:0">«A quien le gusta A le gusta B» varias veces más de lo normal. Solo aparecen parejas con al menos 5 personas en común; con ellas se ajustan las recomendaciones de todos.</p>
       ${tbl(STATS.afinidad || [], [['A', r => esc(labelOf(r.a))], ['B', r => esc(labelOf(r.b))], ['Personas', r => r.users_ab, 1], ['Veces más', r => String(r.lift).replace('.', ','), 1]])}
-      <p class="note" style="margin:0">Solo cuenta a quien ha dado permiso. Edad y sexo se añadirán cuando haya usuarios suficientes para que el desglose sea anónimo.</p>`;
+      ${demoHtml(STATS.demo, tbl)}
+      <p class="note" style="margin:0">El uso solo cuenta a quien ha dado permiso para estadísticas.</p>`;
+  }
+  // «Sobre ti»: año de nacimiento y sexo, opcionales, solo para estadísticas agregadas
+  const GENDERS = [['', 'Sin indicar'], ['mujer', 'Mujer'], ['hombre', 'Hombre'], ['no_binario', 'No binario'], ['otro', 'Otro'], ['prefiero_no', 'Prefiero no decirlo']];
+  function renderDemo() {
+    const box = $('demo-box'); if (!box) return;
+    if (!logged || !me) { box.innerHTML = ''; return; }
+    const y = new Date().getFullYear(), years = []; for (let i = y - 14; i >= y - 100; i--) years.push(i);
+    box.innerHTML = `<h3 style="margin:8px 0 0;font:600 14px var(--f-body)">Sobre ti (opcional)</h3>
+      <p class="note" style="margin:0">Nos ayuda a saber qué planes interesan a cada edad. Solo se usa en estadísticas de grupos de al menos 10 personas y nunca se muestra a nadie. Puedes quitarlo cuando quieras.</p>
+      <div class="seg"><label class="note" style="display:flex;flex-direction:column;gap:4px">Año de nacimiento
+        <select class="search" data-demo="birth_year" style="min-width:140px"><option value="">Sin indicar</option>${years.map(v => `<option ${me.birth_year === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="note" style="display:flex;flex-direction:column;gap:4px">Sexo
+        <select class="search" data-demo="gender" style="min-width:160px">${GENDERS.map(([v, t]) => `<option value="${v}" ${(me.gender || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>`;
   }
   function renderAccountExtras() {
     const org = $('org'), adm = $('adm'), cal = $('ag-cal'), mail = $('mail');
-    renderStats();
+    renderStats(); renderDemo();
     if ($('o-stats')) $('o-stats').checked = !!(window.limonConsent && window.limonConsent.get() === '1');
     if (!logged || !me) {
       org.hidden = true; adm.hidden = true; mail.hidden = true;
@@ -1725,6 +1753,14 @@ function startApp(DATA, TAX, sync) {
       if (lt.checked) await sb.from('list_items').insert({ list_id: l.id, event_id: +evId.slice(1) }); else await sb.from('list_items').delete().eq('list_id', l.id).eq('event_id', +evId.slice(1));
       await sb.from('user_lists').update({ updated_at: new Date().toISOString() }).eq('id', l.id);
       toast(lt.checked ? `Añadido a «${l.title}».` : `Quitado de «${l.title}».`); await loadSocial(); return;
+    }
+    const dm = ev.target.closest('[data-demo]');
+    if (dm && me) {
+      const db = window.limonDB, u = db && db.user(); if (!u) return;
+      const v = dm.value === '' ? null : dm.dataset.demo === 'birth_year' ? +dm.value : dm.value;
+      const { error } = await db.sb.from('profiles').update({ [dm.dataset.demo]: v }).eq('id', u.id);
+      if (error) { toast('No se ha podido guardar: ' + error.message); return; }
+      me[dm.dataset.demo] = v; toast('Guardado.'); return;
     }
     const pc = ev.target.closest('[data-push]');
     if (pc && me) {
@@ -1871,6 +1907,46 @@ function startApp(DATA, TAX, sync) {
     const tab = state.tab, when = state.when;
     listTimer = setTimeout(() => { const k = when + ids.join(','); if (k === lastList || !ids.length) return; lastList = k; track('lista', null, { tab, when, ids: ids.slice(0, 40).map(x => +String(x).slice(1)) }); }, 3000);
   }
+  // ---------- «¿Al final fuiste?»: los planes guardados que ya pasaron (últimos 10 días) se preguntan una vez, dentro de Para ti
+  let PAST = {};
+  let fuiSnooze = store.get('fui_snooze', {});
+  let fuiFocus = new URLSearchParams(location.search).get('fui');
+  async function loadPast() {
+    const db = window.limonDB; if (!db) return;
+    const ids = saved.filter(id => !went.includes(id) && !nofui.includes(id) && !(BYID[id] && parse(BYID[id].fin) >= today)).map(id => +String(id).slice(1)).filter(Boolean);
+    if (fuiFocus && /^e\d+$/.test(fuiFocus) && !ids.includes(+fuiFocus.slice(1))) ids.push(+fuiFocus.slice(1));
+    if (!ids.length) return;
+    const { data } = await db.sb.from('events').select('id,title,starts_on,ends_on,venues(name),event_sessions(on_date),event_categories(category_id)')
+      .in('id', ids.slice(0, 150)).gte('ends_on', ymd(addDays(today, -10))).lt('starts_on', ymd(today));
+    PAST = {};
+    for (const r of data || []) {
+      const past = (r.event_sessions || []).map(x => x.on_date).filter(d => d < ymd(today)).sort();
+      const when = past.length ? past[past.length - 1] : (r.ends_on < ymd(today) ? r.ends_on : null);
+      if (!when) continue;
+      PAST['e' + r.id] = { id: 'e' + r.id, titulo: r.title, fecha: when, lugar: r.venues && r.venues.name, cats: (r.event_categories || []).map(c => c.category_id), temas: [], serie: null };
+    }
+    if (Object.keys(PAST).length && state.tab === 'parati') renderParaTi();
+  }
+  function fuiNext() {
+    const open = Object.values(PAST).filter(x => !went.includes(x.id) && !nofui.includes(x.id) && !dismissed.includes(x.id) && !(fuiSnooze[x.id] && fuiSnooze[x.id] > ymd(today)));
+    return open.find(x => x.id === fuiFocus) || open.sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+  }
+  function fuiCard() {
+    const x = fuiNext(); if (!x) return '';
+    const d = parse(x.fecha), dias = Math.round((today - d) / 864e5);
+    const cuando = dias === 1 ? 'ayer' : `el ${DIA[d.getDay()]} ${d.getDate()} de ${MES[d.getMonth()]}`;
+    return `<div class="consent" role="region" aria-label="¿Al final fuiste?">
+      <p style="margin:0"><b>¿Al final fuiste a «${esc(x.titulo)}»?</b> Lo tenías guardado para ${cuando}${x.lugar ? ' en ' + esc(x.lugar) : ''}.</p>
+      <div class="seg"><button class="btn" data-fui="si" data-id="${x.id}">Sí, fui</button><button class="btn ghost" data-fui="no" data-id="${x.id}">No pude ir</button><button class="btn ghost" data-fui="luego" data-id="${x.id}">Ahora no</button></div></div>`;
+  }
+  function fuiAnswer(id, a) {
+    const x = PAST[id]; if (!x) return;
+    if (fuiFocus === id) fuiFocus = null;
+    if (a === 'si') { went = went.concat(id); store.set('went', went); BYID[id] = BYID[id] || Object.assign({ inicio: x.fecha, fin: x.fecha, sesiones: [], fuentes: [] }, x); learn(x, 'went'); toast('¡Apuntado en tu diario! Ponle nota en Agenda → Mi diario.'); }
+    else if (a === 'no') { nofui = nofui.concat(id); store.set('nofui', nofui); track('novoy', id); toast('Entendido. No cambia tus recomendaciones.'); }
+    else { fuiSnooze[id] = ymd(addDays(today, 2)); store.set('fui_snooze', fuiSnooze); }
+    renderParaTi();
+  }
   // permiso para estadísticas: se pregunta una vez, dentro de la lista (sin ventanas emergentes)
   function consentCard() {
     if (!window.limonConsent || window.limonConsent.get() !== null) return '';
@@ -1893,7 +1969,7 @@ function startApp(DATA, TAX, sync) {
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
       logList(items.slice(0, state.ptShown).map(x => x.e.id));
-      $('pt-list').innerHTML = streetBanner() + consentCard() + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
+      $('pt-list').innerHTML = streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -1915,7 +1991,7 @@ function startApp(DATA, TAX, sync) {
     const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
       (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
     logList(top.map(x => x.e.id));
-    $('pt-list').innerHTML = streetBanner() + consentCard() + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
+    $('pt-list').innerHTML = streetBanner() + (fuiCard() || consentCard()) + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
   }
@@ -2233,6 +2309,8 @@ function startApp(DATA, TAX, sync) {
     if (ev.target.closest('[data-invite-cancel]')) { state.inviting = null; renderAll(); return; }
     const rs = ev.target.closest('[data-reshare]');
     if (rs) { shareInvite(BYID[rs.dataset.ev], rs.dataset.reshare, store.get('myname', '')); return; }
+    const fu = ev.target.closest('[data-fui]');
+    if (fu) { fuiAnswer(fu.dataset.id, fu.dataset.fui); return; }
     const sd = ev.target.closest('[data-stats-days]');
     if (sd) { statsDays = +sd.dataset.statsDays; loadStats(); return; }
     const ge = ev.target.closest('[data-goto-ev]');
@@ -2300,23 +2378,24 @@ function startApp(DATA, TAX, sync) {
     const c = a.closest('[data-eid]'); if (!c) return;
     track('web', c.dataset.eid, { tipo: /google\.com\/maps/.test(a.href) ? 'mapa' : /organizador/i.test(a.textContent) ? 'organizador' : 'fuente' });
   }, true);
-  renderSocialAll(); loadIdeas(); loadAffinity();
+  renderSocialAll(); loadIdeas(); loadAffinity(); loadPast();
   document.addEventListener('input', ev => { if (ev.target.id === 'idea-title') { IDEAS_SIM = similarIdeas(ev.target.value); const b = $('idea-sim'); if (b) b.innerHTML = IDEAS_SIM.length ? '<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>' + IDEAS_SIM.map(ideaRow).join('') : ''; } });
+  if (QS.get('fui')) go('parati');
   if (QS.get('ideas') !== null) { go('intereses'); openFold('ideas', true); setTimeout(() => { const b = $('ideas'); if (b) b.scrollIntoView({ behavior: 'smooth' }); }, 400); }
   if (QS.get('u') && /^[a-z0-9_.]{3,20}$/i.test(QS.get('u'))) { const un = QS.get('u'); go('intereses'); setTimeout(() => openProfile(un), 300); }
   if (QS.get('lista') && /^\d+$/.test(QS.get('lista'))) { const li = QS.get('lista'); setTimeout(() => openList(li), 300); }
-  if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar') || QS.has('u') || QS.has('lista') || QS.has('ideas')) history.replaceState(null, '', location.pathname);
+  if (QS.has('ev') || QS.has('baja') || QS.has('tab') || QS.has('quedar') || QS.has('u') || QS.has('lista') || QS.has('ideas') || QS.has('fui')) history.replaceState(null, '', location.pathname);
   return {
-    get: () => ({ prefs, opts, saved, streets, dismissed, went, learned, taste }),
-    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); loadSocial(); loadIdeas(); },
+    get: () => ({ prefs, opts, saved, streets, dismissed, went, nofui, learned, taste }),
+    setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); loadSocial(); loadIdeas(); loadPast(); },
     set(p) {
       if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
-      if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.learned) learned = p.learned;
+      if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.nofui) nofui = p.nofui; if (p.learned) learned = p.learned;
       if ('taste' in p) { taste = p.taste; try { localStorage.setItem('bureo.taste', JSON.stringify(taste)); } catch (e) { } }
       if ('taste_text' in p) { tasteText = p.taste_text || ''; try { localStorage.setItem('bureo.taste_text', JSON.stringify(tasteText)); } catch (e) { } }
       if ('taste' in p || 'taste_text' in p) { Object.keys(aiReco).forEach(k => delete aiReco[k]); if (!p.prefs) { renderAll(); return; } }
       store.set('prefs', prefs); store.set('opts', opts); store.set('saved', saved); store.set('streets', streets);
-      store.set('dismissed', dismissed); store.set('went', went); store.set('learned', learned); renderAll();
+      store.set('dismissed', dismissed); store.set('went', went); store.set('nofui', nofui); store.set('learned', learned); renderAll(); loadPast();
     }
   };
 }
