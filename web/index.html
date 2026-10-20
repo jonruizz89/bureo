@@ -264,12 +264,13 @@ table.cov td.n, table.cov th.n { text-align: right }
     <input class="search" id="q-global" type="search" placeholder="Buscar evento, lugar, persona o tema" autocomplete="off">
     <nav class="tabs" role="tablist" aria-label="Secciones">
       <button role="tab" id="t-parati" aria-selected="true">Para ti</button>
-      <button role="tab" id="t-calle" aria-selected="false">Calle<span class="n" id="n-calle"></span></button>
-      <button role="tab" id="t-unicos" aria-selected="false">Únicos<span class="n" id="n-unicos"></span></button>
       <button role="tab" id="t-explorar" aria-selected="false">Explorar</button>
+      <button role="tab" id="t-calle" aria-selected="false">Calle<span class="n" id="n-calle"></span></button>
       <button role="tab" id="t-agenda" aria-selected="false">Agenda<span class="n" id="n-agenda"></span></button>
-      <button role="tab" id="t-intereses" aria-selected="false">Intereses</button>
-      <button role="tab" id="t-fuentes" aria-selected="false">Fuentes</button>
+      <button role="tab" id="t-intereses" aria-selected="false">Perfil</button>
+      <!-- Únicos va dentro de Para ti y Fuentes dentro de Perfil, igual que en el móvil -->
+      <button role="tab" id="t-unicos" aria-selected="false" hidden>Únicos<span class="n" id="n-unicos"></span></button>
+      <button role="tab" id="t-fuentes" aria-selected="false" hidden>Fuentes</button>
     </nav>
   </div>
 </header>
@@ -2051,8 +2052,8 @@ function startApp(DATA, TAX, sync) {
   function go(t) {
     if (state.tab !== t) track('pestana', null, { a: t });
     state.tab = t;
-    tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === t); });
     const nav = (t === 'unicos') ? 'parati' : (t === 'fuentes') ? 'intereses' : t;
+    tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === nav); });
     document.querySelectorAll('[data-bnav]').forEach(b => { if (b.dataset.bnav === nav) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
     store.set('tab', t);
     renderAll(); window.scrollTo(0, 0);
