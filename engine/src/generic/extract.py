@@ -11,7 +11,7 @@ import connectors
 HOY = dt.date.today()
 HASTA = HOY + dt.timedelta(days=120)
 RAW = os.environ.get('BUREO_RAW', 'raw')
-MAX_GEO = int(os.environ.get('BUREO_GEOCODE_MAX', '150'))
+MAX_GEO = int(os.environ.get('BUREO_GEOCODE_MAX', '400'))
 
 
 def read_source(s, city):
@@ -62,51 +62,6 @@ def read_source(s, city):
     return None
 
 
-# ---------- situar en el mapa (Nominatim, dentro de los límites de la ciudad) y en su distrito
-def geocoder(city):
-    path = os.path.join(RAW, f'geo_{city["id"]}.json')
-    cache = json.load(open(path)) if os.path.exists(path) else {}
-    spent, last = [0], [0.0]
-    bbox = city.get('bbox') or [city['lng'] - 0.1, city['lat'] - 0.08, city['lng'] + 0.1, city['lat'] + 0.08]
-    dists = city.get('districts') or []
-
-    def district(addr):
-        for k in ('city_district', 'borough', 'suburb', 'quarter', 'neighbourhood'):
-            v = fold(addr.get(k))
-            for d in dists:
-                if v and (fold(d) == v or fold(d).split(' ')[0] == v.split(' ')[0]):
-                    return d
-        return None
-
-    def find(q):
-        k = fold(q)
-        if k in cache:
-            return cache[k]
-        if spent[0] >= MAX_GEO:
-            return None
-        wait = 1.1 - (time.time() - last[0])
-        if wait > 0:
-            time.sleep(wait)
-        u = 'https://nominatim.openstreetmap.org/search?' + urllib.parse.urlencode(
-            {'q': q, 'format': 'jsonv2', 'limit': 1, 'addressdetails': 1, 'countrycodes': 'es', 'viewbox': ','.join(map(str, bbox)), 'bounded': 1})
-        try:
-            with urllib.request.urlopen(urllib.request.Request(u, headers={'User-Agent': UA}), timeout=30) as r:
-                res = json.loads(r.read().decode())
-        except Exception:
-            res = []
-        last[0] = time.time(); spent[0] += 1
-        cache[k] = [float(res[0]['lat']), float(res[0]['lon']), district(res[0].get('address') or {})] if res else None
-        return cache[k]
-
-    def save():
-        os.makedirs(RAW, exist_ok=True)
-        json.dump(cache, open(path, 'w'), ensure_ascii=False)
-    return find, save
-
-
-STOPW = {'de', 'del', 'la', 'el', 'los', 'las', 'y', 'sala', 'teatro', 'antzokia', 'museo', 'museoa', 'bilbao', 'bilboko', 'aretoa'}
-
-
 def in_city(e, city):
     name = fold(city['name'])
     if e.get('municipio'):
@@ -119,6 +74,47 @@ def in_city(e, city):
         if not (bb[0] - m <= e['lng'] <= bb[2] + m and bb[1] - m <= e['lat'] <= bb[3] + m):
             return False
     return True
+
+
+TSTOP = set('programa festival fest de del la las el los en y a con bilbao bilbo edicion ciclo the and of 2025 2026 2027 2028'.split())
+
+
+def tkeys(t):
+    return {w for w in fold(t).split() if len(w) > 1 and w not in TSTOP and not w.isdigit()}
+
+
+def fuzzy_merge(eventos):
+    by_day = {}
+    for e in eventos:
+        by_day.setdefault(e['inicio'], []).append(e)
+    gone = set()
+    for lst in by_day.values():
+        for i, a in enumerate(lst):
+            if id(a) in gone:
+                continue
+            ta = tkeys(a['titulo'])
+            for b in lst[i + 1:]:
+                if id(b) in gone or a.get('fin') != b.get('fin'):
+                    continue
+                tb = tkeys(b['titulo'])
+                if len(ta) < 2 or len(tb) < 2:
+                    continue
+                inter = len(ta & tb)
+                if not (inter / len(ta | tb) >= 0.6 or (inter >= 2 and (ta <= tb or tb <= ta))):
+                    continue
+                la, lb = fold(a.get('lugar') or ''), fold(b.get('lugar') or '')
+                if la and lb and not (la in lb or lb in la or la.split()[:2] == lb.split()[:2]):
+                    continue
+                for k, v in b.items():
+                    if not a.get(k) and v:
+                        a[k] = v
+                if len(b.get('descripcion') or '') > len(a.get('descripcion') or ''):
+                    a['descripcion'] = b['descripcion']
+                names = {f['nombre'] for f in a['fuentes']}
+                a['fuentes'] += [f for f in b['fuentes'] if f['nombre'] not in names]
+                a['sesiones'] = sorted(set(a.get('sesiones') or []) | set(b.get('sesiones') or []))[:40]
+                gone.add(id(b))
+    return [e for e in eventos if id(e) not in gone]
 
 
 def main(cid):
@@ -192,22 +188,32 @@ def main(cid):
             base['fuentes'] = list(fuentes.values())
             eventos.append(base)
 
-    find, save = geocoder(city)
+    # el mismo evento con títulos algo distintos según la fuente («Basque Dok Festival 2026» / «BASQUE DOK FESTIVAL»)
+    eventos = fuzzy_merge(eventos)
+
+    # recintos ya situados (también los corregidos a mano) antes que preguntar a OpenStreetMap
+    from geo import Geocoder, norm as vnorm
+    known = {}
+    for off in range(0, 20000, 1000):
+        part = sb('GET', f'venues?select=name_key,lat,lng,district&city_id=eq.{cid}&lat=not.is.null&order=id&offset={off}&limit=1000') or []
+        known.update({v['name_key']: [v['lat'], v['lng'], v['district']] for v in part})
+        if len(part) < 1000:
+            break
+    geo = Geocoder(city, known, MAX_GEO)
     placed = 0
     for e in eventos:
-        if not (e.get('lat') and e.get('lng')):
-            for q in [x for x in ((e.get('lugar') or '') + ', ' + city['name'] if e.get('lugar') else None,
-                                  (e.get('direccion') or '') + ', ' + city['name'] if e.get('direccion') else None) if x]:
-                g = find(q)
-                if g:
-                    e['lat'], e['lng'], e['distrito'] = g[0], g[1], g[2]; placed += 1
-                    break
+        if not (e.get('lat') and e.get('lng')) and e.get('lugar'):
+            g = geo.find(e['lugar'], e.get('direccion') if e.get('direccion') != e.get('lugar') else None)
+            if g:
+                e['lat'], e['lng'], e['distrito'] = g[0], g[1], g[2]; placed += 1
+        elif e.get('lat') and not e.get('distrito') and e.get('lugar') and vnorm(e['lugar']) in known:
+            e['distrito'] = known[vnorm(e['lugar'])][2]
         e.setdefault('distrito', None)
         e['cats'] = []
         e['descripcion'] = (e.get('descripcion') or '')[:420]
         for k in ('municipio', 'url', 'direccion', 'tipo'):
             e.pop(k, None)
-    save()
+    geo.save()
     out = os.path.join(os.environ.get('BUREO_OUT', 'out'), cid)
     os.makedirs(out, exist_ok=True)
     meta = {'ciudad': city['name'], 'generado': dt.datetime.now().isoformat(timespec='minutes'), 'por_fuente': per,

@@ -53,10 +53,14 @@ for e in evs:
             venues[k] = {'city_id': CITY, 'name': e['lugar'], 'name_key': k, 'district': e.get('distrito'),
                          'lat': e.get('lat'), 'lng': e.get('lng')}
 vid = {}
-for part in chunks(list(venues.values()), 500):
-    for r in api('POST', 'venues?on_conflict=city_id,name_key&select=id,name_key', part,
-                 'resolution=merge-duplicates,return=representation'):
-        vid[r['name_key']] = r['id']
+# los recintos sin coordenadas no borran las que ya tenía la base (p. ej. corregidas a mano)
+with_geo = [v for v in venues.values() if v.get('lat') is not None]
+no_geo = [{k: v[k] for k in ('city_id', 'name', 'name_key')} for v in venues.values() if v.get('lat') is None]
+for group in (with_geo, no_geo):
+    for part in chunks(group, 500):
+        for r in api('POST', 'venues?on_conflict=city_id,name_key&select=id,name_key', part,
+                     'resolution=merge-duplicates,return=representation'):
+            vid[r['name_key']] = r['id']
 print('recintos', len(vid))
 
 # 2) eventos
@@ -75,6 +79,8 @@ for e in evs:
         'image_url': e.get('imagen'), 'organizer_url': e.get('web_organizador'),
         'is_unique': bool(e.get('unico')), 'is_featured': bool(e.get('destacado')),
     })
+    if PFX:  # en las demás ciudades «único» lo decide unicos.py después de clasificar: no se pisa
+        rows[-1].pop('is_unique')
 eid = {}
 for part in chunks(rows, 400):
     for r in api('POST', 'events?on_conflict=ext_key&select=id,ext_key', part,

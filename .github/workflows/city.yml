@@ -13,7 +13,7 @@ on:
         required: true
         default: "bilbao"
       steps:
-        description: "Pasos separados por comas: discover, probe, retry, extract, load, classify"
+        description: "Pasos separados por comas: discover, probe, retry, extract, load, classify, unicos"
         required: true
         default: "extract,load,classify"
       max_usd:
@@ -122,3 +122,8 @@ jobs:
       - name: 5 · Clasificar con IA
         if: contains(env.STEPS, 'classify')
         run: python3 src/classify.py
+
+      - name: 6 · Marcar los planes únicos
+        if: contains(env.STEPS, 'classify') || contains(env.STEPS, 'unicos')
+        working-directory: engine/src/generic
+        run: python3 unicos.py "$BUREO_CITY"
