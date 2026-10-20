@@ -2046,7 +2046,7 @@ function startApp(DATA, TAX, sync) {
   const tabs = ['parati', 'calle', 'unicos', 'explorar', 'agenda', 'intereses', 'fuentes'].filter(t => t !== 'calle' || HAS_CALLE);
   // nombre de la ciudad en textos fijos; sin datos de cortes, la pestaña Calle no aparece
   document.querySelectorAll('.cityname').forEach(x => { x.textContent = CITY.name; });
-  document.title = 'Limón · ' + CITY.name;
+  document.title = (window.LIMON_STAGING ? '[Pruebas] ' : '') + 'Limón · ' + CITY.name;
   if (!HAS_CALLE) { ['t-calle'].forEach(id => { const el = $(id); if (el) el.hidden = true; }); document.querySelectorAll('[data-bnav="calle"]').forEach(b => { b.hidden = true; b.style.display = 'none'; }); }
   function go(t) {
     if (state.tab !== t) track('pestana', null, { a: t });
@@ -2336,7 +2336,6 @@ bootBureo(startApp);
     b.setAttribute('role', 'note');
     b.style.cssText = 'background:#C92A2A;color:#fff;font:600 12px system-ui,sans-serif;text-align:center;padding:calc(4px + env(safe-area-inset-top)) 8px 4px';
     document.body.prepend(b);
-    document.title = '[Pruebas] ' + document.title;
   }
 </script>
 </body>

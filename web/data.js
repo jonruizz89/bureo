@@ -12,7 +12,8 @@
     if (STAGING) {
       const r = await sb.functions.invoke(name + '-pruebas', opts);
       const st = r.error && r.error.context && r.error.context.status;
-      if (!(r.error && (st === 404 || /not found|404/i.test(String(r.error.message))))) return r;
+      // si no hay copia «-pruebas» de esa función, Supabase responde 404 (o falla la petición previa del navegador): se usa la normal
+      if (!(r.error && (st === 404 || r.error.name === 'FunctionsFetchError' || /not found|404/i.test(String(r.error.message))))) return r;
     }
     return sb.functions.invoke(name, opts);
   };
