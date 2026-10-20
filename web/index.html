@@ -842,7 +842,7 @@ function startApp(DATA, TAX, sync) {
     $('ca-mapnote').textContent = withGeo < list.length ? `${list.length - withGeo} de ${list.length} avisos no se pueden situar en el mapa porque no nombran calles ni estaciones concretas.` : '';
     loadLeaflet().then(() => {
       if (!MAP) {
-        MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5 }).setView(CENTER, 12);
+        MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5, zoomAnimation: false })  /* sin animación: al repintar las capas durante el zoom Leaflet fallaba */.setView(CENTER, 12);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(MAP);
@@ -1474,7 +1474,7 @@ function startApp(DATA, TAX, sync) {
       (open.length ? `<h2>Abierto hoy cerca</h2>` + open.map(x => card(x.e, { occ: x.occ, info: `A ${dist(x.d)} de ti` })).join('') : '');
     loadLeaflet().then(() => {
       if (!NEARMAP) {
-        NEARMAP = L.map('near-map', { scrollWheelZoom: false });
+        NEARMAP = L.map('near-map', { scrollWheelZoom: false, zoomAnimation: false });
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(NEARMAP);
         NEARLAYER = L.layerGroup().addTo(NEARMAP);
         $('near-map').classList.toggle('night', dark());
