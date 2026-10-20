@@ -797,7 +797,8 @@ function startApp(DATA, TAX, sync) {
     $('ca-days').innerHTML = days.map(x => `<button class="pill" data-caday="${x.id}" aria-pressed="${x.id === state.caDay}">${esc(x.label)}</button>`).join('');
     const d = days.find(x => x.id === state.caDay).d;
     CA_DATE = d;
-    const kinds = [['todo', 'Todo'], ['calles', 'Calles'], ['transporte', 'Metro, tren y bus']];
+    // sin avisos de transporte en la ciudad (p. ej. Bilbao), no hace falta separar por tipo
+    const kinds = CLOSURES.some(c => TRANS.includes(c.kind)) ? [['todo', 'Todo'], ['calles', 'Calles'], ['transporte', 'Metro, tren y bus']] : [];
     $('ca-kinds').innerHTML = kinds.map(k => `<button class="pill" data-cakind="${k[0]}" aria-pressed="${state.caKind === k[0]}">${k[1]}</button>`).join('');
     const list = cutsOn(d).filter(x => state.caKind === 'todo' || (state.caKind === 'transporte') === TRANS.includes(x.c.kind));
     const mine = list.filter(x => x.mine).length;
