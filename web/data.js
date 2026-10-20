@@ -5,6 +5,17 @@
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
   const $ = (id) => document.getElementById(id);
+  // web de pruebas (pruebas.limonplanes.com): misma base de datos; usa las funciones «-pruebas» si existen y no cuenta estadísticas
+  const STAGING = /^pruebas\.|\.pages\.dev$/.test(location.hostname);
+  window.LIMON_STAGING = STAGING;
+  window.limonFn = async function (name, opts) {
+    if (STAGING) {
+      const r = await sb.functions.invoke(name + '-pruebas', opts);
+      const st = r.error && r.error.context && r.error.context.status;
+      if (!(r.error && (st === 404 || /not found|404/i.test(String(r.error.message))))) return r;
+    }
+    return sb.functions.invoke(name, opts);
+  };
   // enlace de «He olvidado mi contraseña»: se detecta antes de que la app termine de cargar
   let recovery = /type=recovery/.test(location.hash);
   sb.auth.onAuthStateChange((evt) => { if (evt === 'PASSWORD_RECOVERY') { recovery = true; if (window.__limonPw) window.__limonPw(); } });
@@ -94,7 +105,7 @@
     if (error) console.warn('estadísticas', error.message);
   }
   window.limonTrack = function (kind, eventId, ctx) {
-    if (consent() !== '1' || !sb) return;
+    if (consent() !== '1' || !sb || STAGING) return;
     const id = eventId ? toDbId(eventId) : null;
     TQ.push({ kind, event_id: id || null, city_id: C.city, ctx: ctx || null });
     clearTimeout(tTimer); tTimer = setTimeout(flushTrack, TQ.length >= 20 ? 0 : 4000);
@@ -310,7 +321,7 @@
   // acceso directo para las secciones de cuenta (organizadores, admin, calendario)
   window.limonDB = { sb, user: () => user, fn: async (name, body) => {
     if (!user) return { error: 'Entra con tu cuenta.' };
-    const { data, error } = await sb.functions.invoke(name, { body });
+    const { data, error } = await window.limonFn(name, { body });
     if (error) { try { const b = await error.context.json(); return { error: b.error || 'Error del servidor' }; } catch (e) { return { error: 'No se ha podido contactar con el servidor.' }; } }
     return data;
   } };
@@ -318,7 +329,7 @@
   // IA en el servidor (función limon-ai): solo con sesión
   window.limonAI = async function (payload) {
     if (!user) return { error: 'Entra con tu cuenta para usar la IA.' };
-    const { data, error } = await sb.functions.invoke('limon-ai', { body: Object.assign({ city: C.city }, payload) });
+    const { data, error } = await window.limonFn('limon-ai', { body: Object.assign({ city: C.city }, payload) });
     if (error) {
       try { const b = await error.context.json(); return { error: b.error || 'No se ha podido contactar con la IA.' }; }
       catch (e) { return { error: 'No se ha podido contactar con la IA.' }; }

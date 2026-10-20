@@ -998,7 +998,7 @@ function startApp(DATA, TAX, sync) {
     put('Calculando la ruta…');
     const occ = occurs(e, today, addDays(today, 400)), d = occ ? (occ.ongoing ? today : occ.date) : today;
     try {
-      const { data: rt, error } = await window.limonDB.sb.functions.invoke('limon-route', { body: { from: pos, to: [e.lat, e.lng] } });
+      const { data: rt, error } = await window.limonFn('limon-route', { body: { from: pos, to: [e.lat, e.lng] } });
       if (error || !rt || !rt.line) throw new Error('sin ruta');
       const line = rt.line;
       const hits = [];
@@ -1570,7 +1570,7 @@ function startApp(DATA, TAX, sync) {
     try {
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') { toast(perm === 'denied' ? 'Has bloqueado los avisos. Puedes cambiarlo en los ajustes de notificaciones.' : 'Sin permiso no podemos avisarte.'); return; }
-      const { data, error } = await db.sb.functions.invoke('limon-push', { body: { action: 'key' } });
+      const { data, error } = await window.limonFn('limon-push', { body: { action: 'key' } });
       if (error || !data || !data.key) { toast('No se han podido activar ahora. Prueba en un rato.'); return; }
       const reg = await navigator.serviceWorker.ready;
       const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u8(data.key) });
@@ -1709,7 +1709,7 @@ function startApp(DATA, TAX, sync) {
     }
   }
   // los correos de la cola (organizadores, admins) salen en cuanto pasa algo; si falla, los manda la tarea diaria
-  function flushMail() { const db = window.limonDB; if (db) db.sb.functions.invoke('limon-mail', { body: { action: 'flush' } }).catch(() => { }); }
+  function flushMail() { const db = window.limonDB; if (db) window.limonFn('limon-mail', { body: { action: 'flush' } }).catch(() => { }); }
   document.addEventListener('change', async ev => {
     const vj = ev.target.closest('[data-ventaja]');
     if (vj) {
@@ -1746,7 +1746,7 @@ function startApp(DATA, TAX, sync) {
     if (t.closest('[data-push-on]')) { pushOn(); return true; }
     if (t.closest('[data-push-off]')) { pushOff(); return true; }
     if (t.closest('[data-push-test]')) {
-      const { data, error } = await db.sb.functions.invoke('limon-push', { body: { action: 'test' } });
+      const { data, error } = await window.limonFn('limon-push', { body: { action: 'test' } });
       toast(error ? 'No se ha podido enviar ahora.' : data && data.error ? data.error : data && data.sent ? 'Enviado: te llegará en unos segundos.' : 'No hay ningún dispositivo activo: vuelve a activar los avisos.'); return true;
     }
     if (t.closest('[data-org-new]')) { orgEdit = 'nuevo'; renderAccountExtras(); return true; }
@@ -2251,7 +2251,7 @@ function startApp(DATA, TAX, sync) {
   else go(tabs.includes(t0) ? t0 : 'parati');
   renderAccountExtras();
   if (QS.get('baja') && window.limonDB) {
-    window.limonDB.sb.functions.invoke('limon-mail', { body: { action: 'unsub', t: QS.get('baja'), k: QS.get('k') } }).then(({ data }) => {
+    window.limonFn('limon-mail', { body: { action: 'unsub', t: QS.get('baja'), k: QS.get('k') } }).then(({ data }) => {
       toast(data && data.ok ? ({ semanal: 'Ya no recibirás el resumen semanal.', calle: 'Ya no recibirás avisos de cortes.', lluvia: 'Ya no recibirás avisos de lluvia.', quedadas: 'Ya no recibirás avisos de quedadas.', amigos: 'Ya no recibirás avisos de amigos.', ideas: 'Ya no recibirás avisos de tus ideas.', organizador: 'Ya no recibirás avisos de organizador.', admin: 'Ya no recibirás avisos de admin.' })[data.k] + ' Puedes volver a activarlo en tu perfil.' : 'Ese enlace de baja no es válido.');
       if (data && data.ok && me && me.notify) { me.notify[data.k] = false; renderAccountExtras(); }
     });
@@ -2328,5 +2328,16 @@ bootBureo(startApp);
     <div class="seg"><button class="btn" type="submit" id="pw-dlg-ok">Guardar contraseña</button><button class="btn ghost" type="button" id="pw-dlg-later">Ahora no</button></div>
   </form>
 </dialog>
+<script>
+  // web de pruebas: franja visible para no confundirla con la real
+  if (window.LIMON_STAGING) {
+    const b = document.createElement('div');
+    b.textContent = 'PRUEBAS · versión en pruebas: tus datos y los correos son reales';
+    b.setAttribute('role', 'note');
+    b.style.cssText = 'background:#C92A2A;color:#fff;font:600 12px system-ui,sans-serif;text-align:center;padding:calc(4px + env(safe-area-inset-top)) 8px 4px';
+    document.body.prepend(b);
+    document.title = '[Pruebas] ' + document.title;
+  }
+</script>
 </body>
 </html>

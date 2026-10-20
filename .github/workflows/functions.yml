@@ -1,10 +1,12 @@
 name: Funciones del servidor
 
 # Publica en Supabase las funciones que cambian en supabase/functions/ (o todas, a mano).
+#  - rama main:    las funciones de verdad (limon-mail, limon-ai…).
+#  - rama pruebas: copias con «-pruebas» al final (limon-mail-pruebas…), que solo usa pruebas.limonplanes.com.
 # Necesita el secreto SUPABASE_ACCESS_TOKEN (Supabase → Account → Access Tokens).
 on:
   push:
-    branches: [main]
+    branches: [main, pruebas]
     paths: ["supabase/functions/**"]
   workflow_dispatch:
     inputs:
@@ -20,6 +22,7 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       PROJECT: pxeqbxxfsrvsxcdfiddc
+      SUFFIX: ${{ github.ref_name == 'pruebas' && '-pruebas' || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,10 +34,15 @@ jobs:
         run: |
           if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then echo "Falta el secreto SUPABASE_ACCESS_TOKEN: no se publica nada."; exit 0; fi
           if [ -n "${{ inputs.only }}" ]; then fns="${{ inputs.only }}";
-          elif [ "${{ github.event_name }}" = "push" ]; then fns=$(git diff --name-only HEAD~1 HEAD -- supabase/functions | cut -d/ -f3 | sort -u);
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            fns=$(git diff --name-only HEAD~1 HEAD -- supabase/functions | cut -d/ -f3 | sort -u)
+            # si cambia el código compartido, se publican todas las que lo usan
+            if echo "$fns" | grep -qx "_shared"; then fns="$fns $(grep -l '_shared/' supabase/functions/*/index.ts | cut -d/ -f3)"; fi
           else fns=$(ls supabase/functions); fi
-          for f in $fns; do
+          for f in $(echo $fns | tr ' ' '\n' | sort -u); do
             [ -f "supabase/functions/$f/index.ts" ] || continue
-            echo "== $f"
-            supabase functions deploy "$f" --project-ref "$PROJECT" --no-verify-jwt --use-api
+            name="$f$SUFFIX"
+            if [ -n "$SUFFIX" ]; then cp -r "supabase/functions/$f" "supabase/functions/$name"; fi
+            echo "== $name"
+            supabase functions deploy "$name" --project-ref "$PROJECT" --no-verify-jwt --use-api
           done

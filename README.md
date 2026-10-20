@@ -30,3 +30,10 @@ leer el catálogo y que cada usuario gestione sus propios datos.
 
 Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, CC BY 4.0). De esMadrid y de los
 recintos se guarda lo mínimo para mostrar el evento y siempre se enlaza a la ficha original.
+
+## Pruebas antes de publicar
+
+- **`pruebas`** → https://pruebas.limonplanes.com (Cloudflare Pages, carpeta `web`, sin compilación). Lleva una franja roja «PRUEBAS», no aparece en buscadores (`web/_headers`) y no cuenta estadísticas de uso.
+- **`main`** → https://limonplanes.com (GitHub Pages). Solo se pasa a `main` lo que se ha probado en `pruebas`.
+- Base de datos: la misma para las dos webs (los datos, los correos y los avisos son reales). Los cambios de base de datos solo añaden (tablas, columnas, funciones nuevas), nunca quitan ni renombran, para que la versión publicada siga funcionando.
+- Funciones del servidor: lo que se sube a `pruebas` se publica como `limon-…-pruebas`; la web de pruebas las usa si existen y, si no, usa las normales.
