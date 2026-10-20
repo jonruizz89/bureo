@@ -299,7 +299,7 @@ table.cov td.n, table.cov th.n { text-align: right }
 
   <section class="view" id="v-calle" hidden>
     <h1>Antes de salir</h1>
-    <p class="lead">Calles cortadas y cierres de Metro, Cercanías y autobuses, según los avisos del Ayuntamiento y del Consorcio de Transportes.</p>
+    <p class="lead" id="ca-lead">Calles cortadas y cierres de Metro, Cercanías y autobuses, según los avisos del Ayuntamiento y del Consorcio de Transportes.</p>
     <div class="seg" role="group" aria-label="Tipo" id="ca-kinds"></div>
     <div class="seg" role="group" aria-label="Día" id="ca-days"></div>
     <p class="note" id="ca-count"></p>
@@ -327,7 +327,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div id="ca-big" class="view"></div>
     <div id="ca-list" class="view"></div>
-    <p class="note">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
+    <p class="note" id="ca-src">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
   </section>
 
   <section class="view" id="v-unicos" hidden>
@@ -788,7 +788,7 @@ function startApp(DATA, TAX, sync) {
       ${((c.lines || []).length || (c.stations || []).length) ? `<div class="tags">${c.lines.map(l => `<span class="line ${lineMine(l, c.kind) ? 'hit' : ''}" style="${lineStyle(l, c.kind)}">${esc(l)}</span>`).join('')}${(c.stations || []).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}</div>` : ''}
       <div class="tags">${sts.slice(0, 10).map(st => `<span class="street ${isMine(st) ? 'hit' : ''}">${esc(st)}</span>`).join('')}${sts.length > 10 ? `<span class="street">y ${sts.length - 10} más</span>` : ''}</div>
       ${c.geom ? `<button class="maplink" data-cutmap="${i}">Ver en el mapa</button>` : ''}
-      ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">Ver el aviso ${TRANS.includes(c.kind) ? 'del Consorcio de Transportes' : 'del Ayuntamiento'} ↗</a></div>` : ''}
+      ${c.source_url ? `<div class="links"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${CITY.id !== 'madrid' && c.source_name ? 'Ver en ' + esc(c.source_name.split('·').pop().trim()) : 'Ver el aviso ' + (TRANS.includes(c.kind) ? 'del Consorcio de Transportes' : 'del Ayuntamiento')} ↗</a></div>` : ''}
     </article>`;
   }
   function renderCalle() {
@@ -2048,6 +2048,11 @@ function startApp(DATA, TAX, sync) {
   // nombre de la ciudad en textos fijos; sin datos de cortes, la pestaña Calle no aparece
   document.querySelectorAll('.cityname').forEach(x => { x.textContent = CITY.name; });
   document.title = (window.LIMON_STAGING ? '[Pruebas] ' : '') + 'Limón · ' + CITY.name;
+  // textos de la pestaña Calle propios de cada ciudad (tabla cities, campo features)
+  { const f = CITY.features || {};
+    if (f.calle_lead) $('ca-lead').textContent = f.calle_lead;
+    if (f.calle_fuentes) $('ca-src').textContent = f.calle_fuentes;
+    if (f.calle_ejemplo) $('ca-street').placeholder = f.calle_ejemplo; }
   if (!HAS_CALLE) { ['t-calle'].forEach(id => { const el = $(id); if (el) el.hidden = true; }); document.querySelectorAll('[data-bnav="calle"]').forEach(b => { b.hidden = true; b.style.display = 'none'; }); }
   function go(t) {
     if (state.tab !== t) track('pestana', null, { a: t });

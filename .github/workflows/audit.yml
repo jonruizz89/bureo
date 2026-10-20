@@ -13,13 +13,37 @@ on:
         description: "Mostrar las respuestas de la IA"
         required: false
         default: ""
+      cities:
+        description: "Ciudades separadas por comas (vacío = todas las de la tabla cities)"
+        required: false
+        default: ""
 
 concurrency:
   group: audit
   cancel-in-progress: false
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      cities: ${{ steps.c.outputs.cities }}
+    steps:
+      - id: c
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+          ONLY: ${{ inputs.cities }}
+        run: |
+          if [ -n "$ONLY" ]; then echo "cities=$(python3 -c 'import json,os; print(json.dumps([c.strip() for c in os.environ["ONLY"].split(",") if c.strip()]))')" >> "$GITHUB_OUTPUT"
+          else echo "cities=$(curl -sf "$SUPABASE_URL/rest/v1/cities?select=id&order=position" -H "apikey: $SUPABASE_SECRET" -H "Authorization: Bearer $SUPABASE_SECRET" | python3 -c 'import json,sys; print(json.dumps([c["id"] for c in json.load(sys.stdin)]))')" >> "$GITHUB_OUTPUT"; fi
+
   audit:
+    needs: plan
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        city: ${{ fromJson(needs.plan.outputs.cities) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -37,4 +61,5 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BUREO_AUDIT_GROUPS: ${{ inputs.groups }}
           BUREO_AUDIT_DEBUG: ${{ inputs.debug }}
+          BUREO_CITY: ${{ matrix.city }}
         run: python3 src/audit.py

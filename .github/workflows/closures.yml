@@ -52,3 +52,27 @@ jobs:
             engine/raw/geo_metro.json
             engine/raw/osm_ways.json
           key: closures-${{ github.run_id }}
+
+  # resto de ciudades con fuente de calle (motor genérico): Bilbao por ahora
+  otras:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        city: [bilbao]
+    defaults:
+      run:
+        working-directory: engine/src/generic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Avisos de tráfico del ayuntamiento
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET: ${{ secrets.SUPABASE_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BUREO_CITY_MAX_USD: "0.2"
+        run: python3 calle.py ${{ matrix.city }}
