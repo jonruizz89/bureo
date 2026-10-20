@@ -62,9 +62,15 @@ def read_source(s, city):
     return None
 
 
+STOPW = {'de', 'del', 'la', 'el', 'los', 'las', 'y', 'sala', 'teatro', 'antzokia', 'museo', 'museoa', 'bilbao', 'bilboko', 'aretoa'}
+
+
 def in_city(e, city):
     name = fold(city['name'])
-    if e.get('municipio'):
+    if city.get('kind') == 'provincia':  # toda la provincia, menos las ciudades que tienen su propia zona (Bilbao)
+        if not e.get('municipio') or fold(e['municipio']) in city.get('_children', set()):
+            return False
+    elif e.get('municipio'):
         mu = fold(e['municipio'])
         if name not in mu and mu not in name:
             return False
@@ -119,6 +125,9 @@ def fuzzy_merge(eventos):
 
 def main(cid):
     city = load_city(cid)
+    prov = city.get('kind') == 'provincia'
+    if prov:
+        city['_children'] = {fold(c['name']) for c in sb('GET', f'cities?select=name&parent=eq.{cid}') or []}
     srcs = sb('GET', f'sources?select=id,name,url,layer,config&city_id=eq.{cid}&status=eq.activa&order=id')
     raw, per = [], {}
     for s in srcs:
@@ -145,6 +154,15 @@ def main(cid):
         raw += keep
         sb('PATCH', f'sources?id=eq.{s["id"]}', {'events_last': len(keep), 'notes': None}, 'return=minimal')
         print(f'✓ {s["name"]}: {len(keep)} eventos')
+
+    if prov:  # en una provincia el «distrito» es el municipio, y el recinto lleva su pueblo («Kultur Etxea (Getxo)»)
+        for e in raw:
+            mu = e.get('municipio')
+            e['distrito'] = mu
+            if e.get('lugar') and fold(mu) not in fold(e['lugar']):
+                e['lugar'] = f"{e['lugar']} ({mu})"
+            elif not e.get('lugar'):
+                e['lugar'] = mu
 
     # el mismo evento en varias fuentes o con varias sesiones → una sola tarjeta
     def same_place(a, b):
@@ -205,15 +223,22 @@ def main(cid):
         if not (e.get('lat') and e.get('lng')) and e.get('lugar'):
             g = geo.find(e['lugar'], e.get('direccion') if e.get('direccion') != e.get('lugar') else None)
             if g:
-                e['lat'], e['lng'], e['distrito'] = g[0], g[1], g[2]; placed += 1
+                e['lat'], e['lng'] = g[0], g[1]; placed += 1
+                if not prov:
+                    e['distrito'] = g[2]
+            elif prov and e.get('muni_ll'):  # sin el sitio exacto: en el centro del pueblo
+                e['lat'], e['lng'] = e['muni_ll']
         elif e.get('lat') and not e.get('distrito') and e.get('lugar') and vnorm(e['lugar']) in known:
             e['distrito'] = known[vnorm(e['lugar'])][2]
         e.setdefault('distrito', None)
         e['cats'] = []
         e['descripcion'] = (e.get('descripcion') or '')[:420]
-        for k in ('municipio', 'url', 'direccion', 'tipo'):
+        for k in ('municipio', 'url', 'direccion', 'tipo', 'muni_ll'):
             e.pop(k, None)
     geo.save()
+    if prov:  # el selector y el filtro «municipio» muestran los pueblos con planes
+        munis = sorted({e['distrito'] for e in eventos if e.get('distrito')}, key=fold)
+        sb('PATCH', f'cities?id=eq.{cid}', {'districts': munis}, 'return=minimal')
     out = os.path.join(os.environ.get('BUREO_OUT', 'out'), cid)
     os.makedirs(out, exist_ok=True)
     meta = {'ciudad': city['name'], 'generado': dt.datetime.now().isoformat(timespec='minutes'), 'por_fuente': per,

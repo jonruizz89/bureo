@@ -17,9 +17,15 @@ def _clean(t):
     return re.sub(r'\s+', ' ', t).strip()
 
 
+KK_PROV = {'bizkaia': '48', 'vizcaya': '48', 'gipuzkoa': '20', 'guipuzcoa': '20', 'araba': '01', 'alava': '01', 'araba alava': '01'}
+
+
 def kk_match(city):
     if fold(city.get('region')) not in KK_REGIONS:
         return None
+    if city.get('kind') == 'provincia':  # toda la provincia: todos sus municipios
+        prov = KK_PROV.get(fold(city['name'])) or KK_PROV.get(fold(city.get('region')))
+        return {'method': 'kulturklik', 'province': prov, 'municipality': None} if prov else None
     for prov in ('48', '20', '01'):
         st, _, txt, _ = fetch(f'{KK}/municipalities/byProvince/{prov}?_elements=400', accept=JSON, ua=UA_API)
         if st != 200:
@@ -31,11 +37,14 @@ def kk_match(city):
     return None
 
 
-def kk_read(cfg, max_pages=30):
+def kk_read(cfg, max_pages=None):
+    max_pages = max_pages or (30 if cfg.get('municipality') else 90)
     out, page, pages = [], 1, 1
     while page <= min(pages, max_pages):
-        q = urllib.parse.urlencode({'provinceNoraCode': cfg['province'], 'municipalityNoraCode': cfg['municipality'],
-                                    '_elements': 50, '_page': page})
+        params = {'provinceNoraCode': cfg['province'], '_elements': 50, '_page': page}
+        if cfg.get('municipality'):
+            params['municipalityNoraCode'] = cfg['municipality']
+        q = urllib.parse.urlencode(params)
         for intento in range(3):
             st, _, txt, _ = fetch(f'{KK}/events/upcoming?{q}', accept=JSON, ua=UA_API)
             if st == 200:
@@ -67,6 +76,7 @@ def kk_read(cfg, max_pages=30):
                 'imagen': ((i.get('images') or [{}])[0] or {}).get('imageUrl'),
                 'web_organizador': web, 'url': i.get('sourceUrlEs') or web,
                 'municipio': i.get('municipalityEs'), 'tipo': i.get('typeEs'),
+                'muni_ll': [float(i['municipalityLatitude']), float(i['municipalityLongitude'])] if i.get('municipalityLatitude') else None,
             })
         page += 1
     return out
