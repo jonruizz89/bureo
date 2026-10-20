@@ -1594,6 +1594,18 @@ function startApp(DATA, TAX, sync) {
   const clearBadge = () => { try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (e) { } };
   clearBadge(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') clearBadge(); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(refreshPush).catch(e => console.warn('sw', e));
+  // al volver a la app tras un rato (iOS la deja congelada en segundo plano), si hay versión nueva se recarga sola
+  const pageVersion = async () => { try { const r = await fetch('index.html', { method: 'HEAD', cache: 'no-store' }); return r.ok ? (r.headers.get('etag') || r.headers.get('last-modified')) : null; } catch (e) { return null; } };
+  let myVersion = null, hiddenAt = 0;
+  pageVersion().then(v => { myVersion = v; });
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (!hiddenAt || Date.now() - hiddenAt < 10 * 60e3) return;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => { });
+    const v = await pageVersion();
+    const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.querySelector('dialog[open]');
+    if (v && myVersion && v !== myVersion && !busy) location.reload();
+  });
 
   // ---------- estadísticas (solo administradores): agregados de los últimos 30 días
   let STATS = null, statsDays = 30;
