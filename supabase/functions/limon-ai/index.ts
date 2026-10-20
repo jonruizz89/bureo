@@ -163,8 +163,11 @@ async function recommend(uid: string, when: string, force: boolean, city = 'madr
 
   const cols = 'id,title,description,starts_on,ends_on,time_text,district,topics,series,is_unique,ai_unique,is_free,venues(name),event_sessions(on_date),event_categories(category_id)';
   const evs: Ev[] = [];
+  // una provincia incluye sus ciudades (Bizkaia → también Bilbao)
+  const { data: kids } = await admin.from('cities').select('id').eq('parent', city);
+  const scope = [city, ...((kids || []) as { id: string }[]).map((k) => k.id)];
   for (let off = 0; ; off += 1000) {
-    const { data, error } = await admin.from('events').select(cols).eq('city_id', city).gte('ends_on', from).lte('starts_on', to).order('id').range(off, off + 999);
+    const { data, error } = await admin.from('events').select(cols).in('city_id', scope).gte('ends_on', from).lte('starts_on', to).order('id').range(off, off + 999);
     if (error) throw error;
     evs.push(...(data as unknown as Ev[]));
     if (!data || data.length < 1000) break;

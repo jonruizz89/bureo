@@ -593,8 +593,8 @@ function startApp(DATA, TAX, sync) {
   function filtersHtml() {
     const pill = (k, v, t) => `<button class="pill" data-fset="${k}" data-fval="${v}" aria-pressed="${String(F[k]) === String(v)}">${t}</button>`;
     return `<div><h3>Zona</h3><div class="row" style="margin-top:6px">
-        <select class="search" data-fsel="dist" style="max-width:240px" aria-label="Distrito"><option value="">Toda la ciudad</option>${DISTRITOS.map(d => `<option ${F.dist === d ? 'selected' : ''}>${d}</option>`).join('')}</select>
-        ${pill('near', 1, 'A 1 km')}${pill('near', 3, 'A 3 km')}${pill('near', 8, 'A 8 km')}</div>
+        <select class="search" data-fsel="dist" style="max-width:240px" aria-label="${CITY.kind === 'provincia' ? 'Municipio' : 'Distrito'}"><option value="">${CITY.kind === 'provincia' ? 'Toda la provincia' : CITY.muni ? 'Todo ' + esc(CITY.name) : 'Toda la ciudad'}</option>${DISTRITOS.map(d => `<option ${F.dist === d ? 'selected' : ''}>${d}</option>`).join('')}</select>
+        ${pill('near', 1, 'A 1 km')}${pill('near', 3, 'A 3 km')}${pill('near', 8, 'A 8 km')}${CITY.kind === 'provincia' || CITY.muni ? pill('near', 20, 'A 20 km') + pill('near', 40, 'A 40 km') : ''}</div>
         <p class="note" id="f-geo">${F.near ? (F.pos ? `Cerca de tu ubicación actual (${F.near} km).` : 'Buscando tu ubicación…') : 'La distancia se calcula desde donde estás ahora; no se guarda.'}</p></div>
       <div><h3>Momento del día</h3><div class="row" style="margin-top:6px">${pill('franja', 'manana', 'Mañana')}${pill('franja', 'tarde', 'Tarde')}${pill('franja', 'noche', 'Noche')}</div></div>
       <div><h3>Días</h3><div class="row" style="margin-top:6px">${pill('dias', 'laborables', 'Entre semana')}${pill('dias', 'finde', 'Fin de semana')}</div></div>
@@ -1533,6 +1533,41 @@ function startApp(DATA, TAX, sync) {
       <div class="seg full"><button class="btn" type="submit">${x.id ? 'Guardar cambios' : 'Enviar evento'}</button><button class="btn ghost" type="button" data-org-cancel>Cancelar</button><span class="note" id="org-msg" role="status"></span></div>
     </form>`;
   }
+  // ---------- selector de zona: primero provincia (o ciudad), luego «Toda la provincia» o un municipio
+  function zoneGroups() {
+    const isAdm = me && me.role === 'admin', all = DATA.cities || [];
+    const vis = c => c.status === 'publicada' || isAdm || c.id === CITY.id;
+    const groups = [];
+    for (const c of all.filter(x => !x.parent || !all.some(p => p.id === x.parent && vis(p)))) {
+      if (!vis(c)) continue;
+      if (c.kind === 'provincia') {
+        const kids = all.filter(k => k.parent === c.id && vis(k));
+        const kidNames = new Set(kids.map(k => k.name));
+        groups.push({ id: c.id, name: c.name, draft: c.status !== 'publicada', options: [{ v: c.id, t: 'Toda ' + c.name }]
+          .concat(kids.map(k => ({ v: k.id, t: k.name + (k.status !== 'publicada' ? ' (borrador)' : '') })))
+          .concat((c.districts || []).filter(d => !kidNames.has(d)).map(d => ({ v: c.id + '|' + d, t: d }))) });
+      } else groups.push({ id: c.id, name: c.name, draft: c.status !== 'publicada', options: [{ v: c.id, t: c.name }] });
+    }
+    return groups;
+  }
+  function openZone() {
+    const groups = zoneGroups(), zone = window.limonCity.zone();
+    const cur = groups.find(g => g.options.some(o => o.v === zone)) || groups[0];
+    const isAdm = me && me.role === 'admin';
+    openSheet(`<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">¿Dónde buscas planes?</h2><button class="btn ghost" data-sheet-close>Cerrar</button></div>
+      <label class="note" style="display:flex;flex-direction:column;gap:4px">Provincia
+        <select class="search" id="zone-p">${groups.map(g => `<option value="${esc(g.id)}" ${g === cur ? 'selected' : ''}>${esc(g.name)}${g.draft ? ' (borrador)' : ''}</option>`).join('')}</select></label>
+      <label class="note" id="zone-m-wrap" style="display:flex;flex-direction:column;gap:4px">Municipio
+        <select class="search" id="zone-m"></select></label>
+      <button class="btn" data-zone-go style="align-self:flex-start">Ver planes</button>
+      <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las zonas.${isAdm ? ' Las zonas en borrador solo las ves tú.' : ''} De momento: Madrid y Bizkaia; iremos añadiendo más.</p>`);
+    const fill = () => {
+      const g = groups.find(x => x.id === $('zone-p').value) || groups[0];
+      $('zone-m').innerHTML = g.options.map(o => `<option value="${esc(o.v)}" ${o.v === zone ? 'selected' : ''}>${esc(o.t)}</option>`).join('');
+      $('zone-m-wrap').hidden = g.options.length < 2;
+    };
+    fill(); $('zone-p').addEventListener('change', fill);
+  }
   // ---------- avisos push en este dispositivo (PWA). En iPhone solo funcionan con Limón añadido a la pantalla de inicio.
   const PUSH_KINDS = [['quedadas', 'Quedadas: alguien responde a un plan que propusiste'], ['amigos', 'Amigos: te quieren seguir o aceptan tu solicitud'],
     ['calle', 'Cortes junto a tus planes de hoy o mañana, o en tus calles (por la mañana)'], ['lluvia', 'Lluvia en un plan al aire libre que tienes guardado'],
@@ -2253,13 +2288,8 @@ function startApp(DATA, TAX, sync) {
       renderAll(); return;
     }
     if (ev.target.closest('[data-sheet-close]')) { closeSheets(); return; }
-    if (ev.target.closest('#city-btn')) {
-      const isAdm = me && me.role === 'admin', list = (DATA.cities || []).filter(c => c.status === 'publicada' || isAdm || c.id === CITY.id);
-      openSheet(`<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Elige ciudad</h2><button class="btn ghost" data-sheet-close>Cerrar</button></div>
-        <div class="citylist">${list.map(c => `<button data-city="${esc(c.id)}" aria-current="${c.id === CITY.id}"><b>${esc(c.name)}</b>${c.region ? ` <span class="note">${esc(c.region)}</span>` : ''}${c.status !== 'publicada' ? ' <span class="badge revision">borrador</span>' : ''}</button>`).join('')}</div>
-        <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las ciudades.${isAdm ? ' Las ciudades en borrador solo las ves tú.' : ''}</p>`);
-      return;
-    }
+    if (ev.target.closest('#city-btn')) { openZone(); return; }
+    if (ev.target.closest('[data-zone-go]')) { const v = $('zone-m').value; if (v !== window.limonCity.zone()) window.limonCity.set(v); else closeSheets(); return; }
     const cb2 = ev.target.closest('[data-city]'); if (cb2) { if (cb2.dataset.city !== CITY.id) window.limonCity.set(cb2.dataset.city); else closeSheets(); return; }
     if (ev.target.closest('[data-vote],[data-idea-tab],[data-idea-del]')) { ideasClick(ev.target); return; }
     const pf = ev.target.closest('[data-prof]'); if (pf) { openProfile(pf.dataset.prof); return; }

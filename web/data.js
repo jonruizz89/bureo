@@ -37,12 +37,14 @@
 
   async function loadEvents() {
     const today = ymd(new Date());
-    const cols = 'id,title,description,starts_on,ends_on,time_text,district,price_text,is_free,image_url,organizer_url,' +
+    const cols = 'id,city_id,title,description,starts_on,ends_on,time_text,district,price_text,is_free,image_url,organizer_url,' +
       'is_unique,is_featured,ai_unique,topics,series,lat,lng,venues(name),event_sessions(on_date),event_categories(category_id),event_sources(url,sources(name))';
     const out = [];
     for (let from = 0; ; from += 1000) {
-      const r = await sb.from('events').select(cols).eq('city_id', C.city).gte('ends_on', today)
-        .order('starts_on').order('id').range(from, from + 999);
+      // zona: una ciudad, una provincia entera (sus eventos + los de sus ciudades) o un municipio de la provincia
+      let q = sb.from('events').select(cols).gte('ends_on', today);
+      q = C.muni ? q.eq('city_id', C.city).eq('district', C.muni) : q.in('city_id', C.scope || [C.city]);
+      const r = await q.order('starts_on').order('id').range(from, from + 999);
       if (r.error) throw r.error;
       out.push(...r.data);
       if (r.data.length < 1000) break;
@@ -55,7 +57,8 @@
       fin: e.ends_on,
       hora: e.time_text,
       lugar: e.venues ? e.venues.name : null,
-      distrito: e.district,
+      // en la provincia, el «distrito» es el municipio: los planes de Bilbao cuentan como «Bilbao»
+      distrito: e.city_id !== C.city && C.names ? C.names[e.city_id] : e.district,
       lat: e.lat, lng: e.lng,
       precio: e.price_text,
       gratis: e.is_free,
@@ -72,7 +75,8 @@
   }
 
   async function loadClosures() {
-    const r = await sb.from('closures').select('title,kind,summary,streets,lines,stations,district,ranges,source_url,source_name,geom').eq('city_id', C.city);
+    if (C.muni) return [];
+    const r = await sb.from('closures').select('title,kind,summary,streets,lines,stations,district,ranges,source_url,source_name,geom').in('city_id', C.scope || [C.city]);
     if (r.error) { console.warn('cortes', r.error); return []; }
     return r.data;
   }
@@ -86,7 +90,7 @@
   }
 
   async function loadSources() {
-    const r = await sb.from('sources').select('name,url,method,license,last_run_at').eq('city_id', C.city).eq('status', 'activa').order('id');
+    const r = await sb.from('sources').select('name,url,method,license,last_run_at').in('city_id', C.scope || [C.city]).eq('status', 'activa').order('id');
     if (r.error) throw r.error;
     return r.data;
   }
@@ -348,24 +352,42 @@
   // ciudades: la elegida en este navegador, la de ?c= (vista previa, también de ciudades en borrador) o Madrid
   let CITIES = [], CITY = null;
   async function loadCities() {
-    const r = await sb.from('cities').select('id,name,region,lat,lng,bbox,districts,stadiums,features,status,position').order('position');
+    const r = await sb.from('cities').select('id,name,region,lat,lng,bbox,districts,stadiums,features,status,position,kind,parent').order('position');
     CITIES = r.data || [];
-    const qs = new URLSearchParams(location.search).get('c');
+    const qp = new URLSearchParams(location.search);
     let saved = null; try { saved = localStorage.getItem('bureo.city'); } catch (e) { }
+    const [sid, smuni] = (saved || '').split('|');
     const pick = (id) => CITIES.find((c) => c.id === id);
-    CITY = (qs && pick(qs)) || (saved && pick(saved) && pick(saved).status === 'publicada' && pick(saved)) || pick(C.city) || CITIES[0] || { id: C.city, name: 'Madrid', lat: 40.4168, lng: -3.7038, districts: [], stadiums: [], features: { calle: true } };
-    C.city = CITY.id;
+    let base = null, muni = null;
+    if (qp.get('c') && pick(qp.get('c'))) { base = pick(qp.get('c')); muni = qp.get('m'); }
+    else if (sid && pick(sid) && pick(sid).status === 'publicada') { base = pick(sid); muni = smuni || null; }
+    base = base || pick(C.city) || CITIES[0] || { id: C.city, name: 'Madrid', lat: 40.4168, lng: -3.7038, districts: [], stadiums: [], features: { calle: true } };
+    const kids = CITIES.filter((c) => c.parent === base.id);
+    if (base.kind !== 'provincia' || !(base.districts || []).includes(muni) || kids.some((k) => k.name === muni)) muni = null;
+    C.city = base.id; C.muni = muni; C.scope = [base.id].concat(kids.map((k) => k.id));
+    C.names = Object.fromEntries(kids.map((k) => [k.id, k.name]));
+    if (muni) CITY = Object.assign({}, base, { name: muni, muni, province: base.name, districts: [], features: {}, stadiums: [] });
+    else if (base.kind === 'provincia') CITY = Object.assign({}, base, { districts: [...new Set((base.districts || []).concat(kids.map((k) => k.name)))].sort((a, b) => a.localeCompare(b, 'es')) });
+    else CITY = base;
+  }
+  // centro de un municipio sin fila propia: la media de sus planes situados
+  function centerOn(evs) {
+    const pts = evs.filter((e) => e.lat && e.lng);
+    if (!CITY.muni || !pts.length) return;
+    CITY.lat = pts.reduce((a, e) => a + e.lat, 0) / pts.length; CITY.lng = pts.reduce((a, e) => a + e.lng, 0) / pts.length;
   }
   window.limonCity = {
     list: () => CITIES, current: () => CITY,
+    // id = «madrid», «bizkaia» (toda la provincia) o «bizkaia|Getxo» (un municipio de la provincia)
     async set(id) {
-      const c = CITIES.find((x) => x.id === id);
-      // una ciudad en borrador solo se ve en vista previa (?c=), sin guardarla como ciudad propia
-      if (c && c.status !== 'publicada') { location.href = location.pathname + '?c=' + encodeURIComponent(id); return; }
+      const [base, muni] = String(id).split('|'), c = CITIES.find((x) => x.id === base);
+      // una zona en borrador solo se ve en vista previa (?c=), sin guardarla como propia
+      if (c && c.status !== 'publicada') { location.href = location.pathname + '?c=' + encodeURIComponent(base) + (muni ? '&m=' + encodeURIComponent(muni) : ''); return; }
       try { localStorage.setItem('bureo.city', id); } catch (e) { }
-      if (user) await sb.from('profiles').update({ city_id: id }).eq('id', user.id);
+      if (user) await sb.from('profiles').update({ city_id: base }).eq('id', user.id);
       location.href = location.pathname;
-    }
+    },
+    zone: () => (C.muni ? C.city + '|' + C.muni : C.city)
   };
 
   window.bootBureo = async function (startApp) {
@@ -373,6 +395,7 @@
     try {
       await loadCities();
       const [tax, evs, srcs, cuts, audit] = await Promise.all([loadTaxonomy(), loadEvents(), loadSources(), loadClosures(), loadAudit().catch(() => null)]);
+      centerOn(evs);
       const last = srcs.map((s) => s.last_run_at).filter(Boolean).sort().pop();
       const meta = {
         eventos: evs.length,

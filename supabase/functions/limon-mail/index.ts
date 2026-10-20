@@ -204,9 +204,9 @@ const OUTDOOR = new Set(['aire_libre', 'mercadillos', 'fiestas', 'desfiles', 're
   'natacion', 'tematicas', 'solidarias', 'foodtrucks', 'carreras_perro', 'quedadas_perro', 'aves', 'excursiones', 'huertos', 'itinerarios', 'jardines', 'senderismo', 'g:naturaleza', 'beneficos']);
 const isOutdoor = (cats: string[], text: string) => cats.some((c) => OUTDOOR.has(c)) || /al aire libre/i.test(text || '');
 type Rain = { daily: Record<string, number>; hourly: Record<string, number[]> };
-type CityRow = { id: string; name: string; lat: number; lng: number };
+type CityRow = { id: string; name: string; lat: number; lng: number; parent?: string | null };
 async function loadCities(): Promise<Record<string, CityRow>> {
-  const { data } = await admin.from('cities').select('id,name,lat,lng');
+  const { data } = await admin.from('cities').select('id,name,lat,lng,parent');
   return Object.fromEntries((data || []).map((c: CityRow) => [c.id, c]));
 }
 const rainCache: Record<string, Promise<Rain | null>> = {};
@@ -239,7 +239,7 @@ async function daily() {
   let sent = 0;
   for (const p of profs as (Prof & { my_streets: string[] | null; city_id: string | null })[]) {
     if (!p.email) continue;
-    const cityId = p.city_id || 'madrid', closures = allClosures.filter((c) => c.city_id === cityId), rain = await rainFor(cities[cityId]);
+    const cityId = p.city_id || 'madrid', closures = allClosures.filter((c) => c.city_id === cityId || (cities[c.city_id] as { parent?: string } | undefined)?.parent === cityId), rain = await rainFor(cities[cityId]);
     const sections: { h: string; items: Item[] }[] = [];
     const wantCalle = (p.notify || {}).calle === true || wantsPush(p, 'calle'), wantRain = (p.notify || {}).lluvia === true || wantsPush(p, 'lluvia');
     // tus planes guardados con sesión hoy o mañana
@@ -343,7 +343,7 @@ async function weekly(only?: string) {
     for (let off = 0; ; off += 1000) {
       const { data, error } = await admin.from('events')
         .select('id,title,starts_on,ends_on,time_text,is_free,price_text,district,is_unique,is_featured,topics,series,description,venues(name),event_categories(category_id),event_sessions(on_date)')
-        .eq('city_id', cityId).lte('starts_on', to).gte('ends_on', from).order('id').range(off, off + 999);
+        .in('city_id', [cityId, ...Object.values(cities).filter((c) => (c as { parent?: string }).parent === cityId).map((c) => c.id)]).lte('starts_on', to).gte('ends_on', from).order('id').range(off, off + 999);
       if (error) throw error;
       evs.push(...((data || []) as unknown as Ev[]));
       if (!data || data.length < 1000) break;
