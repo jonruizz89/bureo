@@ -6,7 +6,7 @@
   });
   const $ = (id) => document.getElementById(id);
   // web de pruebas (pruebas.limonplanes.com): misma base de datos; usa las funciones «-pruebas» si existen y no cuenta estadísticas
-  const STAGING = /^pruebas\.|\.pages\.dev$/.test(location.hostname);
+  const STAGING = /^pruebas\.|\.pages\.dev$|\.workers\.dev$/.test(location.hostname);
   window.LIMON_STAGING = STAGING;
   window.limonFn = async function (name, opts) {
     if (STAGING) {
