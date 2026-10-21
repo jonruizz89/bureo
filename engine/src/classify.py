@@ -43,6 +43,7 @@ def texto(e):
 groups = sb('GET', 'category_groups?select=id,name&order=position')
 cats = sb('GET', 'categories?select=id,group_id,label,is_generic&order=position')
 valid = {c['id'] for c in cats if c['id'] != 'sin_categoria'}
+FAMILIA = {c['id'] for c in cats if c['group_id'] == 'familia'}
 tax_txt = '\n'.join(
     f"{g['name']}: " + ', '.join(f"{c['id']} ({c['label']})" for c in cats if c['group_id'] == g['id'] and c['id'] in valid)
     for g in groups if g['id'] != 'otros')
@@ -56,6 +57,7 @@ Para cada evento devuelve:
 - "cats": de 1 a 4 identificadores de la taxonomía, del más al menos relevante. Sé preciso: una película clásica es cine_clasico, una proyección de documental es documental, una exposición de pintura es pintura. No pongas categorías de familia (infantil, cuentacuentos, titeres, talleres_familia) salvo que el evento esté dirigido a niños o familias. Una sesión de DJ o una fiesta en discoteca o club es discotecas (y noche); un concierto en una sala no es discotecas. No confundas el nombre de un lugar con el contenido (el Hipódromo de la Zarzuela no es zarzuela; "Los pájaros" de Hitchcock no es observación de aves).
 - "topics": de 0 a 5 temas concretos en español que un aficionado buscaría: personas (director, autor, artista, compositor, intérprete), obras famosas, épocas o civilizaciones, movimientos, lugares. Usa tu conocimiento: si el título es una película conocida, incluye su director (p. ej. "Alfred Hitchcock"); si es una ópera, su compositor. Nombres propios con su forma más común. Nada genérico como "cine" o "cultura".
 - "series": si el evento forma parte claramente de un ciclo o serie (un ciclo de un director en un centro, un festival, una temporada), su nombre corto, p. ej. "Ciclo Hitchcock en el C.S. José de Espronceda"; si no, null.
+- "publico": a quién va dirigido. "ninos" si es para niños o pide edades infantiles (p. ej. «de 7 a 12 años», «hasta 14 años», «a partir de 4 años»), aunque sea un curso, un deporte o un concierto; "adolescentes" si es para jóvenes de 12 a 17; "familias" si es para ir con niños de cualquier edad; "adultos" si es solo para mayores de edad o pide +18; "todos" en el resto.
 - "unique": true solo si es una cita de ciudad singular, de las que pasan como mucho una vez al año y atraen a mucha gente (fiestas tradicionales, grandes carreras populares, festivales de referencia, noches especiales de museos); false en la programación habitual.
 
 Entrega el resultado llamando a la herramienta guardar_clasificacion con un elemento por evento."""
@@ -72,8 +74,9 @@ TOOL = {
                 'cats': {'type': 'array', 'items': {'type': 'string'}},
                 'topics': {'type': 'array', 'items': {'type': 'string'}},
                 'series': {'type': ['string', 'null']},
-                'unique': {'type': 'boolean'}},
-            'required': ['id', 'cats', 'topics', 'series', 'unique']}}},
+                'unique': {'type': 'boolean'},
+                'publico': {'type': 'string', 'enum': ['todos', 'ninos', 'adolescentes', 'familias', 'adultos']}},
+            'required': ['id', 'cats', 'topics', 'series', 'unique', 'publico']}}},
         'required': ['items']}}
 
 
@@ -92,7 +95,7 @@ def spent_usd():
 def call_model(batch):
     items = [{'id': e['id'], 'titulo': e['title'], 'lugar': (e.get('venues') or {}).get('name'),
               'fechas': f"{e['starts_on']}–{e['ends_on']}", 'precio': e.get('price_text'),
-              'descripcion': texto(e)[:350],
+              'descripcion': texto(e)[:600],
               'pistas_de_la_fuente': [c['category_id'] for c in e.get('event_categories') or []]} for e in batch]
     body = {'model': MODEL, 'max_tokens': 6000,
             'system': [{'type': 'text', 'text': SYSTEM, 'cache_control': {'type': 'ephemeral'}}],
@@ -143,6 +146,10 @@ def save(batch, result):
         if not r:
             continue
         cs = [c for c in dict.fromkeys(r.get('cats') or []) if c in valid][:4] or ['sin_categoria']
+        # el público va aparte de las 4 categorías: un curso de tenis para niños es deporte Y actividad infantil
+        extra = {'ninos': 'infantil', 'familias': 'infantil', 'adolescentes': 'jovenes'}.get(r.get('publico'))
+        if extra and extra in valid and not any(c in FAMILIA for c in cs):
+            cs = [c for c in cs if c != 'sin_categoria'] + [extra]
         topics = [str(t).strip()[:80] for t in (r.get('topics') or []) if str(t).strip()][:5]
         series = r.get('series') or None
         rows.append({'id': e['id'], 'topics': topics, 'series': str(series)[:160] if series else None,
