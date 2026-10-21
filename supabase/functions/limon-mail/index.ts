@@ -111,7 +111,7 @@ async function flush() {
     if (p && (wants(p, k) || wantsPush(p, k))) {
       if (m.kind === 'org_editor') {
         mail = pl.status === 'aprobado'
-          ? { subject: 'Ya puedes publicar tus eventos en Limón', html: layout({ title: '¡Bienvenido a Limón como organizador!', intro: 'Hemos aprobado tu solicitud. Desde <b>Perfil → Mis eventos</b> puedes crear tus eventos: la IA los revisa, los sitúa en el mapa y salen en Limón con enlace a tu web.', cta: { label: 'Crear mi primer evento', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por tu solicitud de organizador.') }) }
+          ? { subject: 'Ya puedes publicar tus eventos en Limón', html: layout({ title: '¡Bienvenido a Limón como organizador!', intro: 'Hemos aprobado tu solicitud. Desde <b>Perfil → Mis eventos</b> puedes crear tus eventos: los revisamos, los situamos en el mapa y salen en Limón con enlace a tu web.', cta: { label: 'Crear mi primer evento', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por tu solicitud de organizador.') }) }
           : { subject: 'Tu solicitud de organizador en Limón', html: layout({ title: 'No hemos podido aprobar tu solicitud', intro: 'De momento no podemos darte acceso de organizador. Si crees que es un error o quieres darnos más detalles, responde a este correo o vuelve a enviar la solicitud desde tu perfil.', footer: footer(p, k, 'Te escribimos por tu solicitud de organizador.') }) };
       } else if (m.kind === 'org_event') {
         const ok = pl.status === 'publicado';

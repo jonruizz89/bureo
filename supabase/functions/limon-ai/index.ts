@@ -51,7 +51,7 @@ async function guard(uid: string) {
   ]);
   if (mine && mine.calls >= MAX_CALLS_USER_DAY) return 'Has llegado al límite de consultas de hoy. Mañana más.';
   const total = (all || []).reduce((s: number, r: { usd: number }) => s + Number(r.usd), 0);
-  if (total >= MAX_USD_DAY) return 'La IA está en pausa hasta mañana por el tope de gasto diario.';
+  if (total >= MAX_USD_DAY) return 'Las recomendaciones están en pausa hasta mañana. Vuelve a probar entonces.';
   return null;
 }
 
@@ -88,7 +88,7 @@ async function taste(uid: string, text: string) {
     'tal cual en un evento (personas, obras, épocas, civilizaciones, estilos); nunca frases genéricas como «conferencias de historia» ' +
     'o «planes con perro», que ya cubren las categorías.\n\nTaxonomía (id = nombre (grupo)):\n' + list;
   const { out, usd } = await claude(system, text.slice(0, 2000), TASTE_TOOL, 1500);
-  if (!out) throw new Error('La IA no devolvió el perfil');
+  if (!out) throw new Error('No se ha podido interpretar el texto. Prueba a escribirlo de otra forma.');
   const t = {
     resumen: String(out.resumen || '').slice(0, 600),
     categorias: (out.categorias || []).filter((c: { id: string }) => ids.has(c.id)).slice(0, 40),
@@ -228,8 +228,8 @@ Deno.serve(async (req) => {
   try {
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const { data: u } = token ? await admin.auth.getUser(token) : { data: { user: null } };
-    if (!u || !u.user) return json({ error: 'Entra con tu cuenta para usar la IA.' }, 401);
-    if (!AKEY) return json({ error: 'La IA aún no está configurada en el servidor.' }, 503);
+    if (!u || !u.user) return json({ error: 'Entra con tu cuenta para usar esta función.' }, 401);
+    if (!AKEY) return json({ error: 'Esta función aún no está disponible.' }, 503);
     const uid = u.user.id;
     const body = await req.json().catch(() => ({}));
     const stop = await guard(uid);

@@ -47,6 +47,7 @@
       const r = await q.order('starts_on').order('id').range(from, from + 999);
       if (r.error) throw r.error;
       out.push(...r.data);
+      if (window.limonSplash) window.limonSplash(Math.min(0.85, 0.3 + (from / 1000 + 1) * 0.12));
       if (r.data.length < 1000) break;
     }
     return out.map((e) => ({
@@ -340,11 +341,11 @@
 
   // IA en el servidor (función limon-ai): solo con sesión
   window.limonAI = async function (payload) {
-    if (!user) return { error: 'Entra con tu cuenta para usar la IA.' };
+    if (!user) return { error: 'Entra con tu cuenta para usar esta función.' };
     const { data, error } = await window.limonFn('limon-ai', { body: Object.assign({ city: C.city }, payload) });
     if (error) {
-      try { const b = await error.context.json(); return { error: b.error || 'No se ha podido contactar con la IA.' }; }
-      catch (e) { return { error: 'No se ha podido contactar con la IA.' }; }
+      try { const b = await error.context.json(); return { error: b.error || 'No se ha podido conectar. Prueba en un rato.' }; }
+      catch (e) { return { error: 'No se ha podido conectar. Prueba en un rato.' }; }
     }
     return data;
   };
@@ -393,7 +394,10 @@
   window.bootBureo = async function (startApp) {
     $('pt-h').textContent = 'Cargando planes…';
     try {
+      const sp = window.limonSplash || (() => { });
+      sp(0.15);
       await loadCities();
+      sp(0.3);
       const [tax, evs, srcs, cuts, audit] = await Promise.all([loadTaxonomy(), loadEvents(), loadSources(), loadClosures(), loadAudit().catch(() => null)]);
       centerOn(evs);
       const last = srcs.map((s) => s.last_run_at).filter(Boolean).sort().pop();
@@ -404,12 +408,15 @@
         sin_categoria: evs.filter((e) => !e.cats.length || (e.cats.length === 1 && e.cats[0] === 'sin_categoria')).length,
         generado: last ? new Date(last).toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' }) : 'sin datos'
       };
+      sp(0.9);
       app = startApp({ eventos: evs, meta, closures: cuts, audit, city: CITY, cities: CITIES }, tax, sync);
       wireAccount();
+      requestAnimationFrame(() => sp(1));
     } catch (e) {
       console.error(e);
       $('pt-h').textContent = 'No se han podido cargar los planes';
       $('pt-lead').textContent = 'Revisa tu conexión y recarga la página.';
+      if (window.limonSplash) window.limonSplash(1);
     }
   };
 })();

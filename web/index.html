@@ -253,10 +253,68 @@ table.cov td.n, table.cov th.n { text-align: right }
 .leaflet-popup-content button { margin-top: 6px; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 8px; padding: 6px 10px; font: 600 12.5px var(--f-body); cursor: pointer }
 .cut.flash { box-shadow: 0 0 0 3px var(--accent) }
 .cut .maplink { align-self: flex-start; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; font: 600 13px var(--f-body); cursor: pointer }
+
+/* Pantalla de carga al abrir la app: limón girando y barra de progreso hasta que la lista está lista */
+#splash { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--accent-ink); transition: opacity .35s ease, visibility .35s; padding: env(safe-area-inset-top, 0) 16px env(safe-area-inset-bottom, 0) }
+#splash.out { opacity: 0; visibility: hidden }
+#splash .sp-lemon { width: 112px; height: 112px; animation: sp-spin 2.4s cubic-bezier(.45,.05,.55,.95) infinite; filter: drop-shadow(0 10px 14px rgba(35,29,2,.18)) }
+#splash .sp-shadow { width: 64px; height: 10px; border-radius: 50%; background: rgba(35,29,2,.16); margin-top: 14px; animation: sp-shadow 1.2s ease-in-out infinite }
+#splash .sp-name { font: italic 700 34px/1 var(--f-display); letter-spacing: -.02em; margin-top: 22px }
+#splash .sp-msg { font: 500 14px var(--f-body); margin-top: 8px; opacity: .75; min-height: 1.4em; text-align: center }
+#splash .sp-bar { position: absolute; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  width: min(240px, 60vw); height: 6px; border-radius: 3px; background: rgba(35,29,2,.15); overflow: hidden }
+#splash .sp-bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--accent-ink); transition: width .4s ease }
+@keyframes sp-spin { 0% { transform: translateY(0) rotate(0) } 25% { transform: translateY(-14px) rotate(90deg) } 50% { transform: translateY(0) rotate(180deg) }
+  75% { transform: translateY(-14px) rotate(270deg) } 100% { transform: translateY(0) rotate(360deg) } }
+@keyframes sp-shadow { 0%, 100% { transform: scaleX(1); opacity: 1 } 50% { transform: scaleX(.7); opacity: .6 } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #splash { background: var(--bg); color: var(--ink) }
+  :root:not([data-theme="light"]) #splash .sp-bar { background: rgba(255,255,255,.12) } :root:not([data-theme="light"]) #splash .sp-bar i { background: var(--accent) }
+  :root:not([data-theme="light"]) #splash .sp-shadow { background: rgba(0,0,0,.45) } }
+:root[data-theme="dark"] #splash { background: var(--bg); color: var(--ink) }
+:root[data-theme="dark"] #splash .sp-bar { background: rgba(255,255,255,.12) } :root[data-theme="dark"] #splash .sp-bar i { background: var(--accent) }
+@media (prefers-reduced-motion: reduce) { #splash .sp-lemon, #splash .sp-shadow { animation: none } }
 </style>
 
 </head>
 <body>
+<div id="splash" role="status" aria-live="polite" aria-label="Cargando Limón">
+  <svg class="sp-lemon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">      <g transform="rotate(-24 32 34)">
+    <path d="M5 34Q5 30 10 29C13 19 22 14 32 14C42 14 51 19 54 29Q59 30 59 34Q59 38 54 39C51 49 42 54 32 54C22 54 13 49 10 39Q5 38 5 34Z"
+          fill="#FFD43B" stroke="#2B2306" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M14 39C17 47 24 51 32 51C40 51 47 47 50 39" fill="none" stroke="#F2B600" stroke-width="4" stroke-linecap="round" opacity=".9"/>
+    <path d="M16 27C19 21.5 24.5 18.5 30.5 18" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"/>
+    <g fill="#E8AD00"><circle cx="40" cy="24" r="1"/><circle cx="45" cy="30" r="1"/><circle cx="37" cy="31" r="1"/><circle cx="25" cy="42" r="1"/></g>
+  </g>
+  <g transform="translate(3.5 4)">
+  <path d="M41 12.5C42 5.5 49 2.5 56 3.5C55 10.5 48.5 14 41 12.5Z" fill="#3BB273" stroke="#2B2306" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M42.5 11.5C46 9 49.5 7 53 5.5" fill="none" stroke="#2B2306" stroke-width="1.4" stroke-linecap="round"/>
+  </g>
+</svg>
+  <div class="sp-shadow"></div>
+  <div class="sp-name">limón</div>
+  <div class="sp-msg" id="sp-msg">Buscando planes…</div>
+  <div class="sp-bar"><i id="sp-bar"></i></div>
+</div>
+<script>
+/* Progreso de la pantalla de carga: data.js marca hitos con limonSplash(0–1); entre hitos la barra avanza sola, sin llegar al final */
+(function () {
+  var bar = document.getElementById('sp-bar'), msg = document.getElementById('sp-msg'), el = document.getElementById('splash');
+  var goal = 0.08, shown = 0, t0 = Date.now(), done = false;
+  var MSGS = [[0, 'Buscando planes…'], [0.3, 'Repasando la agenda…'], [0.7, 'Ordenando lo mejor para ti…'], [0.95, '¡Listo!']];
+  function paint() { bar.style.width = (shown * 100).toFixed(1) + '%'; var m = MSGS.filter(function (x) { return shown >= x[0]; }).pop(); if (m && msg.textContent !== m[1]) msg.textContent = m[1]; }
+  var timer = setInterval(function () { if (shown < goal) shown = Math.min(goal, shown + 0.04); else if (shown < Math.min(goal + 0.15, 0.94)) shown += 0.004; paint(); }, 120);
+  window.limonSplash = function (p) {
+    if (done) return;
+    goal = Math.max(goal, p); shown = Math.max(shown, Math.min(p, shown + 0.3));
+    if (p >= 1) {
+      done = true; shown = 1; paint(); clearInterval(timer);
+      setTimeout(function () { el.classList.add('out'); setTimeout(function () { el.remove(); }, 400); }, Math.max(250, 700 - (Date.now() - t0)));
+    } else paint();
+  };
+  setTimeout(function () { window.limonSplash(1); }, 25000); /* por si algo se cuelga: nunca deja la app tapada */
+})();
+</script>
 <header class="top">
   <div class="wrap">
     <div class="brand"><b><img src="limon.svg" alt="" width="30" height="30"><em>limón</em></b><span id="stamp"></span></div>
@@ -327,7 +385,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div id="ca-big" class="view"></div>
     <div id="ca-list" class="view"></div>
-    <p class="note" id="ca-src">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, leídos con IA dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
+    <p class="note" id="ca-src">Fuentes: "Principales incidencias en la ciudad" del Ayuntamiento de Madrid y avisos del Consorcio Regional de Transportes, revisados dos veces al día. Comprueba siempre el aviso original antes de salir.</p>
   </section>
 
   <section class="view" id="v-unicos" hidden>
@@ -383,10 +441,10 @@ table.cov td.n, table.cov th.n { text-align: right }
     <p class="note" style="margin:-4px 0 0">Toca cada apartado para abrirlo.</p>
     <div class="panel" id="taste">
       <h2 style="margin:0">Cuéntame qué te gusta</h2>
-      <p class="note">Escríbelo con tus palabras, como se lo contarías a un amigo: «cine clásico, sobre todo Hitchcock; arqueología y Egipto; nada de reguetón». La IA lo convierte en tu perfil y puedes corregirlo.</p>
+      <p class="note">Escríbelo con tus palabras, como se lo contarías a un amigo: «cine clásico, sobre todo Hitchcock; arqueología y Egipto; nada de reguetón». Lo convertimos en tu perfil y puedes corregirlo.</p>
       <label for="ts-text" class="sr">Tus gustos</label>
       <textarea class="search" id="ts-text" rows="4" maxlength="2000" style="height:auto;padding:10px 12px;resize:vertical" placeholder="Me encanta…"></textarea>
-      <div class="seg"><button class="btn" id="ts-go">Interpretar con IA</button><span class="note" id="ts-msg" role="status"></span></div>
+      <div class="seg"><button class="btn" id="ts-go">Interpretar</button><span class="note" id="ts-msg" role="status"></span></div>
       <div id="ts-out"></div>
     </div>
     <div class="panel" id="in-panel">
@@ -1757,7 +1815,7 @@ function startApp(DATA, TAX, sync) {
           <p class="note full">Al solicitarlo aceptas las <a href="condiciones.html#organizadores">condiciones para organizadores</a>.</p><div class="seg full"><button class="btn" type="submit">Solicitar acceso de organizador</button><span class="note" id="ed-msg" role="status"></span></div></form>`;
     } else {
       org.innerHTML = `<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Mis eventos</h2>${orgEdit === null ? '<button class="btn" data-org-new>Nuevo evento</button>' : ''}</div>
-        <p class="note">Lo que publiques sale en Limón con enlace a tu web. La IA revisa cada evento, lo sitúa en el mapa y le pone categorías.</p>
+        <p class="note">Lo que publiques sale en Limón con enlace a tu web. Revisamos cada evento, lo situamos en el mapa y le ponemos categorías.</p>
         ${orgEdit !== null ? subForm(mySubs.find(x => x.id === orgEdit)) : ''}
         <div>${mySubs.map(x => `<div class="row-item"><div style="min-width:0;flex:1"><b>${esc(x.title)}</b><div class="note">${esc(x.starts_on)}${x.ends_on !== x.starts_on ? ' → ' + esc(x.ends_on) : ''} · ${esc(x.venue_name || '')}${x.ai_review && x.ai_review.motivo && x.status !== 'publicado' ? ' · ' + esc(x.ai_review.motivo) : ''}</div></div>
           <div class="seg"><span class="badge ${x.status}">${ST[x.status] || x.status}</span><button class="act" data-org-edit="${x.id}">Editar</button>${x.status !== 'borrador' ? `<button class="act" data-org-retire="${x.id}">Retirar</button>` : ''}</div></div>`).join('') || (orgEdit === null ? '<p class="note">Aún no has publicado nada.</p>' : '')}</div>`;
@@ -2033,23 +2091,23 @@ function startApp(DATA, TAX, sync) {
   // ---------- selección de la IA (servidor): 6–10 planes con el porqué
   function aiBlock() {
     const w = state.when;
-    if (!logged) return `<div class="ai"><h2>La IA elige por ti</h2><p class="note" style="margin:0">Entra con tu cuenta y la IA te elegirá los mejores planes de cada semana, con el porqué de cada uno.</p><button class="btn ghost" data-goto="intereses" style="align-self:flex-start">Entrar</button></div>`;
+    if (!logged) return `<div class="ai"><h2>Elegidos para ti</h2><p class="note" style="margin:0">Entra con tu cuenta y cada semana te elegiremos los mejores planes, con el porqué de cada uno.</p><button class="btn ghost" data-goto="intereses" style="align-self:flex-start">Entrar</button></div>`;
     const r = aiReco[w];
-    if (!r) { loadAI(w, false); return `<div class="ai"><h2>La IA está eligiendo tus planes…</h2></div>`; }
-    if (r.loading) return `<div class="ai"><h2>La IA está eligiendo tus planes…</h2></div>`;
-    if (r.error) return `<div class="ai"><h2>Selección de la IA</h2><p class="note" style="margin:0">${esc(r.error)}</p></div>`;
+    if (!r) { loadAI(w, false); return `<div class="ai"><h2>Eligiendo tus planes…</h2></div>`; }
+    if (r.loading) return `<div class="ai"><h2>Eligiendo tus planes…</h2></div>`;
+    if (r.error) return `<div class="ai"><h2>Elegidos para ti</h2><p class="note" style="margin:0">${esc(r.error)}</p></div>`;
     const list = (r.planes || []).map(p => ({ e: BYID['e' + p.id], why: p.por_que })).filter(x => x.e && !isDismissed(x.e) && passF(x.e, occurs(x.e, ...range(w))));
     if (!list.length) return '';
-    return `<section class="ai" aria-label="Selección de la IA"><h2>Elegidos para ti</h2>
-      <p class="note" style="margin:0">La IA ha leído ${r.candidatos || 'los'} planes que encajan contigo y se queda con estos.</p>
+    return `<section class="ai" aria-label="Elegidos para ti"><h2>Elegidos para ti</h2>
+      <p class="note" style="margin:0">Hemos repasado ${r.candidatos || 'los'} planes que encajan contigo y nos quedamos con estos.</p>
       ${list.map(x => card(x.e, { occ: occurs(x.e, ...range(w)), reason: x.why })).join('')}
       <button class="btn ghost" data-ai-refresh style="align-self:flex-start">Volver a elegir</button></section>`;
   }
   async function loadAI(w, force) {
     aiReco[w] = { loading: true };
     const res = await window.limonAI({ action: 'recommend', when: w, force });
-    aiReco[w] = res && !res.error ? res : { error: (res && res.error) || 'No se ha podido contactar con la IA.' };
-    if (res && res.vacio) aiReco[w] = { error: 'Cuéntame qué te gusta en tu perfil o marca intereses y la IA elegirá por ti.' };
+    aiReco[w] = res && !res.error ? res : { error: (res && res.error) || 'No se ha podido conectar. Prueba en un rato.' };
+    if (res && res.vacio) aiReco[w] = { error: 'Cuéntanos qué te gusta en tu perfil o marca intereses y elegiremos por ti.' };
     if (state.tab === 'parati') renderParaTi();
   }
   function renderTaste() {
@@ -2128,7 +2186,7 @@ function startApp(DATA, TAX, sync) {
       m.fuentes.map(f => `<tr><td>${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(nm[f.name] || f.name)}</a>` : esc(nm[f.name] || f.name)}</td><td class="n">${(per[f.name] || 0).toLocaleString('es-ES')}</td><td>${esc(f.method || '')}</td><td>${esc(f.license || '')}</td></tr>`).join('') + '</tbody>';
     $('fu-notes').innerHTML = `<h2 style="margin:0">Cómo se ha montado</h2>
       <p class="note">Las sesiones de un mismo evento se agrupan en una sola tarjeta. Si el mismo evento aparece en varias fuentes se une en uno y se conservan todos los enlaces: ahora hay ${m.multifuente} eventos con más de una fuente.</p>
-      <p class="note">Las categorías, temas y ciclos los asigna la IA a partir del título y la descripción. ${m.sin_categoria} eventos (${Math.round(100 * m.sin_categoria / Math.max(1, m.eventos))} %) se quedan sin categoría.</p>
+      <p class="note">Las categorías, temas y ciclos se asignan automáticamente a partir del título y la descripción. ${m.sin_categoria} eventos (${Math.round(100 * m.sin_categoria / Math.max(1, m.eventos))} %) se quedan sin categoría.</p>
       <p class="note">${CITY.id === 'madrid' ? 'Contiene información de la agenda del Ayuntamiento de Madrid (datos.madrid.es, licencia CC BY 4.0), de esMadrid.com, de la Agenda Cultural del Ministerio de Cultura y de las webs de cada recinto.' : 'Contiene información de las fuentes de la tabla, encontradas y leídas automáticamente.'} Cada tarjeta enlaza a su fuente original.</p>`;
     const au = DATA.audit;
     if (au && au.runs.length) {
@@ -2136,7 +2194,7 @@ function startApp(DATA, TAX, sync) {
       const tf = au.runs.reduce((a, r) => a + r.found, 0), tm = au.runs.reduce((a, r) => a + r.missing, 0);
       $('fu-audit').hidden = false;
       $('fu-audit').innerHTML = `<h2 style="margin:0">Auditoría de cobertura</h2>
-        <p class="note">Cada lunes la IA busca en la web planes de las dos semanas siguientes por grupo de categorías y comprueba si los tenemos. Última revisión: ${esc(when)}. De ${tf} planes encontrados faltaban ${tm} (${Math.round(100 * tm / Math.max(1, tf))} %).</p>
+        <p class="note">Cada lunes buscamos en la web planes de las dos semanas siguientes por grupo de categorías y comprueba si los tenemos. Última revisión: ${esc(when)}. De ${tf} planes encontrados faltaban ${tm} (${Math.round(100 * tm / Math.max(1, tf))} %).</p>
         <div class="tablewrap"><table class="cov"><thead><tr><th>Grupo</th><th class="n">Encontrados</th><th class="n">Faltaban</th><th class="n">%</th></tr></thead><tbody>
         ${au.runs.slice().sort((a, b) => b.pct_missing - a.pct_missing).map(r => `<tr><td>${esc(GROUP_NAME[r.group_id] || r.group_id)}</td><td class="n">${r.found}</td><td class="n">${r.missing}</td><td class="n" style="${+r.pct_missing > 10 ? 'color:var(--accent-text);font-weight:700' : ''}">${(+r.pct_missing).toLocaleString('es-ES')}</td></tr>`).join('')}</tbody></table></div>
         ${au.cands.length ? `<h3 style="margin:8px 0 0;font:600 14px var(--f-body)">Fuentes candidatas</h3><p class="note">Webs donde se publicaban planes que no teníamos. Las que se repiten semana a semana son las primeras que conviene añadir.</p>
@@ -2214,7 +2272,7 @@ function startApp(DATA, TAX, sync) {
     $('ts-go').disabled = true; $('ts-msg').textContent = 'Interpretando…';
     const res = await window.limonAI({ action: 'taste', text });
     $('ts-go').disabled = false;
-    if (!res || res.error) { $('ts-msg').textContent = (res && res.error) || 'No se ha podido contactar con la IA.'; return; }
+    if (!res || res.error) { $('ts-msg').textContent = (res && res.error) || 'No se ha podido conectar. Prueba en un rato.'; return; }
     tasteText = text; store.set('taste_text', text); setTaste(res.taste);
     $('ts-msg').textContent = 'Listo. Para ti ya usa este perfil.'; renderIntereses();
   });
