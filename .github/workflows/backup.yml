@@ -2,7 +2,7 @@ name: Copia de seguridad
 
 # Cada domingo: copia completa de la base de datos (datos de la app y cuentas), comprimida y CIFRADA con una frase
 # que solo tiene Jon. Se guarda 90 días como artefacto del flujo (el repositorio es público: sin la frase no sirve de nada).
-# Secretos: SUPABASE_DB_URL (cadena de conexión «Session pooler» de Supabase, con la contraseña) y BACKUP_PASSPHRASE.
+# Secretos: SUPABASE_DB_PASSWORD (contraseña de la base de datos) y BACKUP_PASSPHRASE. También vale SUPABASE_DB_URL en lugar de la contraseña.
 # Restaurar: ver «Copias de seguridad» en el README.
 on:
   schedule:
@@ -15,12 +15,15 @@ jobs:
     timeout-minutes: 30
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      REF: pxeqbxxfsrvsxcdfiddc
+      REGION: eu-central-1
       BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
     steps:
       - name: Comprobar los secretos
         run: |
-          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
-            echo "::error::Faltan los secretos SUPABASE_DB_URL y/o BACKUP_PASSPHRASE en GitHub"; exit 1; fi
+          if { [ -z "$SUPABASE_DB_URL" ] && [ -z "$PGPASSWORD" ]; } || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Faltan los secretos SUPABASE_DB_PASSWORD y/o BACKUP_PASSPHRASE en GitHub"; exit 1; fi
       - name: Instalar pg_dump 17
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -33,6 +36,16 @@ jobs:
           set -euo pipefail
           D=$(date -u +%Y-%m-%d); mkdir -p out; umask 077
           PGD=/usr/lib/postgresql/17/bin/pg_dump
+          # con la contraseña sola: se busca el «session pooler» de la región (GitHub no tiene IPv6 para la conexión directa)
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            export PGUSER="postgres.$REF" PGPORT=5432 PGDATABASE=postgres PGSSLMODE=require
+            for h in aws-0-$REGION.pooler.supabase.com aws-1-$REGION.pooler.supabase.com; do
+              if PGHOST=$h /usr/lib/postgresql/17/bin/psql -tAc 'select 1' >/dev/null 2>&1; then export PGHOST=$h; break; fi
+            done
+            [ -n "${PGHOST:-}" ] || { echo "::error::No se ha podido conectar a la base de datos: revisa SUPABASE_DB_PASSWORD"; exit 1; }
+            echo "conectado por $PGHOST"
+            SUPABASE_DB_URL="postgresql://"
+          fi
           # 1) la app: esquema y datos del esquema public
           $PGD "$SUPABASE_DB_URL" -n public --no-owner --no-privileges -Fc -f app.dump
           # 2) las cuentas: solo datos de usuarios e identidades (el esquema auth lo crea Supabase)

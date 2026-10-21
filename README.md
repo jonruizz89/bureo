@@ -23,7 +23,7 @@ En *Settings → Secrets and variables → Actions*:
 - `SUPABASE_URL`: la URL del proyecto.
 - `SUPABASE_SECRET`: una clave secreta de Supabase (`sb_secret_…`) solo para el motor.
 - `SUPABASE_ACCESS_TOKEN`: token personal de Supabase para desplegar funciones y leer los avisos de seguridad.
-- `SUPABASE_DB_URL` y `BACKUP_PASSPHRASE`: para la copia de seguridad semanal (ver «Copias de seguridad»).
+- `SUPABASE_DB_PASSWORD` (o `SUPABASE_DB_URL`) y `BACKUP_PASSPHRASE`: para la copia de seguridad semanal (ver «Copias de seguridad»).
 
 La clave publicable de `web/config.js` es pública por diseño: las políticas de seguridad por filas solo permiten
 leer el catálogo y que cada usuario gestione sus propios datos.
