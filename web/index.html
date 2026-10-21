@@ -1998,7 +1998,7 @@ function startApp(DATA, TAX, sync) {
         if (isFamily(e) && !opts.ninos) continue;
         const occ = occurs(e, a, b); if (!occ || !passF(e, occ)) continue;
         const s = (e.unico ? 3 : 0) + (e.destacado ? 2 : 0) + (e.fuentes.length > 1 ? 1 : 0);
-        if (s > 0) items.push({ e, occ, s });
+        items.push({ e, occ, s });  // en pueblos con pocos destacados, detrás van los demás por fecha
       }
       items.sort((x, y) => y.s - x.s || x.occ.date - y.occ.date);
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
