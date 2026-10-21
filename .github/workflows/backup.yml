@@ -36,20 +36,23 @@ jobs:
           set -euo pipefail
           D=$(date -u +%Y-%m-%d); mkdir -p out; umask 077
           PGD=/usr/lib/postgresql/17/bin/pg_dump
-          # con la contraseña sola: se busca el «session pooler» de la región (GitHub no tiene IPv6 para la conexión directa)
-          if [ -z "$SUPABASE_DB_URL" ]; then
-            export PGUSER="postgres.$REF" PGPORT=5432 PGDATABASE=postgres PGSSLMODE=require
+          # lo normal: solo la contraseña; se busca el «session pooler» de la región (GitHub no tiene IPv6 para la conexión directa).
+          # Si SUPABASE_DB_URL es una cadena postgresql:// completa se usa tal cual; si no, se trata como la contraseña.
+          if [[ "${SUPABASE_DB_URL:-}" =~ ^postgres(ql)?://[^/]*@ ]]; then
+            DB=("$SUPABASE_DB_URL"); echo "conexión: cadena completa"
+          else
+            export PGPASSWORD="${PGPASSWORD:-$SUPABASE_DB_URL}" PGUSER="postgres.$REF" PGPORT=5432 PGDATABASE=postgres PGSSLMODE=require
             for h in aws-0-$REGION.pooler.supabase.com aws-1-$REGION.pooler.supabase.com; do
-              if PGHOST=$h /usr/lib/postgresql/17/bin/psql -tAc 'select 1' >/dev/null 2>&1; then export PGHOST=$h; break; fi
+              if out=$(PGHOST=$h PGCONNECT_TIMEOUT=10 /usr/lib/postgresql/17/bin/psql -tAc 'select 1' 2>&1); then export PGHOST=$h; break; fi
+              echo "$h: $(echo "$out" | head -1 | sed 's/password[^ ]*/***/g')"
             done
-            [ -n "${PGHOST:-}" ] || { echo "::error::No se ha podido conectar a la base de datos: revisa SUPABASE_DB_PASSWORD"; exit 1; }
-            echo "conectado por $PGHOST"
-            SUPABASE_DB_URL="postgresql://"
+            [ -n "${PGHOST:-}" ] || { echo "::error::No se ha podido conectar a la base de datos: revisa la contraseña (SUPABASE_DB_PASSWORD)"; exit 1; }
+            echo "conectado por $PGHOST"; DB=()
           fi
           # 1) la app: esquema y datos del esquema public
-          $PGD "$SUPABASE_DB_URL" -n public --no-owner --no-privileges -Fc -f app.dump
+          $PGD "${DB[@]}" -n public --no-owner --no-privileges -Fc -f app.dump
           # 2) las cuentas: solo datos de usuarios e identidades (el esquema auth lo crea Supabase)
-          $PGD "$SUPABASE_DB_URL" --data-only -t auth.users -t auth.identities --no-owner --no-privileges -Fc -f cuentas.dump
+          $PGD "${DB[@]}" --data-only -t auth.users -t auth.identities --no-owner --no-privileges -Fc -f cuentas.dump
           tar czf limon.tgz app.dump cuentas.dump
           echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 -o "out/limon-$D.tgz.gpg" limon.tgz
           rm -f app.dump cuentas.dump limon.tgz
