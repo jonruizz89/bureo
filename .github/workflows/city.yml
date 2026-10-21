@@ -5,7 +5,7 @@ name: Ciudades (motor genérico)
 
 on:
   schedule:
-    - cron: "47 3 * * *"
+    - cron: "47 0 * * *"   # GitHub lo arranca con horas de retraso: se pide pronto para tenerlo por la mañana
   workflow_dispatch:
     inputs:
       city:
