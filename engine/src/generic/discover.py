@@ -17,7 +17,11 @@ AMBITOS = [
     ('cine', 'filmotecas, cines con ciclos o cineclubs, y festivales de cine'),
     ('letras', 'bibliotecas, librerías con presentaciones, ateneos y centros culturales o cívicos con programación de actividades'),
     ('ciudad', 'fiestas populares, ferias, mercados, carreras populares y eventos deportivos, actividades de naturaleza y visitas guiadas'),
+    ('noche', 'discotecas, clubs y salas de baile o de música electrónica que anuncian en su propia web sus fiestas temáticas, DJs invitados y sesiones especiales (su página de eventos o agenda, no Instagram ni la ticketera)'),
 ]
+# BUREO_AMBITOS=noche,musica limita la búsqueda a esos ámbitos (p. ej. para añadir un tipo de fuente a una ciudad que ya existe)
+import os
+ONLY = [x for x in os.environ.get('BUREO_AMBITOS', '').split(',') if x]
 
 TOOL = {'name': 'guardar_fuentes', 'description': 'Guarda las fuentes de eventos encontradas.',
         'input_schema': {'type': 'object', 'required': ['fuentes'], 'properties': {'fuentes': {'type': 'array', 'items': {
@@ -43,6 +47,8 @@ def main(cid):
             known.add(r['url'].rstrip('/')); rows.append(r); found += 1
             print('conector:', r['name'])
     for key, que in AMBITOS:
+        if ONLY and key not in ONLY:
+            continue
         if over_budget():
             print('Presupuesto agotado:', round(usd(), 2), '$'); break
         system = (f'Hoy es {dt.date.today().isoformat()}. Ayudas a montar Limón, una agenda de planes, en {name} ({region}, España). '

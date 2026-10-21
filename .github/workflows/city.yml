@@ -1,7 +1,8 @@
 name: Ciudades (motor genérico)
 
 # Alta manual de una ciudad: 1) crear la fila en `cities` (status borrador) · 2) lanzar este flujo con steps=discover,probe,extract,load,classify
-# Cada noche se vuelven a leer las fuentes activas de todas las ciudades menos Madrid (que tiene su propio flujo).
+# Cada noche se vuelven a leer las fuentes activas de todas las ciudades. En Madrid solo las del motor genérico (p. ej. discotecas):
+# el resto de Madrid va por su propio flujo (nightly.yml).
 
 on:
   schedule:
@@ -20,6 +21,10 @@ on:
         description: "Tope de gasto en IA por ejecución (USD)"
         required: false
         default: "2"
+      ambitos:
+        description: "Solo para discover: ámbitos a buscar, p. ej. noche (vacío = todos)"
+        required: false
+        default: ""
 
 concurrency:
   group: city-${{ inputs.city || 'nightly' }}
@@ -40,7 +45,7 @@ jobs:
           if [ -n "$INPUT_CITY" ]; then
             echo "cities=[\"$INPUT_CITY\"]" >> "$GITHUB_OUTPUT"
           else
-            list=$(curl -sf "$SUPABASE_URL/rest/v1/cities?select=id&id=neq.madrid" -H "apikey: $SUPABASE_SECRET" -H "Authorization: Bearer $SUPABASE_SECRET" | python3 -c 'import json,sys; print(json.dumps([c["id"] for c in json.load(sys.stdin)]))')
+            list=$(curl -sf "$SUPABASE_URL/rest/v1/cities?select=id" -H "apikey: $SUPABASE_SECRET" -H "Authorization: Bearer $SUPABASE_SECRET" | python3 -c 'import json,sys; print(json.dumps([c["id"] for c in json.load(sys.stdin)]))')
             echo "cities=$list" >> "$GITHUB_OUTPUT"
           fi
 
@@ -64,6 +69,7 @@ jobs:
       BUREO_CITY: ${{ matrix.city }}
       BUREO_CITY_MAX_USD: ${{ inputs.max_usd || '1' }}
       BUREO_RAW: raw
+      BUREO_AMBITOS: ${{ inputs.ambitos }}
       STEPS: ${{ inputs.steps || 'extract,load,classify' }}
       PYTHONUNBUFFERED: "1"
     steps:
@@ -124,6 +130,6 @@ jobs:
         run: python3 src/classify.py
 
       - name: 6 · Marcar los planes únicos
-        if: contains(env.STEPS, 'classify') || contains(env.STEPS, 'unicos')
+        if: (contains(env.STEPS, 'classify') || contains(env.STEPS, 'unicos')) && matrix.city != 'madrid'
         working-directory: engine/src/generic
         run: python3 unicos.py "$BUREO_CITY"

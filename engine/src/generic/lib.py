@@ -15,7 +15,8 @@ UA_API = 'Limon/1.0 (+https://limonplanes.com; hola@limonplanes.com)'  # APIs de
 COST = {'in': 0, 'out': 0, 'search': 0}
 AGREGADORES = ('eventbrite.', 'meetup.', 'timeout.', 'feverup.', 'fever.', 'ticketmaster.', 'entradas.com', 'correrjuntos.',
                'instagram.', 'facebook.', 'x.com', 'twitter.', 'tiktok.', 'youtube.', 'google.', 'wikipedia.', 'tripadvisor.',
-               'atrapalo.', 'ticketea.', 'allevents.', 'eventseeker.', 'songkick.', 'bandsintown.', 'dice.fm', 'wegow.', 'giglon.')
+               'atrapalo.', 'ticketea.', 'allevents.', 'eventseeker.', 'songkick.', 'bandsintown.', 'dice.fm', 'wegow.', 'giglon.',
+               'xceed.', 'fourvenues.', 'residentadvisor.', 'ra.co', 'clubbingspain.', 'linktr.ee')
 
 
 def usd():
