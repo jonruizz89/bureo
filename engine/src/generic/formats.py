@@ -248,9 +248,9 @@ EXTRACT_TOOL = {'name': 'guardar_eventos', 'description': 'Guarda los eventos qu
                 'input_schema': {'type': 'object', 'required': ['eventos'], 'properties': {
                     'eventos': {'type': 'array', 'items': {'type': 'object', 'required': ['titulo', 'inicio'], 'properties': {
                         'titulo': {'type': 'string'},
-                        'inicio': {'type': 'string', 'description': 'YYYY-MM-DD'},
+                        'inicio': {'type': 'string', 'description': 'YYYY-MM-DD, tal como aparece en el texto. Si el texto no da una fecha concreta para ese evento, no lo incluyas (nunca pongas la de hoy por defecto)'},
                         'fin': {'type': ['string', 'null'], 'description': 'YYYY-MM-DD si dura varios días'},
-                        'hora': {'type': ['string', 'null'], 'description': 'HH:MM o texto corto'},
+                        'hora': {'type': ['string', 'null'], 'description': 'Hora de INICIO (HH:MM) o «23:00 a 06:00»; nunca solo la de cierre'},
                         'lugar': {'type': ['string', 'null']},
                         'direccion': {'type': ['string', 'null']},
                         'municipio': {'type': ['string', 'null'], 'description': 'Si la página lo indica'},
