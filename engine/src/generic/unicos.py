@@ -30,8 +30,11 @@ def main(cid):
               'que pasan como mucho una vez al año y que alguien de allí lamentaría perderse: fiestas populares y patronales, festivales anuales '
               '(música, cine, teatro, danza), grandes ferias y mercados de temporada, carreras populares conocidas, tradiciones, cabalgatas, '
               'celebraciones de Navidad o de una fecha concreta. NO marques: conciertos o funciones sueltas, obras en gira, exposiciones, talleres, '
-              'cursos, conferencias, ciclos semanales ni sesiones de cine. Si un festival tiene varias actividades sueltas, marca la principal '
+              'cursos, conferencias, ciclos semanales, sesiones de cine, cuentacuentos, clubes de lectura, visitas guiadas, conciertos de bandas '
+              'o escuelas de música, ni una función suelta aunque forme parte de un festival. Si un festival tiene varias actividades sueltas, marca la principal '
               '(la que lleva el nombre del festival), no cada actividad. Sé exigente: normalmente son pocos (de 5 a 40). '
+              + ('Es una provincia entera: marca solo fiestas patronales y populares, festivales anuales con nombre propio, ferias y grandes citas '
+                 'de cada pueblo. ' if city.get('kind') == 'provincia' else '') +
               'Responde con marcar_unicos y los ids.')
     out = tool_call(system, 'id|título|fechas|lugar|categorías\n' + lines, TOOL, max_tokens=4000) or {}
     valid = {e['id'] for e in cand}
