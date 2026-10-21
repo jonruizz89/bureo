@@ -6,5 +6,5 @@ window.BUREO_CONFIG = {
   city: 'madrid',
   google: true,
   // Cloudflare Turnstile: clave PÚBLICA del widget (la secreta va solo en Supabase → Auth → Bot protection). Vacía = sin captcha.
-  turnstile: ''
+  turnstile: '0x4AAAAAAFfGPQYgv8dEk1md'
 };
