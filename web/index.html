@@ -623,7 +623,9 @@ function startApp(DATA, TAX, sync) {
   F.pos = null; F.near = 0;  // la ubicación no se guarda: se pide cada vez
   let userPos = null;  // última posición conocida del usuario (solo en memoria)
   const fmtDist = d => d < 1 ? Math.max(50, Math.round(d * 1000 / 50) * 50) + ' m' : d < 10 ? d.toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' km';
-  function setUserPos(p) { userPos = p; if (!F.pos) F.pos = p; renderAll(); }
+  // si alguna vez nos dejas usar tu ubicación, se recuerda que quieres ver distancias (la posición en sí no se guarda)
+  function keepDist() { if (!opts.dist) { opts.dist = true; store.set('opts', opts); const o = $('o-dist'); if (o) o.checked = true; } }
+  function setUserPos(p) { userPos = p; if (!F.pos) F.pos = p; keepDist(); renderAll(); }
   function askPos(quiet) {
     if (!navigator.geolocation) { if (!quiet) toast('Tu navegador no permite saber dónde estás.'); return; }
     navigator.geolocation.getCurrentPosition(p => setUserPos([p.coords.latitude, p.coords.longitude]),
@@ -675,7 +677,7 @@ function startApp(DATA, TAX, sync) {
     F[k] = String(F[k]) === String(v) ? (k === 'near' ? 0 : '') : (k === 'near' ? +v : v);
     if (k === 'near' && F.near && !F.pos) {
       if (!navigator.geolocation) { F.near = 0; toast('Tu navegador no permite saber dónde estás.'); }
-      else navigator.geolocation.getCurrentPosition(p => { F.pos = [p.coords.latitude, p.coords.longitude]; userPos = userPos || F.pos; renderAll(); },
+      else navigator.geolocation.getCurrentPosition(p => { F.pos = [p.coords.latitude, p.coords.longitude]; userPos = userPos || F.pos; keepDist(); renderAll(); },
         () => { F.near = 0; toast('Sin permiso de ubicación: elige un distrito.'); renderAll(); }, { timeout: 10000, maximumAge: 300000 });
     }
     store.set('filters', { dist: F.dist, franja: F.franja, dias: F.dias, precio: F.precio });
@@ -1059,7 +1061,7 @@ function startApp(DATA, TAX, sync) {
     if (!pos) {
       if (!navigator.geolocation) { put('Tu navegador no permite saber dónde estás.'); return; }
       put('Buscando dónde estás…');
-      try { pos = await new Promise((ok, ko) => navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), ko, { timeout: 10000, maximumAge: 300000 })); userPos = pos; }
+      try { pos = await new Promise((ok, ko) => navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), ko, { timeout: 10000, maximumAge: 300000 })); userPos = pos; keepDist(); }
       catch (x) { put('Sin permiso de ubicación no puedo calcular la ruta.'); return; }
     }
     if (km(pos, CENTER) > 35) { put(`Estás lejos de ${CITY.name}: no puedo comprobar la ruta desde ahí.`); return; }
@@ -1623,6 +1625,7 @@ function startApp(DATA, TAX, sync) {
     try { z = await window.limonCity.locate(); }
     catch (e) { if (btn) { btn.disabled = false; btn.textContent = t; } toast('Sin permiso de ubicación no puedo saber dónde estás. Elige la zona a mano.'); return; }
     if (btn) { btn.disabled = false; btn.textContent = t; }
+    keepDist(); askPos(true);
     if (!z) { $('zone-hint').hidden = true; toast('Aún no estamos en tu zona: de momento, Madrid y Bizkaia. ¡Iremos añadiendo más!'); return; }
     if (z === window.limonCity.zone()) { $('zone-hint').hidden = true; closeSheets(); toast('Ya estás viendo los planes de ' + CITY.name + '.'); return; }
     window.limonCity.set(z);
@@ -2314,7 +2317,7 @@ function startApp(DATA, TAX, sync) {
     if (!navigator.geolocation) { toast('Tu navegador no permite saber dónde estás.'); return; }
     $('near-go').disabled = true; $('near-go').textContent = 'Buscando dónde estás…';
     navigator.geolocation.getCurrentPosition(p => {
-      nearPos = [p.coords.latitude, p.coords.longitude]; userPos = nearPos;
+      nearPos = [p.coords.latitude, p.coords.longitude]; userPos = nearPos; keepDist();
       $('near-go').disabled = false; $('near-go').textContent = '📍 Ahora cerca de ti';
       if (km(nearPos, CENTER) > 25) toast(`Pareces estar fuera de ${CITY.name}: te enseño lo que hay cerca del centro.`), nearPos = CENTER;
       $('near').hidden = false; $('near-go').hidden = true; renderNear(); $('near').scrollIntoView({ behavior: 'smooth' });
@@ -2514,7 +2517,7 @@ function startApp(DATA, TAX, sync) {
     get: () => ({ prefs, opts, saved, streets, dismissed, went, nofui, learned, taste }),
     setUser(v) { logged = v; Object.keys(aiReco).forEach(k => delete aiReco[k]); renderAll(); loadMe(); loadInvites(); loadSocial(); loadIdeas(); loadPast(); },
     set(p) {
-      if (p.prefs) prefs = p.prefs; if (p.opts) opts = p.opts; if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
+      if (p.prefs) prefs = p.prefs; if (p.opts) opts = Object.assign({}, opts, p.opts, { dist: opts.dist });  // la distancia es de cada dispositivo: la cuenta no la pisa if (p.saved) saved = p.saved; if (p.streets) streets = p.streets;
       if (p.dismissed) dismissed = p.dismissed; if (p.went) went = p.went; if (p.nofui) nofui = p.nofui; if (p.learned) learned = p.learned;
       if ('taste' in p) { taste = p.taste; try { localStorage.setItem('bureo.taste', JSON.stringify(taste)); } catch (e) { } }
       if ('taste_text' in p) { tasteText = p.taste_text || ''; try { localStorage.setItem('bureo.taste_text', JSON.stringify(tasteText)); } catch (e) { } }
