@@ -151,6 +151,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .badge.hecha { background: var(--ok-soft); color: var(--ok) }
 .badge.estudiando, .badge.planificada { background: var(--accent-soft); color: var(--accent-text) }
 .badge.descartada, .badge.oculta { background: #FFF0EE; color: #A4251C }
+.badge.pendiente { background: var(--accent-soft); color: var(--accent-text) }
 .form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--quiet) }
 .form .full { grid-column: 1 / -1 }
@@ -1445,7 +1446,7 @@ function startApp(DATA, TAX, sync) {
   // ---------- ideas: la gente propone mejoras, avisa de fallos o de sitios que faltan, y vota
   let IDEAS = null, IDEAS_TAB = 'top', IDEAS_SIM = [];
   const IKIND = { idea: 'Idea', fallo: 'Algo no funciona', fuente: 'Falta un sitio o evento' };
-  const ISTATUS = { nueva: 'Nueva', estudiando: 'Lo estamos mirando', planificada: 'Planificada', hecha: '¡Hecha!', descartada: 'Descartada', oculta: 'Oculta' };
+  const ISTATUS = { pendiente: 'Pendiente de revisión', nueva: 'Nueva', estudiando: 'Lo estamos mirando', planificada: 'Planificada', hecha: '¡Hecha!', descartada: 'Descartada', oculta: 'Oculta' };
   async function loadIdeas() {
     const sb = sbx(); if (!sb) return;
     const { data } = await sb.rpc('ideas_board');
@@ -1475,10 +1476,10 @@ function startApp(DATA, TAX, sync) {
     const box = $('ideas'); if (!box) return;
     if (!IDEAS) { box.innerHTML = '<h2 style="margin:0">Ideas para Limón</h2><p class="note">Cargando…</p>'; return; }
     const tabs = [['top', 'Más votadas'], ['nuevas', 'Nuevas'], ['marcha', 'En marcha'], ['hechas', 'Hechas']];
-    const open = i => !['hecha', 'descartada', 'oculta'].includes(i.status);
+    const open = i => !['hecha', 'descartada', 'oculta', 'pendiente'].includes(i.status);
     let list = IDEAS.slice();
     if (IDEAS_TAB === 'top') list = list.filter(open).sort((a, b) => b.votes - a.votes || b.created_at.localeCompare(a.created_at));
-    else if (IDEAS_TAB === 'nuevas') list = list.filter(i => i.status === 'nueva');
+    else if (IDEAS_TAB === 'nuevas') list = list.filter(i => i.status === 'nueva' || (i.status === 'pendiente' && i.mine));
     else if (IDEAS_TAB === 'marcha') list = list.filter(i => ['estudiando', 'planificada'].includes(i.status));
     else list = list.filter(i => i.status === 'hecha');
     if (me && me.role === 'admin' && IDEAS_TAB === 'nuevas') list = list.concat(IDEAS.filter(i => i.status === 'oculta'));
@@ -1554,7 +1555,7 @@ function startApp(DATA, TAX, sync) {
 
   // ---------- cuenta: organizadores, revisión (admin) y calendario
   const CONF = window.BUREO_CONFIG;
-  let me = null, mySubs = [], admQueue = { editors: [], events: [] }, orgEdit = null;
+  let me = null, mySubs = [], admQueue = { editors: [], events: [], ideas: [] }, orgEdit = null;
   async function loadMe() {
     const db = window.limonDB, u = db && db.user();
     if (!u) { me = null; renderAccountExtras(); return; }
@@ -1567,10 +1568,11 @@ function startApp(DATA, TAX, sync) {
       mySubs = r.data || [];
     }
     if (me && me.role === 'admin') {
-      const [a, b] = await Promise.all([
+      const [a, b, c] = await Promise.all([
         db.sb.from('profiles').select('id,email,organizer,editor_status').eq('editor_status', 'solicitado'),
-        db.sb.from('submitted_events').select('*').eq('status', 'revision').order('created_at')]);
-      admQueue = { editors: a.data || [], events: b.data || [] };
+        db.sb.from('submitted_events').select('*').eq('status', 'revision').order('created_at'),
+        db.sb.from('ideas').select('id,kind,title,body,created_at').eq('status', 'pendiente').order('created_at')]);
+      admQueue = { editors: a.data || [], events: b.data || [], ideas: c.data || [] };
     }
     renderAccountExtras();
   }
@@ -1815,7 +1817,7 @@ function startApp(DATA, TAX, sync) {
           <p class="note full">Al solicitarlo aceptas las <a href="condiciones.html#organizadores">condiciones para organizadores</a>.</p><div class="seg full"><button class="btn" type="submit">Solicitar acceso de organizador</button><span class="note" id="ed-msg" role="status"></span></div></form>`;
     } else {
       org.innerHTML = `<div class="seg" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Mis eventos</h2>${orgEdit === null ? '<button class="btn" data-org-new>Nuevo evento</button>' : ''}</div>
-        <p class="note">Lo que publiques sale en Limón con enlace a tu web. Revisamos cada evento, lo situamos en el mapa y le ponemos categorías.</p>
+        <p class="note">Lo que publiques sale en Limón con enlace a tu web en cuanto lo aprobemos. Revisamos cada evento, lo situamos en el mapa y le ponemos categorías.</p>
         ${orgEdit !== null ? subForm(mySubs.find(x => x.id === orgEdit)) : ''}
         <div>${mySubs.map(x => `<div class="row-item"><div style="min-width:0;flex:1"><b>${esc(x.title)}</b><div class="note">${esc(x.starts_on)}${x.ends_on !== x.starts_on ? ' → ' + esc(x.ends_on) : ''} · ${esc(x.venue_name || '')}${x.ai_review && x.ai_review.motivo && x.status !== 'publicado' ? ' · ' + esc(x.ai_review.motivo) : ''}</div></div>
           <div class="seg"><span class="badge ${x.status}">${ST[x.status] || x.status}</span><button class="act" data-org-edit="${x.id}">Editar</button>${x.status !== 'borrador' ? `<button class="act" data-org-retire="${x.id}">Retirar</button>` : ''}</div></div>`).join('') || (orgEdit === null ? '<p class="note">Aún no has publicado nada.</p>' : '')}</div>`;
@@ -1828,7 +1830,10 @@ function startApp(DATA, TAX, sync) {
           <div class="seg"><button class="act" data-adm-ed="${p.id}" data-ok="1">Aprobar</button><button class="act" data-adm-ed="${p.id}" data-ok="0">Rechazar</button></div></div>`; }).join('') || '<p class="note">Ninguna pendiente.</p>'}
         <h3 style="margin:8px 0 0;font:600 14px var(--f-body)">Eventos en revisión (${admQueue.events.length})</h3>
         ${admQueue.events.map(x => `<div class="row-item"><div style="min-width:0;flex:1"><b>${esc(x.title)}</b><div class="note">${esc(x.starts_on)} · ${esc(x.venue_name || '')} · ${esc(x.address || '')}${x.ai_review ? ' · IA: ' + (x.ai_review.ok ? 'bien' : esc(x.ai_review.motivo || 'dudas')) + (x.ai_review.sin_ubicacion ? ' · sin ubicar' : '') : ''}</div></div>
-          <div class="seg"><button class="act" data-adm-pub="${x.id}" data-ok="1">Publicar</button><button class="act" data-adm-pub="${x.id}" data-ok="0">Rechazar</button></div></div>`).join('') || '<p class="note">Nada pendiente.</p>'}`;
+          <div class="seg"><button class="act" data-adm-pub="${x.id}" data-ok="1">Publicar</button><button class="act" data-adm-pub="${x.id}" data-ok="0">Rechazar</button></div></div>`).join('') || '<p class="note">Nada pendiente.</p>'}
+        <h3 style="margin:8px 0 0;font:600 14px var(--f-body)">Ideas por revisar (${admQueue.ideas.length})</h3>
+        ${admQueue.ideas.map(x => `<div class="row-item"><div style="min-width:0;flex:1"><b>${esc(x.title)}</b><div class="note">${esc(IKIND[x.kind] || x.kind)}${x.body ? ' · ' + esc(x.body) : ''}</div></div>
+          <div class="seg"><button class="act" data-adm-idea="${x.id}" data-ok="1">Publicar</button><button class="act" data-adm-idea="${x.id}" data-ok="0">Ocultar</button></div></div>`).join('') || '<p class="note">Nada pendiente.</p>'}`;
     }
   }
   // los correos de la cola (organizadores, admins) salen en cuanto pasa algo; si falla, los manda la tarea diaria
@@ -1887,6 +1892,8 @@ function startApp(DATA, TAX, sync) {
     if (rt) { await db.sb.from('submitted_events').update({ status: 'borrador' }).eq('id', +rt.dataset.orgRetire); toast('Retirado: deja de salir en Limón.'); loadMe(); return true; }
     const ae = t.closest('[data-adm-ed]');
     if (ae) { await db.sb.from('profiles').update({ editor_status: ae.dataset.ok === '1' ? 'aprobado' : 'rechazado' }).eq('id', ae.dataset.admEd); flushMail(); loadMe(); return true; }
+    const ai = t.closest('[data-adm-idea]');
+    if (ai) { const { error } = await db.sb.from('ideas').update({ status: ai.dataset.ok === '1' ? 'nueva' : 'oculta' }).eq('id', +ai.dataset.admIdea); toast(error ? 'No se ha podido: ' + error.message : (ai.dataset.ok === '1' ? 'Publicada en el tablón.' : 'Ocultada.')); flushMail(); loadMe(); if (IDEAS) loadIdeas(); return true; }
     const ap = t.closest('[data-adm-pub]');
     if (ap) { const { error } = await db.sb.rpc('publish_submission', { p_id: +ap.dataset.admPub, p_publish: ap.dataset.ok === '1' }); toast(error ? 'No se ha podido: ' + error.message : (ap.dataset.ok === '1' ? 'Publicado.' : 'Rechazado.')); flushMail(); loadMe(); return true; }
     if (t.closest('[data-mail-test]')) {
@@ -1904,7 +1911,7 @@ function startApp(DATA, TAX, sync) {
       $('idea-msg').textContent = 'Enviando…';
       const { error } = await db.sb.from('ideas').insert({ author: u.id, kind: f.get('kind'), title: String(f.get('title')).trim(), body: String(f.get('body') || '').trim() || null });
       if (error) { $('idea-msg').textContent = error.message; return; }
-      IDEAS_SIM = []; IDEAS_TAB = 'nuevas'; flushMail(); await loadIdeas(); toast('¡Gracias! Tu idea ya está en el tablón.'); return;
+      IDEAS_SIM = []; IDEAS_TAB = 'nuevas'; flushMail(); await loadIdeas(); toast('¡Gracias! La revisamos y en cuanto la aprobemos saldrá en el tablón.'); return;
     }
     const ia = ev.target.closest('[data-idea-adm]');
     if (ia) {
@@ -2289,7 +2296,7 @@ function startApp(DATA, TAX, sync) {
   $('near-close').addEventListener('click', () => { $('near').hidden = true; $('near-go').hidden = false; });
   $('toast-undo').addEventListener('click', () => { $('toast').hidden = true; if (toastUndo) toastUndo(); toastUndo = null; });
   document.addEventListener('click', ev => {
-    if (ev.target.closest('#org, #adm, #ag-cal, #mail') && ev.target.closest('button, a[data-copy]')) { onAccountClick(ev).then(done => { if (done) ev.preventDefault(); }); if (ev.target.closest('[data-org-new],[data-org-edit],[data-org-cancel],[data-org-retire],[data-adm-ed],[data-adm-pub],[data-copy],[data-mail-test]')) return; }
+    if (ev.target.closest('#org, #adm, #ag-cal, #mail') && ev.target.closest('button, a[data-copy]')) { onAccountClick(ev).then(done => { if (done) ev.preventDefault(); }); if (ev.target.closest('[data-org-new],[data-org-edit],[data-org-cancel],[data-org-retire],[data-adm-ed],[data-adm-pub],[data-adm-idea],[data-copy],[data-mail-test]')) return; }
     const ck = ev.target.closest('[data-cakind]');
     if (ck) { state.caKind = ck.dataset.cakind; renderCalle(); return; }
     const cd = ev.target.closest('[data-caday]');

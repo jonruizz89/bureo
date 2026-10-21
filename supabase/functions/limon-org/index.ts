@@ -1,6 +1,6 @@
 // Limón · revisión de eventos enviados por organizadores.
 // Sitúa la dirección en el mapa, la IA comprueba que es un evento real en la ciudad del evento y le pone categorías.
-// Si el organizador está aprobado y la IA no ve problemas, se publica; si no, queda para revisión del admin.
+// Nada sale sin supervisión: todo queda en «revisión» hasta que un admin lo aprueba (solo lo que publica un admin sale directo).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -101,8 +101,7 @@ Deno.serve(async (req) => {
       if (usd > 0) await admin.rpc('ai_usage_add', { p_user: u.user.id, p_usd: usd });
     }
     const fueraDeCiudad = (s.address || s.venue_name) && !geo;
-    const trusted = me && (me.role === 'admin' || (me.role === 'editor' && me.editor_status === 'aprobado'));
-    const publish = review.ok && trusted && !fueraDeCiudad;
+    const publish = review.ok && me?.role === 'admin' && !fueraDeCiudad;
     await admin.from('submitted_events').update({
       lat: geo ? geo.lat : null, lng: geo ? geo.lng : null, district: geo ? geo.district : null,
       categories: review.categorias, status: publish ? 'revision' : (review.ok ? 'revision' : 'rechazado'),
@@ -119,7 +118,7 @@ Deno.serve(async (req) => {
     }
     return json({
       estado: publish ? 'publicado' : review.ok ? 'revision' : 'rechazado',
-      motivo: !review.ok ? review.motivo : fueraDeCiudad ? `No encuentro esa dirección en ${city.name}: revísala o la revisará el equipo.` : !trusted ? 'Lo revisará el equipo de Limón antes de publicarlo.' : '',
+      motivo: !review.ok ? review.motivo : fueraDeCiudad ? `No encuentro esa dirección en ${city.name}: revísala o la revisará el equipo.` : !publish ? (s.event_id ? 'Lo revisará el equipo de Limón; mientras tanto sigue saliendo la versión anterior.' : 'Lo revisará el equipo de Limón antes de publicarlo. Te avisamos cuando salga.') : '',
       categorias: review.categorias, distrito: geo && geo.district,
     });
   } catch (e) {

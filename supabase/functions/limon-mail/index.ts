@@ -111,7 +111,7 @@ async function flush() {
     if (p && (wants(p, k) || wantsPush(p, k))) {
       if (m.kind === 'org_editor') {
         mail = pl.status === 'aprobado'
-          ? { subject: 'Ya puedes publicar tus eventos en Limón', html: layout({ title: '¡Bienvenido a Limón como organizador!', intro: 'Hemos aprobado tu solicitud. Desde <b>Perfil → Mis eventos</b> puedes crear tus eventos: los revisamos, los situamos en el mapa y salen en Limón con enlace a tu web.', cta: { label: 'Crear mi primer evento', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por tu solicitud de organizador.') }) }
+          ? { subject: 'Ya puedes publicar tus eventos en Limón', html: layout({ title: '¡Bienvenido a Limón como organizador!', intro: 'Hemos aprobado tu solicitud. Desde <b>Perfil → Mis eventos</b> puedes crear tus eventos: los revisamos, los situamos en el mapa y, en cuanto los aprobamos, salen en Limón con enlace a tu web.', cta: { label: 'Crear mi primer evento', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Te escribimos por tu solicitud de organizador.') }) }
           : { subject: 'Tu solicitud de organizador en Limón', html: layout({ title: 'No hemos podido aprobar tu solicitud', intro: 'De momento no podemos darte acceso de organizador. Si crees que es un error o quieres darnos más detalles, responde a este correo o vuelve a enviar la solicitud desde tu perfil.', footer: footer(p, k, 'Te escribimos por tu solicitud de organizador.') }) };
       } else if (m.kind === 'org_event') {
         const ok = pl.status === 'publicado';
@@ -140,11 +140,11 @@ async function flush() {
               : { subject: `${name} ha empezado a seguirte en Limón`, html: layout({ title: `${name} te sigue`, intro: `<b>${esc(name)}</b> (@${esc(who.username)}) ha empezado a seguirte.`, cta: { label: 'Ver su perfil', url: link }, footer: footer(p, k, 'Te escribimos por tus amigos en Limón.') }) };
         }
       } else if (m.kind === 'idea_status') {
-        const T: Record<string, string> = { estudiando: 'La estamos mirando', planificada: 'La hemos planificado', hecha: '¡Ya está hecha!', descartada: 'De momento no la haremos' };
+        const T: Record<string, string> = { nueva: 'Ya está en el tablón', estudiando: 'La estamos mirando', planificada: 'La hemos planificado', hecha: '¡Ya está hecha!', descartada: 'De momento no la haremos' };
         mail = { subject: `Tu idea en Limón: ${T[pl.status] || pl.status}`, html: layout({ title: T[pl.status] || 'Tu idea ha cambiado', intro: `Sobre tu idea <b>${esc(pl.title)}</b>.${pl.nota ? '<br><br>' + esc(pl.nota) : ''}<br><br>¡Gracias por ayudarnos a mejorar Limón!`, cta: { label: 'Ver el tablón de ideas', url: APP + '?ideas' }, footer: footer(p, k, 'Te escribimos porque propusiste esta idea.') }) };
       } else if (m.kind === 'admin_idea') {
         const KN: Record<string, string> = { idea: 'Idea', fallo: 'Fallo', fuente: 'Falta un sitio o evento' };
-        mail = { subject: `${KN[pl.kind] || 'Idea'}: ${pl.title}`, html: layout({ title: 'Nueva propuesta en el tablón', intro: `<b>${esc(pl.title)}</b> (${esc(KN[pl.kind] || pl.kind)})`, cta: { label: 'Ver el tablón', url: APP + '?ideas' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
+        mail = { subject: `${KN[pl.kind] || 'Idea'}: ${pl.title}`, html: layout({ title: 'Nueva propuesta para revisar', intro: `<b>${esc(pl.title)}</b> (${esc(KN[pl.kind] || pl.kind)})`, cta: { label: 'Revisar', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_editor') {
         mail = { subject: `Solicitud de organizador: ${pl.nombre || 'sin nombre'}`, html: layout({ title: 'Nueva solicitud de organizador', intro: `<b>${esc(pl.nombre)}</b>${pl.web ? ' · ' + esc(pl.web) : ''}<br>${esc(pl.que || '')}`, cta: { label: 'Revisar', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_event') {
