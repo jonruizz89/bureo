@@ -3,6 +3,9 @@
 <head>
 <title>Limón · Madrid</title>
 <meta charset="utf-8">
+<!-- Política de contenido: solo se carga código de la propia web, jsDelivr (con huella fija) y la comprobación anti-robots de Cloudflare -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://pxeqbxxfsrvsxcdfiddc.supabase.co wss://pxeqbxxfsrvsxcdfiddc.supabase.co https://api.open-meteo.com; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Limón: los planes de tu ciudad que van contigo, y en Madrid también las calles y líneas cortadas antes de salir.">
 <link rel="icon" href="limon.svg" type="image/svg+xml">
@@ -483,6 +486,7 @@ table.cov td.n, table.cov th.n { text-align: right }
           <label>Contraseña<input class="search" id="acc-pass" type="password" autocomplete="current-password" minlength="8" placeholder="Mínimo 8 caracteres"></label>
           <div class="seg full"><button class="btn" type="submit" data-mode="login">Entrar</button><button class="btn ghost" type="submit" data-mode="signup">Crear cuenta</button></div>
           <div class="seg full" style="gap:14px"><button class="btnlink" type="submit" data-mode="link">Prefiero que me mandes un enlace para entrar sin contraseña</button><button class="btnlink" type="submit" data-mode="reset">He olvidado mi contraseña</button></div>
+          <div id="acc-captcha" class="full"></div>
         </form>
         <p class="note" id="acc-msg" role="status"></p>
         <p class="note" style="margin-top:6px">Al entrar aceptas las <a href="condiciones.html">condiciones de uso</a> y la <a href="privacidad.html">política de privacidad</a>.</p>
@@ -523,7 +527,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <button data-goto="intereses" data-bnav="intereses"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Perfil</span></button>
 </nav>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js?v=sri" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
 <script src="config.js"></script>
 <script src="data.js"></script>
 <script>
@@ -885,10 +889,10 @@ function startApp(DATA, TAX, sync) {
     if (window.L) return Promise.resolve();
     return new Promise((ok, ko) => {
       const css = document.createElement('link');
-      css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      css.rel = 'stylesheet'; css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'; css.integrity = 'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H'; css.crossOrigin = 'anonymous';
       document.head.appendChild(css);
       const js = document.createElement('script');
-      js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'; js.integrity = 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH'; js.crossOrigin = 'anonymous';
       js.onload = ok; js.onerror = ko;
       document.head.appendChild(js);
     });

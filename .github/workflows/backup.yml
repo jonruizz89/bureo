@@ -1,0 +1,48 @@
+name: Copia de seguridad
+
+# Cada domingo: copia completa de la base de datos (datos de la app y cuentas), comprimida y CIFRADA con una frase
+# que solo tiene Jon. Se guarda 90 días como artefacto del flujo (el repositorio es público: sin la frase no sirve de nada).
+# Secretos: SUPABASE_DB_URL (cadena de conexión «Session pooler» de Supabase, con la contraseña) y BACKUP_PASSPHRASE.
+# Restaurar: ver «Copias de seguridad» en el README.
+on:
+  schedule:
+    - cron: "23 3 * * 0"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Comprobar los secretos
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Faltan los secretos SUPABASE_DB_URL y/o BACKUP_PASSPHRASE en GitHub"; exit 1; fi
+      - name: Instalar pg_dump 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -sSf -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          /usr/lib/postgresql/17/bin/pg_dump --version
+      - name: Volcar, comprimir y cifrar
+        run: |
+          set -euo pipefail
+          D=$(date -u +%Y-%m-%d); mkdir -p out; umask 077
+          PGD=/usr/lib/postgresql/17/bin/pg_dump
+          # 1) la app: esquema y datos del esquema public
+          $PGD "$SUPABASE_DB_URL" -n public --no-owner --no-privileges -Fc -f app.dump
+          # 2) las cuentas: solo datos de usuarios e identidades (el esquema auth lo crea Supabase)
+          $PGD "$SUPABASE_DB_URL" --data-only -t auth.users -t auth.identities --no-owner --no-privileges -Fc -f cuentas.dump
+          tar czf limon.tgz app.dump cuentas.dump
+          echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 -o "out/limon-$D.tgz.gpg" limon.tgz
+          rm -f app.dump cuentas.dump limon.tgz
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: copia-${{ github.run_id }}
+          path: out/*.gpg
+          retention-days: 90

@@ -1,0 +1,47 @@
+name: Revisión de seguridad
+
+# Cada lunes pide a Supabase sus avisos de seguridad (tablas sin protección, funciones abiertas, ajustes de acceso…)
+# y falla si aparece alguno que no esté revisado en .github/security/aceptados.txt. GitHub avisa por correo cuando falla.
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/security/**", ".github/workflows/security.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Avisos de seguridad de Supabase
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: pxeqbxxfsrvsxcdfiddc
+        run: |
+          code=$(curl -sS -o advisors.json -w '%{http_code}' -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$REF/advisors/security")
+          if [ "$code" != "200" ]; then echo "::error::No se han podido leer los avisos ($code)"; cat advisors.json | head -c 500; exit 1; fi
+          python3 - <<'PY'
+          import json, sys
+          ok = {l.strip() for l in open('.github/security/aceptados.txt') if l.strip() and not l.startswith('#')}
+          data = json.load(open('advisors.json'))
+          seen, new = set(), []
+          for lint in data.get('lints', []):
+              for f in lint.get('findings') or [lint]:
+                  md = f.get('metadata') or {}
+                  key = f"{lint['name']}:{md.get('name') or md.get('entity') or ''}"
+                  seen.add(key)
+                  if key not in ok:
+                      new.append((lint.get('level'), key, f.get('detail') or lint.get('detail') or lint.get('title')))
+          print(f'{len(seen)} avisos, {len(seen & ok)} ya revisados')
+          for k in sorted(ok - seen):
+              print(f'  resuelto (se puede quitar de aceptados.txt): {k}')
+          if new:
+              for lvl, key, det in new:
+                  print(f'::error title={lvl} {key}::{det}')
+              sys.exit(1)
+          print('Sin avisos nuevos.')
+          PY

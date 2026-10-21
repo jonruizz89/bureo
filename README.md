@@ -22,6 +22,8 @@ En *Settings → Secrets and variables → Actions*:
 
 - `SUPABASE_URL`: la URL del proyecto.
 - `SUPABASE_SECRET`: una clave secreta de Supabase (`sb_secret_…`) solo para el motor.
+- `SUPABASE_ACCESS_TOKEN`: token personal de Supabase para desplegar funciones y leer los avisos de seguridad.
+- `SUPABASE_DB_URL` y `BACKUP_PASSPHRASE`: para la copia de seguridad semanal (ver «Copias de seguridad»).
 
 La clave publicable de `web/config.js` es pública por diseño: las políticas de seguridad por filas solo permiten
 leer el catálogo y que cada usuario gestione sus propios datos.
@@ -37,3 +39,20 @@ recintos se guarda lo mínimo para mostrar el evento y siempre se enlaza a la fi
 - **`main`** → https://limonplanes.com (GitHub Pages). Solo se pasa a `main` lo que se ha probado en `pruebas`.
 - Base de datos: la misma para las dos webs (los datos, los correos y los avisos son reales). Los cambios de base de datos solo añaden (tablas, columnas, funciones nuevas), nunca quitan ni renombran, para que la versión publicada siga funcionando.
 - Funciones del servidor: lo que se sube a `pruebas` se publica como `limon-…-pruebas`; la web de pruebas las usa si existen y, si no, usa las normales.
+
+## Seguridad
+
+- **Revisión semanal** (`security.yml`): pide a Supabase sus avisos de seguridad y falla si aparece uno nuevo. Los revisados y aceptados están en `.github/security/aceptados.txt`, cada uno con el porqué.
+- **Captcha** (Cloudflare Turnstile): la clave pública va en `web/config.js` (`turnstile`); la secreta solo en Supabase → Authentication → Attack Protection. Si se activa en Supabase sin clave en la web, nadie podrá entrar.
+- **Web**: política de contenido (CSP) en cada página y huella (SRI) en las librerías externas. Al cambiar de versión una librería hay que recalcular su huella: `npm pack <paquete>@<versión>` y `openssl dgst -sha384 -binary <fichero> | base64`.
+
+## Copias de seguridad
+
+Cada domingo `backup.yml` guarda una copia cifrada de la base de datos durante 90 días (pestaña Actions → «Copia de seguridad» → artefacto). Para restaurar:
+
+```sh
+gpg -d limon-AAAA-MM-DD.tgz.gpg > limon.tgz   # pide la frase BACKUP_PASSPHRASE
+tar xzf limon.tgz                             # app.dump (esquema public) y cuentas.dump (usuarios)
+pg_restore -d "$SUPABASE_DB_URL" --no-owner --data-only cuentas.dump   # primero las cuentas
+pg_restore -d "$SUPABASE_DB_URL" --no-owner --clean --if-exists app.dump
+```

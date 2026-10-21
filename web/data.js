@@ -231,8 +231,35 @@
       if (/password should be|at least|weak/i.test(m)) return 'La contraseña es demasiado débil: usa al menos 8 caracteres y mezcla letras y números.';
       if (/rate limit|too many|seconds/i.test(m)) return 'Demasiados intentos seguidos. Espera un minuto y vuelve a probar.';
       if (/same.*password|different from the old/i.test(m)) return 'Esa ya es tu contraseña actual.';
+      if (/captcha/i.test(m)) return 'No hemos podido comprobar que no eres un robot. Recarga la página y vuelve a probar.';
+      if (/pwned|leaked|compromised/i.test(m)) return 'Esa contraseña aparece en filtraciones conocidas de internet: elige otra.';
       return m;
     };
+    // captcha invisible (Cloudflare Turnstile) contra registros y accesos automáticos: se carga solo al tocar el formulario
+    const TS_KEY = (window.BUREO_CONFIG || {}).turnstile;
+    let tsToken = null, tsWait = null, tsId = null;
+    const tsLoad = () => {
+      if (!TS_KEY || tsWait) return tsWait;
+      tsWait = new Promise((ok) => {
+        window.__limonTs = () => {
+          tsId = window.turnstile.render('#acc-captcha', { sitekey: TS_KEY, size: 'flexible', appearance: 'interaction-only', language: 'es',
+            callback: (t) => { tsToken = t; ok(); }, 'expired-callback': () => { tsToken = null; }, 'error-callback': () => { tsToken = null; ok(); } });
+        };
+        const s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__limonTs'; s.async = true;
+        s.onerror = () => ok(); document.head.appendChild(s);
+      });
+      return tsWait;
+    };
+    const tsTake = async () => {
+      if (!TS_KEY) return undefined;
+      tsLoad();
+      for (let i = 0; !tsToken && i < 50; i++) await new Promise((r) => setTimeout(r, 200));
+      const t = tsToken; tsToken = null;
+      try { if (tsId !== null) window.turnstile.reset(tsId); } catch (e) { }
+      return t || undefined;
+    };
+    $('acc-form').addEventListener('focusin', tsLoad);
     $('acc-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const mode = (ev.submitter && ev.submitter.dataset.mode) || 'login';
@@ -241,11 +268,13 @@
       if (!email) { msg('Escribe tu correo.'); return; }
       if ((mode === 'login' || mode === 'signup') && password.length < 8) { msg(mode === 'signup' ? 'Elige una contraseña de al menos 8 caracteres.' : 'Escribe tu contraseña (o pide un enlace para entrar sin ella).'); $('acc-pass').focus(); return; }
       msg(mode === 'login' ? 'Entrando…' : 'Enviando…');
+      const captchaToken = await tsTake();
+      if (TS_KEY && !captchaToken) { msg('No hemos podido comprobar que no eres un robot. Recarga la página y vuelve a probar.'); return; }
       let r;
-      if (mode === 'login') r = await sb.auth.signInWithPassword({ email, password });
-      else if (mode === 'signup') r = await sb.auth.signUp({ email, password, options: { emailRedirectTo: back } });
-      else if (mode === 'reset') r = await sb.auth.resetPasswordForEmail(email, { redirectTo: back });
-      else r = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: back } });
+      if (mode === 'login') r = await sb.auth.signInWithPassword({ email, password, options: { captchaToken } });
+      else if (mode === 'signup') r = await sb.auth.signUp({ email, password, options: { emailRedirectTo: back, captchaToken } });
+      else if (mode === 'reset') r = await sb.auth.resetPasswordForEmail(email, { redirectTo: back, captchaToken });
+      else r = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: back, captchaToken } });
       if (r.error) { msg(ES(r.error.message)); return; }
       $('acc-pass').value = '';
       if (mode === 'login') msg('');

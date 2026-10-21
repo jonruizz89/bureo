@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacidad · Limón</title>
 <link rel="icon" href="limon.svg" type="image/svg+xml">
@@ -74,10 +75,10 @@ th { font-weight: 600 }
       <tr><td>Anthropic</td><td>Funciones de IA (apartado 4)</td><td>EE. UU.</td></tr>
       <tr><td>GitHub (Microsoft)</td><td>Alojamiento de la web; registra tu IP al cargarla</td><td>EE. UU.</td></tr>
       <tr><td>Apple, Google o Mozilla, según tu dispositivo</td><td>Entregar los avisos push en tu móvil o navegador (reciben el aviso cifrado y la dirección de entrega, no tu nombre ni tu correo)</td><td>Según el proveedor</td></tr>
-      <tr><td>Cloudflare</td><td>Dominio y recepción de correo en hola@limonplanes.com</td><td>Global</td></tr>
+      <tr><td>Cloudflare</td><td>Dominio, recepción de correo en hola@limonplanes.com y comprobación anti-robots (Turnstile) al entrar o crear la cuenta</td><td>Global</td></tr>
     </table></div>
     <p>Cuando hay transferencias fuera del Espacio Económico Europeo se amparan en el Marco de Privacidad de Datos UE-EE. UU. o en cláusulas contractuales tipo de la Comisión Europea.</p>
-    <p>Además, al usar la web tu navegador se conecta directamente a servicios de terceros que reciben tu IP: los mapas de OpenStreetMap, la previsión del tiempo de Open-Meteo (se pide la de Madrid, no la de tu ubicación), las tipografías de Google Fonts y las librerías de cdnjs y jsDelivr. Si usas «¿Cortes en el camino?», nuestro servidor pide la ruta al servicio público OSRM (project-osrm.org) con tu punto de partida redondeado a unos 100 metros; OSRM no recibe tu IP. Si pulsas «Cómo llegar» o añades el calendario a Google Calendar, se abre el servicio de Google con sus propias condiciones.</p>
+    <p>Además, al usar la web tu navegador se conecta directamente a servicios de terceros que reciben tu IP: los mapas de OpenStreetMap, la previsión del tiempo de Open-Meteo (se pide la de Madrid, no la de tu ubicación), las tipografías de Google Fonts y las librerías de jsDelivr. Al usar el formulario de entrar o crear cuenta, se carga la comprobación anti-robots de Cloudflare Turnstile, que recibe tu IP y datos técnicos del navegador solo para distinguir personas de programas automáticos; no usa cookies de seguimiento. Si usas «¿Cortes en el camino?», nuestro servidor pide la ruta al servicio público OSRM (project-osrm.org) con tu punto de partida redondeado a unos 100 metros; OSRM no recibe tu IP. Si pulsas «Cómo llegar» o añades el calendario a Google Calendar, se abre el servicio de Google con sus propias condiciones.</p>
 
     <h2>6. Cuánto tiempo los guardamos</h2>
     <p>Los datos de tu cuenta, mientras la mantengas. Si te das de baja se borran al momento la cuenta y todos sus datos, incluidas las estadísticas de uso unidas a ella, y los eventos que publicaste dejan de mostrarse. El detalle de las estadísticas de uso se guarda un máximo de 18 meses. El registro de correos enviados se conserva un máximo de 12 meses. Los registros técnicos de nuestros proveedores se eliminan según sus propios plazos, normalmente en semanas.</p>
