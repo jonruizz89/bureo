@@ -381,6 +381,33 @@
 
   // ciudades: la elegida en este navegador, la de ?c= (vista previa, también de ciudades en borrador) o Madrid
   let CITIES = [], CITY = null;
+  // ---------- zona según dónde estás: se calcula en el propio navegador con las zonas de Limón; la posición no se envía a nadie
+  const kmTo = (a, b, c, d) => { const r = Math.PI / 180, x = (d - b) * r * Math.cos((a + c) / 2 * r), y = (c - a) * r; return Math.sqrt(x * x + y * y) * 6371; };
+  async function zoneAt(lat, lng) {
+    const pub = CITIES.filter((c) => c.status === 'publicada');
+    const inBox = (c) => Array.isArray(c.bbox) && lng >= c.bbox[0] && lat >= c.bbox[1] && lng <= c.bbox[2] && lat <= c.bbox[3];
+    const byDist = (a, b) => kmTo(lat, lng, a.lat, a.lng) - kmTo(lat, lng, b.lat, b.lng);
+    const city = pub.filter((c) => c.kind !== 'provincia' && inBox(c)).sort(byDist)[0];
+    if (city) return city.id;
+    const prov = pub.find((c) => c.kind === 'provincia' && inBox(c));
+    if (prov) {
+      // municipio: el de los planes con ubicación más cercanos (a menos de 3 km); si no, toda la provincia.
+      // Se descargan las ubicaciones de toda la provincia y se compara aquí, para no mandar tu posición al servidor.
+      const r = await sb.from('events').select('district,lat,lng').eq('city_id', prov.id).not('district', 'is', null).not('lat', 'is', null).limit(5000);
+      const best = (r.data || []).map((e) => [e.district, kmTo(lat, lng, e.lat, e.lng)]).sort((a, b) => a[1] - b[1])[0];
+      return best && best[1] < 3 && (prov.districts || []).includes(best[0]) ? prov.id + '|' + best[0] : prov.id;
+    }
+    // cerca de una ciudad sin provincia entera (p. ej. el área de Madrid)
+    const near = pub.filter((c) => c.kind !== 'provincia' && !c.parent && kmTo(lat, lng, c.lat, c.lng) < 30).sort(byDist)[0];
+    return near ? near.id : null;
+  }
+  const getPos = (timeout) => new Promise((ok, ko) => navigator.geolocation
+    ? navigator.geolocation.getCurrentPosition((p) => ok([p.coords.latitude, p.coords.longitude]), ko, { timeout, maximumAge: 30 * 60e3 })
+    : ko(new Error('sin geolocalización')));
+  async function geoGranted() {
+    try { return navigator.permissions && (await navigator.permissions.query({ name: 'geolocation' })).state === 'granted'; } catch (e) { return false; }
+  }
+
   async function loadCities() {
     const r = await sb.from('cities').select('id,name,region,lat,lng,bbox,districts,stadiums,features,status,position,kind,parent').order('position');
     CITIES = r.data || [];
@@ -391,6 +418,14 @@
     let base = null, muni = null;
     if (qp.get('c') && pick(qp.get('c'))) { base = pick(qp.get('c')); muni = qp.get('m'); }
     else if (sid && pick(sid) && pick(sid).status === 'publicada') { base = pick(sid); muni = smuni || null; }
+    else if (await geoGranted()) {
+      // primera visita con permiso de ubicación ya concedido: se abre directamente la zona donde estás
+      try {
+        const [la, lo] = await getPos(4000), z = await zoneAt(la, lo);
+        if (z) { const [zb, zm] = z.split('|'); base = pick(zb); muni = zm || null; window.__limonAutoZone = true; try { localStorage.setItem('bureo.city', z); } catch (e) { } }
+        else window.__limonNoZone = true;
+      } catch (e) { }
+    }
     base = base || pick(C.city) || CITIES[0] || { id: C.city, name: 'Madrid', lat: 40.4168, lng: -3.7038, districts: [], stadiums: [], features: { calle: true } };
     const kids = CITIES.filter((c) => c.parent === base.id);
     if (base.kind !== 'provincia' || !(base.districts || []).includes(muni) || kids.some((k) => k.name === muni)) muni = null;
@@ -417,7 +452,10 @@
       if (user) await sb.from('profiles').update({ city_id: base }).eq('id', user.id);
       location.href = location.pathname;
     },
-    zone: () => (C.muni ? C.city + '|' + C.muni : C.city)
+    zone: () => (C.muni ? C.city + '|' + C.muni : C.city),
+    // pide la ubicación y devuelve la zona de Limón donde estás (null si aún no cubrimos esa zona)
+    async locate() { const [la, lo] = await getPos(10000); return zoneAt(la, lo); },
+    chosen: () => { try { return !!localStorage.getItem('bureo.city') || new URLSearchParams(location.search).has('c'); } catch (e) { return true; } }
   };
 
   window.bootBureo = async function (startApp) {

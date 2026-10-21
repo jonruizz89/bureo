@@ -345,6 +345,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <h1 id="pt-h"></h1>
     <p class="lead" id="pt-lead"></p>
+    <div id="zone-hint" hidden></div>
     <div class="seg" role="group" aria-label="Cuándo">
       <button class="pill" data-when="semana">Esta semana</button>
       <button class="pill" data-when="finde">Este finde</button>
@@ -1614,6 +1615,28 @@ function startApp(DATA, TAX, sync) {
     }
     return groups;
   }
+  // ---------- «¿Estás en otro sitio?»: la primera vez, si no has elegido zona, se ofrece abrir la de donde estás
+  async function locateZone(btn) {
+    const t = btn && btn.textContent; if (btn) { btn.disabled = true; btn.textContent = 'Buscando…'; }
+    store.set('zoneAsked', 1);
+    let z = null;
+    try { z = await window.limonCity.locate(); }
+    catch (e) { if (btn) { btn.disabled = false; btn.textContent = t; } toast('Sin permiso de ubicación no puedo saber dónde estás. Elige la zona a mano.'); return; }
+    if (btn) { btn.disabled = false; btn.textContent = t; }
+    if (!z) { $('zone-hint').hidden = true; toast('Aún no estamos en tu zona: de momento, Madrid y Bizkaia. ¡Iremos añadiendo más!'); return; }
+    if (z === window.limonCity.zone()) { $('zone-hint').hidden = true; closeSheets(); toast('Ya estás viendo los planes de ' + CITY.name + '.'); return; }
+    window.limonCity.set(z);
+  }
+  function renderZoneHint() {
+    const box = $('zone-hint'); if (!box) return;
+    if (window.__limonAutoZone) { window.__limonAutoZone = false; toast('Te enseñamos los planes de ' + CITY.name + ', donde estás. Puedes cambiar de zona arriba.'); }
+    if (window.__limonNoZone) { window.__limonNoZone = false; store.set('zoneAsked', 1); toast('Aún no estamos en tu zona: te enseñamos Madrid. Puedes cambiar a Bizkaia arriba.'); }
+    const show = !window.limonCity.chosen() && !store.get('zoneAsked', 0) && 'geolocation' in navigator;
+    box.hidden = !show; if (!show) return;
+    box.innerHTML = `<div class="consent" role="region" aria-label="Tu zona" style="margin:10px 0">
+      <div><b>¿No estás en ${esc(CITY.name)}?</b> Te enseñamos los planes de donde estés. Tu ubicación no sale de tu móvil.</div>
+      <div class="seg"><button class="btn" data-zone-locate>📍 Usar mi ubicación</button><button class="btn ghost" data-zone-pick>Elegir zona</button><button class="btnlink" data-zone-hint-x>Ahora no</button></div></div>`;
+  }
   function openZone() {
     const groups = zoneGroups(), zone = window.limonCity.zone();
     const cur = groups.find(g => g.options.some(o => o.v === zone)) || groups[0];
@@ -1623,7 +1646,7 @@ function startApp(DATA, TAX, sync) {
         <select class="search" id="zone-p">${groups.map(g => `<option value="${esc(g.id)}" ${g === cur ? 'selected' : ''}>${esc(g.name)}${g.draft ? ' (borrador)' : ''}</option>`).join('')}</select></label>
       <label class="note" id="zone-m-wrap" style="display:flex;flex-direction:column;gap:4px">Municipio
         <select class="search" id="zone-m"></select></label>
-      <button class="btn" data-zone-go style="align-self:flex-start">Ver planes</button>
+      <div class="seg"><button class="btn" data-zone-go>Ver planes</button><button class="btn ghost" data-zone-locate>📍 Donde estoy</button></div>
       <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las zonas.${isAdm ? ' Las zonas en borrador solo las ves tú.' : ''} De momento: Madrid y Bizkaia; iremos añadiendo más.</p>`);
     const fill = () => {
       const g = groups.find(x => x.id === $('zone-p').value) || groups[0];
@@ -2357,7 +2380,9 @@ function startApp(DATA, TAX, sync) {
       renderAll(); return;
     }
     if (ev.target.closest('[data-sheet-close]')) { closeSheets(); return; }
-    if (ev.target.closest('#city-btn')) { openZone(); return; }
+    if (ev.target.closest('#city-btn') || ev.target.closest('[data-zone-pick]')) { openZone(); return; }
+    if (ev.target.closest('[data-zone-locate]')) { locateZone(ev.target.closest('[data-zone-locate]')); return; }
+    if (ev.target.closest('[data-zone-hint-x]')) { store.set('zoneAsked', 1); $('zone-hint').hidden = true; return; }
     if (ev.target.closest('[data-zone-go]')) { const v = $('zone-m').value; if (v !== window.limonCity.zone()) window.limonCity.set(v); else closeSheets(); return; }
     const cb2 = ev.target.closest('[data-city]'); if (cb2) { if (cb2.dataset.city !== CITY.id) window.limonCity.set(cb2.dataset.city); else closeSheets(); return; }
     if (ev.target.closest('[data-vote],[data-idea-tab],[data-idea-del]')) { ideasClick(ev.target); return; }
@@ -2478,6 +2503,7 @@ function startApp(DATA, TAX, sync) {
     track('web', c.dataset.eid, { tipo: /google\.com\/maps/.test(a.href) ? 'mapa' : /organizador/i.test(a.textContent) ? 'organizador' : 'fuente' });
   }, true);
   renderSocialAll(); loadIdeas(); loadAffinity(); loadPast();
+  renderZoneHint();
   document.addEventListener('input', ev => { if (ev.target.id === 'idea-title') { IDEAS_SIM = similarIdeas(ev.target.value); const b = $('idea-sim'); if (b) b.innerHTML = IDEAS_SIM.length ? '<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>' + IDEAS_SIM.map(ideaRow).join('') : ''; } });
   if (QS.get('fui')) go('parati');
   if (QS.get('ideas') !== null) { go('intereses'); openFold('ideas', true); setTimeout(() => { const b = $('ideas'); if (b) b.scrollIntoView({ behavior: 'smooth' }); }, 400); }
