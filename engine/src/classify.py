@@ -31,7 +31,12 @@ def sb(method, path, body=None, prefer=None):
 
 def content_hash(e):
     v = (e.get('venues') or {}).get('name') or ''
-    return hashlib.md5(f"{e['title']}|{e.get('description') or ''}|{v}|{e['starts_on']}".encode()).hexdigest()
+    return hashlib.md5(f"{e['title']}|{texto(e)}|{v}|{e['starts_on']}".encode()).hexdigest()
+
+
+def texto(e):
+    # la descripción de la fuente; si no trae, lo leído de la ficha original (enrich.py)
+    return e.get('description') or (e.get('details') or '')[:600]
 
 
 # ---------- taxonomía
@@ -87,7 +92,7 @@ def spent_usd():
 def call_model(batch):
     items = [{'id': e['id'], 'titulo': e['title'], 'lugar': (e.get('venues') or {}).get('name'),
               'fechas': f"{e['starts_on']}–{e['ends_on']}", 'precio': e.get('price_text'),
-              'descripcion': (e.get('description') or '')[:350],
+              'descripcion': texto(e)[:350],
               'pistas_de_la_fuente': [c['category_id'] for c in e.get('event_categories') or []]} for e in batch]
     body = {'model': MODEL, 'max_tokens': 6000,
             'system': [{'type': 'text', 'text': SYSTEM, 'cache_control': {'type': 'ephemeral'}}],
@@ -157,7 +162,7 @@ def save(batch, result):
 # ---------- eventos pendientes
 today = dt.date.today().isoformat()
 pending, offset = [], 0
-cols = 'id,ext_key,city_id,title,description,starts_on,ends_on,price_text,ai_hash,venues(name),event_categories(category_id)'
+cols = 'id,ext_key,city_id,title,description,details,starts_on,ends_on,price_text,ai_hash,venues(name),event_categories(category_id)'
 while True:
     page = sb('GET', f'events?select={cols}&ends_on=gte.{today}&order=id&limit=1000&offset={offset}')
     for e in page:

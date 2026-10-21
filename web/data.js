@@ -441,6 +441,10 @@
     if (!CITY.muni || !pts.length) return;
     CITY.lat = pts.reduce((a, e) => a + e.lat, 0) / pts.length; CITY.lng = pts.reduce((a, e) => a + e.lng, 0) / pts.length;
   }
+  // texto leído de la ficha original de un evento sin descripción (columna details, se rellena cada noche)
+  window.limonDetails = async (id) => {
+    try { const r = await sb.from('events').select('details').eq('id', +String(id).replace(/^e/, '')).maybeSingle(); return (r.data && r.data.details) || ''; } catch (e) { return ''; }
+  };
   window.limonCity = {
     list: () => CITIES, current: () => CITY,
     // id = «madrid», «bizkaia» (toda la provincia) o «bizkaia|Getxo» (un municipio de la provincia)
