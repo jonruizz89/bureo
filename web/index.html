@@ -11,6 +11,8 @@
 <link rel="icon" href="limon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="limon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
+<meta property="og:title" content="Limón · Los planes de tu zona"><meta property="og:description" content="Conciertos, teatro, exposiciones y actividades cerca de ti, cada día.">
+<meta property="og:image" content="https://limonplanes.com/og.png"><meta property="og:url" content="https://limonplanes.com/"><meta name="twitter:card" content="summary_large_image">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Limón">
@@ -2116,6 +2118,24 @@ function startApp(DATA, TAX, sync) {
       <p style="margin:0"><b>¿Nos ayudas a mejorar Limón?</b> Si nos dejas, guardamos qué planes abres, guardas o compartes para mejorar las recomendaciones de todos y saber qué tipo de planes interesan en la ciudad. Sin anuncios y sin vender datos de nadie.</p>
       <div class="seg"><button class="btn" data-consent="1">Vale</button><button class="btn ghost" data-consent="0">No, gracias</button><a class="note" href="privacidad.html#estadisticas">Más información</a></div></div>`;
   }
+  // ---------- compartir «Este finde en …»: enlace a la página pública del finde de la zona (se genera cada mañana)
+  let FINDE = null;
+  fetch('/planes/finde.json').then(r => r.ok ? r.json() : {}).then(j => { FINDE = j || {}; renderAll(); }).catch(() => { FINDE = {}; });
+  const zslug = t => String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ñ/g, 'n').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70);
+  function findePath() {
+    if (!FINDE) return null;
+    return FINDE[CITY.muni ? zslug(CITY.muni) : CITY.id] || FINDE[CITY.muni ? CITY.id + '-' + zslug(CITY.muni) : ''] || null;
+  }
+  function shareFindeBtn() {
+    const p = state.when === 'finde' && findePath();
+    return p ? `<div class="seg" style="margin:4px 0 10px"><button class="btn ghost" data-share-finde="${esc(p)}">📤 Compartir los planes del finde en ${esc(CITY.name)}</button></div>` : '';
+  }
+  async function shareFinde(p) {
+    const url = 'https://limonplanes.com' + p, text = '🍋 Planes este finde en ' + CITY.name;
+    track('compartir', null, { que: 'finde' });
+    if (navigator.share) { try { await navigator.share({ title: text, text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    window.open('https://wa.me/?text=' + encodeURIComponent(text + ': ' + url), '_blank', 'noopener');
+  }
   function renderParaTi() {
     const [a, b] = range(state.when);
     if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1) && !(taste && ((taste.categorias || []).length || (taste.temas || []).length)) && !Object.keys(FRIENDS).length && !TOPICS.length) {
@@ -2131,7 +2151,7 @@ function startApp(DATA, TAX, sync) {
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
       logList(items.slice(0, state.ptShown).map(x => x.e.id));
-      $('pt-list').innerHTML = zoneNote() + streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
+      $('pt-list').innerHTML = shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -2154,7 +2174,7 @@ function startApp(DATA, TAX, sync) {
     const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
       (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
     logList(top.map(x => x.e.id));
-    $('pt-list').innerHTML = streetBanner() + (fuiCard() || consentCard()) + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
+    $('pt-list').innerHTML = shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
   }
@@ -2417,6 +2437,7 @@ function startApp(DATA, TAX, sync) {
     }
     if (ev.target.closest('[data-sheet-close]')) { closeSheets(); return; }
     if (ev.target.closest('#city-btn') || ev.target.closest('[data-zone-pick]')) { openZone(); return; }
+    if (ev.target.closest('[data-share-finde]')) { shareFinde(ev.target.closest('[data-share-finde]').dataset.shareFinde); return; }
     if (ev.target.closest('[data-zone-wider]')) { ZONE.r = +ev.target.closest('[data-zone-wider]').dataset.zoneWider; renderAll(); return; }
     if (ev.target.closest('[data-zone-locate]')) { locateZone(ev.target.closest('[data-zone-locate]')); return; }
     if (ev.target.closest('[data-zone-hint-x]')) { store.set('zoneAsked', 1); $('zone-hint').hidden = true; return; }

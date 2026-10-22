@@ -129,6 +129,7 @@ h1{font:700 30px/1.2 'Space Grotesk',system-ui,sans-serif;margin:10px 0 8px}h2{f
 .lead,.q{color:var(--q)}.crumbs{font-size:14px;color:var(--q);margin-top:6px}.crumbs a{color:var(--q)}
 ul.ev{list-style:none;padding:0;margin:0}ul.ev li{background:var(--s);border:1px solid var(--l);border-radius:12px;padding:12px 14px;margin:8px 0}
 ul.ev a{font-weight:600;text-decoration:none}ul.ev a:hover{text-decoration:underline}.m{font-size:14px;color:var(--q)}
+.share{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.share a{border:1px solid var(--l);background:var(--s);border-radius:10px;padding:8px 14px;text-decoration:none;font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.chips a{background:var(--s);border:1px solid var(--l);border-radius:999px;padding:5px 12px;font-size:14px;text-decoration:none}
 .card{background:var(--s);border:1px solid var(--l);border-radius:14px;padding:16px;margin:12px 0}.card p{margin:8px 0}
 img.hero{width:100%;max-height:340px;object-fit:cover;border-radius:14px;margin:8px 0}
@@ -146,6 +147,7 @@ def page(path, title, desc, body, crumbs=(), ld=None, app='/'):
 <meta name="description" content="{esc(desc[:300])}"><link rel="canonical" href="{BASE}{path}">
 <meta property="og:title" content="{esc(title)}"><meta property="og:description" content="{esc(desc[:300])}"><meta property="og:url" content="{BASE}{path}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Limón"><meta property="og:locale" content="es_ES">
+<meta property="og:image" content="{BASE}/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/limon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/limon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&display=swap">
 <style>{CSS}</style>{ldj}</head><body>
@@ -237,6 +239,9 @@ for z in zonas:
     desc = f"Qué hacer en {z['name']} esta semana y este fin de semana: {n} planes entre conciertos, teatro, exposiciones, actividades infantiles y más. Agenda actualizada cada día."
     body = f"<h1>Planes en {esc(z['name'])}</h1><p class='lead'>{n} planes y eventos en {esc(z['name'])} en las próximas semanas, actualizados cada día.</p>"
     body += f'<p><a class="cta" href="{esc(zone_app(z))}">Ver en Limón con mapa y filtros</a></p>'
+    vie0, dom0 = finde()
+    if sum(1 for e in lista if d(e['starts_on']) <= dom0 and d(e['ends_on']) >= vie0) >= 3:
+        body += f'<p><a href="/planes/{z["path"]}/este-finde/"><b>Qué hacer este fin de semana en {esc(z["name"])} ›</b></a></p>'
     if gl:
         body += '<div class="chips">' + ''.join(f'<a href="/planes/{z["path"]}/{g}/">{esc(groups[g])} ({len(l)})</a>' for g, l in gl) + '</div>'
     if z['kids']:
@@ -255,6 +260,63 @@ for z in zonas:
              f"<h1>{esc(gn)} en {esc(z['name'])}</h1><p class='lead'>{len(l)} planes de {esc(gn.lower())} en {esc(z['name'])}.</p>"
              f'<p><a class="cta" href="{esc(zone_app(z))}">Ver en Limón</a></p>' + secciones(l, z),
              crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")], app=zone_app(z))
+
+# ---------- «Este finde en …»: los mejores planes del fin de semana, para compartir por WhatsApp o Telegram
+def picks(lista, vie, dom, n=12):
+    cand = [e for e in lista if d(e['starts_on']) <= dom and d(e['ends_on']) >= vie]
+    def score(e):
+        return (3 if e.get('is_unique') or e.get('ai_unique') else 0) + (0 if e['largo'] else 1.5) + (0.7 if e.get('is_free') else 0) + \
+               (0.5 if e.get('image_url') else 0) + (0.5 if e.get('description') or e.get('details') else 0) + 0.3 * len(e.get('event_sources') or [])
+    out, por_grupo = [], defaultdict(int)
+    for e in sorted(cand, key=lambda e: (-score(e), e['starts_on'], e['id'])):
+        g = (e['grupos'] or ['otros'])[0]
+        if por_grupo[g] >= 3:  # variedad: como mucho 3 del mismo tipo
+            continue
+        por_grupo[g] += 1
+        out.append(e)
+        if len(out) >= n:
+            break
+    return sorted(out, key=lambda e: (e['largo'], max(e['starts_on'], vie.isoformat()), e.get('time_text') or '', e['id']))
+
+
+def recorta(t, n):
+    return t if len(t) <= n else t[:n].rsplit(' ', 1)[0].rstrip(',;:') + '…'
+
+
+def sitio_corto(t):
+    t = re.split(r' - | \(|, ', t)[0].strip()
+    return recorta(t, 35)
+
+
+def corto(e, vie):
+    a = d(e['starts_on'])
+    dia = DIAS[max(a, vie).weekday()][:3] if not e['largo'] else 'todo el finde'
+    h = e.get('time_text') if e.get('time_text') and len(e['time_text']) < 12 and not e['largo'] else ''
+    return f"{dia}{' ' + h if h else ''}"
+
+
+vie, dom = finde()
+FINDE = {}
+for z in zonas:
+    sel = picks(z['evs'], vie, dom)
+    if len(sel) < 3:
+        continue
+    path = f"/planes/{z['path']}/este-finde/"
+    FINDE[z['path']] = path
+    msg = f"🍋 Planes este finde en {z['name']}:\n" + '\n'.join(f"• {corto(e, vie)} · {recorta(e['title'], 70)}" + (f" ({sitio_corto(e['lugar'])})" if e['lugar'] else '') for e in sel[:8]) + \
+          f"\n\nTodos: {BASE}{path}"
+    wa = 'https://wa.me/?text=' + urllib.parse.quote(msg)
+    tg = 'https://t.me/share/url?' + urllib.parse.urlencode({'url': BASE + path, 'text': msg.rsplit('\n\n', 1)[0]})
+    rango = f"del {vie.day} al {fecha(dom, False)}" if vie.month == dom.month else f"del {fecha(vie, False)} al {fecha(dom, False)}"
+    body = (f"<h1>Este finde en {esc(z['name'])}</h1><p class='lead'>Los {len(sel)} planes que no te puedes perder {rango}: variados, con fecha y lugar.</p>"
+            f'<div class="share"><a href="{esc(wa)}" rel="noopener" target="_blank">Compartir por WhatsApp</a><a href="{esc(tg)}" rel="noopener" target="_blank">Compartir por Telegram</a></div>'
+            '<ul class="ev">' + ''.join(li(e, z) for e in sel) + '</ul>'
+            f'<p><a href="/planes/{z["path"]}/">Toda la agenda de {esc(z["name"])}</a> · <a class="cta" href="{esc(zone_app(z))}">Ver en Limón</a></p>')
+    page(path, f"Qué hacer este fin de semana en {z['name']} ({rango}) · Limón",
+         f"Planes para este fin de semana en {z['name']}, {rango}: " + ', '.join(e['title'] for e in sel[:4]) + ' y más.',
+         body, crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")], app=zone_app(z))
+json.dump(FINDE, open(os.path.join(WEB, 'planes', 'finde.json'), 'w', encoding='utf-8'), ensure_ascii=False)
+print(len(FINDE), 'páginas de «este finde»')
 
 # índice de zonas
 tops = [z for z in zonas if not z.get('parent') and z['evs']]
