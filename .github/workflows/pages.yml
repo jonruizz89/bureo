@@ -3,7 +3,9 @@ name: Publicar la web
 on:
   push:
     branches: [main]
-    paths: ["web/**", ".github/workflows/pages.yml"]
+    paths: ["web/**", ".github/workflows/pages.yml", "engine/src/site.py"]
+  schedule:
+    - cron: "37 4 * * *"   # cada mañana, con los planes del día en las páginas para buscadores
   workflow_dispatch:
 
 permissions:
@@ -24,6 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Páginas para buscadores (zonas, categorías y eventos) y sitemap
+        working-directory: engine
+        run: python3 src/site.py ../web
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

@@ -3,3 +3,8 @@ engine/out/
 __pycache__/
 *.env
 .env*
+
+# páginas para buscadores: se generan al publicar (engine/src/site.py)
+web/planes/
+web/evento/
+web/sitemap.xml
