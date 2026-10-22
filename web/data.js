@@ -43,7 +43,7 @@
     for (let from = 0; ; from += 1000) {
       // zona: una ciudad, una provincia entera (sus eventos + los de sus ciudades) o un municipio de la provincia
       let q = sb.from('events').select(cols).gte('ends_on', today);
-      q = C.muni ? q.eq('city_id', C.city).eq('district', C.muni) : q.in('city_id', C.scope || [C.city]);
+      q = q.in('city_id', C.scope || [C.city]);  // con un municipio elegido también: sus alrededores salen detrás
       const r = await q.order('starts_on').order('id').range(from, from + 999);
       if (r.error) throw r.error;
       out.push(...r.data);
@@ -409,7 +409,7 @@
   }
 
   async function loadCities() {
-    const r = await sb.from('cities').select('id,name,region,lat,lng,bbox,districts,stadiums,features,status,position,kind,parent').order('position');
+    const r = await sb.from('cities').select('id,name,region,lat,lng,bbox,districts,stadiums,features,status,position,kind,parent,munis').order('position');
     CITIES = r.data || [];
     const qp = new URLSearchParams(location.search);
     let saved = null; try { saved = localStorage.getItem('bureo.city'); } catch (e) { }
@@ -428,17 +428,21 @@
     }
     base = base || pick(C.city) || CITIES[0] || { id: C.city, name: 'Madrid', lat: 40.4168, lng: -3.7038, districts: [], stadiums: [], features: { calle: true } };
     const kids = CITIES.filter((c) => c.parent === base.id);
-    if (base.kind !== 'provincia' || !(base.districts || []).includes(muni) || kids.some((k) => k.name === muni)) muni = null;
+    if (base.kind !== 'provincia' || !((base.districts || []).includes(muni) || (base.munis || {})[muni]) || kids.some((k) => k.name === muni)) muni = null;
     C.city = base.id; C.muni = muni; C.scope = [base.id].concat(kids.map((k) => k.id));
     C.names = Object.fromEntries(kids.map((k) => [k.id, k.name]));
-    if (muni) CITY = Object.assign({}, base, { name: muni, muni, province: base.name, districts: [], features: {}, stadiums: [] });
+    if (muni) {
+      // un municipio: se cargan los planes de toda la provincia y la app enseña los del pueblo y, después, los de alrededor por distancia
+      const ll = (base.munis || {})[muni];
+      CITY = Object.assign({}, base, { name: muni, muni, province: base.name, districts: [], features: {}, stadiums: [] }, ll ? { lat: ll[0], lng: ll[1], muniCenter: true } : {});
+    }
     else if (base.kind === 'provincia') CITY = Object.assign({}, base, { districts: [...new Set((base.districts || []).concat(kids.map((k) => k.name)))].sort((a, b) => a.localeCompare(b, 'es')) });
     else CITY = base;
   }
   // centro de un municipio sin fila propia: la media de sus planes situados
   function centerOn(evs) {
-    const pts = evs.filter((e) => e.lat && e.lng);
-    if (!CITY.muni || !pts.length) return;
+    const pts = evs.filter((e) => e.lat && e.lng && e.distrito === CITY.muni);
+    if (!CITY.muni || CITY.muniCenter || !pts.length) return;
     CITY.lat = pts.reduce((a, e) => a + e.lat, 0) / pts.length; CITY.lng = pts.reduce((a, e) => a + e.lng, 0) / pts.length;
   }
   // texto leído de la ficha original de un evento sin descripción (columna details, se rellena cada noche)

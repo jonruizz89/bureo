@@ -218,7 +218,7 @@ def main(cid):
         if len(part) < 1000:
             break
     geo = Geocoder(city, known, MAX_GEO)
-    placed = 0
+    placed, mll = 0, {}
     for e in eventos:
         if not (e.get('lat') and e.get('lng')) and e.get('lugar'):
             g = geo.find(e['lugar'], e.get('direccion') if e.get('direccion') != e.get('lugar') else None)
@@ -233,12 +233,18 @@ def main(cid):
         e.setdefault('distrito', None)
         e['cats'] = []
         e['descripcion'] = (e.get('descripcion') or '')[:420]
+        if prov and e.get('municipio') and e.get('muni_ll'):
+            mll.setdefault(e['municipio'], [round(x, 4) for x in e['muni_ll']])
         for k in ('municipio', 'url', 'direccion', 'tipo', 'muni_ll'):
             e.pop(k, None)
     geo.save()
     if prov:  # el selector y el filtro «municipio» muestran los pueblos con planes
         munis = sorted({e['distrito'] for e in eventos if e.get('distrito')}, key=fold)
-        sb('PATCH', f'cities?id=eq.{cid}', {'districts': munis}, 'return=minimal')
+        # y el mapa de todos los municipios con su centro (para «alrededores» en los pueblos sin planes): solo se añaden
+        todos = dict(city.get('munis') or {})
+        nuevos = {k: v for k, v in mll.items() if k not in todos and fold(k) not in city.get('_children', set())}
+        todos.update(nuevos)
+        sb('PATCH', f'cities?id=eq.{cid}', {'districts': munis, 'munis': todos}, 'return=minimal')
     out = os.path.join(os.environ.get('BUREO_OUT', 'out'), cid)
     os.makedirs(out, exist_ok=True)
     meta = {'ciudad': city['name'], 'generado': dt.datetime.now().isoformat(timespec='minutes'), 'por_fuente': per,

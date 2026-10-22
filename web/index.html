@@ -642,8 +642,28 @@ function startApp(DATA, TAX, sync) {
   const startHour = e => { const m = String(e.hora || '').match(/(\d{1,2})[:.h](\d{2})/); return m ? +m[1] + m[2] / 60 : null; };
   const minPrice = e => { if (e.gratis) return 0; const m = String(e.precio || '').replace(',', '.').match(/(\d+(?:\.\d+)?)\s*(?:€|euros?)/i) || String(e.precio || '').match(/^\D{0,12}(\d+(?:[.,]\d+)?)/); return m ? parseFloat(m[1]) : null; };
   const km = (a, b) => { const R = 6371, r = Math.PI / 180, dLa = (b[0] - a[0]) * r, dLo = (b[1] - a[1]) * r; const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  // ---------- municipio elegido: sus planes primero y después los de alrededor, del más cercano al más lejano
+  const ZONE = CITY.muni ? { name: CITY.muni, c: [CITY.lat, CITY.lng], r: 40 } : null;
+  const zkm = e => !ZONE ? 0 : e.distrito === ZONE.name ? 0 : e.lat ? km(ZONE.c, [e.lat, e.lng]) : 999;
+  const inZone = e => !ZONE || zkm(e) <= ZONE.r;
+  if (ZONE) {  // radio: el menor que junte un buen puñado de planes este mes (un pueblo pequeño mira más lejos)
+    const t0 = new Date(), t1 = new Date(Date.now() + 30 * 864e5);
+    const near = EV.filter(e => e.lat || e.distrito === ZONE.name).filter(e => occurs(e, t0, t1)).map(zkm);
+    ZONE.own = near.filter(d => d === 0).length;
+    ZONE.r = [5, 10, 15, 25, 40].find(r => near.filter(d => d <= r).length >= 40) || 40;
+  }
+  // orden dentro de una lista con municipio: primero los del pueblo; los de fuera, por distancia (redondeada a 2 km) y luego como venían
+  const zoneSort = (x, y, rest) => !ZONE ? rest : (zkm(x) > 0) - (zkm(y) > 0) || (zkm(x) > 0 ? Math.round(zkm(x) / 2) - Math.round(zkm(y) / 2) : 0) || rest;
+  function zoneNote() {
+    if (!ZONE) return '';
+    const next = [5, 10, 15, 25, 40, 80].find(r => r > ZONE.r);
+    const wider = next ? ` <button class="btnlink" data-zone-wider="${next}">Ampliar a ${next} km</button>` : '';
+    return `<p class="note" style="margin:6px 0 10px">${ZONE.own ? `Primero los planes de ${esc(ZONE.name)} y después los de alrededor (hasta ${ZONE.r} km), del más cercano al más lejano.`
+      : `${esc(ZONE.name)} no tiene planes publicados estos días: te enseñamos los de alrededor (hasta ${ZONE.r} km), del más cercano al más lejano.`}${wider}</p>`;
+  }
   const nFilters = () => [F.dist, F.near && F.pos, F.franja, F.dias, F.precio].filter(Boolean).length;
   function passF(e, occ) {
+    if (ZONE && !F.dist && !(F.near && F.pos) && !inZone(e)) return false;
     if (F.dist && e.distrito !== F.dist) return false;
     if (F.near && F.pos) { if (!e.lat || km(F.pos, [e.lat, e.lng]) > F.near) return false; }
     if (F.franja) {
@@ -793,7 +813,7 @@ function startApp(DATA, TAX, sync) {
         <div class="body">
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
           <div class="meta">${esc(whenText(e, occ))}</div>
-          <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}${userPos && e.lat ? ` · <span class="dist">a ${fmtDist(km(userPos, [e.lat, e.lng]))}</span>` : ''}</div>
+          <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}${userPos && e.lat ? ` · <span class="dist">a ${fmtDist(km(userPos, [e.lat, e.lng]))}</span>` : ''}${ZONE && zkm(e) > 0 && zkm(e) < 999 ? ` · <span class="dist">${e.distrito && !(e.lugar || '').includes(e.distrito) ? esc(e.distrito) + ', ' : ''}a ${fmtDist(zkm(e))} de ${esc(ZONE.name)}</span>` : ''}</div>
           ${streetWarn(e, occ)}${rainWarn(e, occ)}${crewHtml(e)}${friendsHtml(e)}
           ${e.serie ? `<button class="serie link" data-f-serie="${esc(e.serie)}" aria-label="Ver todo el ciclo: ${esc(e.serie)}">${esc(e.serie)} ›</button>` : ''}
         </div></div>
@@ -1624,7 +1644,7 @@ function startApp(DATA, TAX, sync) {
         const kidNames = new Set(kids.map(k => k.name));
         groups.push({ id: c.id, name: c.name, draft: c.status !== 'publicada', options: [{ v: c.id, t: 'Toda ' + c.name }]
           .concat(kids.map(k => ({ v: k.id, t: k.name + (k.status !== 'publicada' ? ' (borrador)' : '') })))
-          .concat((c.districts || []).filter(d => !kidNames.has(d)).map(d => ({ v: c.id + '|' + d, t: d }))) });
+          .concat([...new Set((c.districts || []).concat(Object.keys(c.munis || {})))].filter(d => !kidNames.has(d)).sort((a, b) => a.localeCompare(b, 'es')).map(d => ({ v: c.id + '|' + d, t: d }))) });
       } else groups.push({ id: c.id, name: c.name, draft: c.status !== 'publicada', options: [{ v: c.id, t: c.name }] });
     }
     return groups;
@@ -2107,11 +2127,11 @@ function startApp(DATA, TAX, sync) {
         const s = (e.unico ? 3 : 0) + (e.destacado ? 2 : 0) + (e.fuentes.length > 1 ? 1 : 0);
         items.push({ e, occ, s });  // en pueblos con pocos destacados, detrás van los demás por fecha
       }
-      items.sort((x, y) => y.s - x.s || x.occ.date - y.occ.date);
+      items.sort((x, y) => zoneSort(x.e, y.e, y.s - x.s || x.occ.date - y.occ.date));
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
       logList(items.slice(0, state.ptShown).map(x => x.e.id));
-      $('pt-list').innerHTML = streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
+      $('pt-list').innerHTML = zoneNote() + streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -2121,6 +2141,7 @@ function startApp(DATA, TAX, sync) {
     for (const e of EV) {
       const occ = occurs(e, a, b); if (!occ || !passF(e, occ)) continue;
       const sc = score(e); if (sc.s < 1.5) continue;
+      if (ZONE) sc.s -= Math.min(2, zkm(e) / 10);  // a igualdad de gustos, antes lo cercano
       items.push({ e, occ, sc });
     }
     items.sort((x, y) => (y.sc.s - x.sc.s) || (x.occ.date - y.occ.date));
@@ -2175,7 +2196,7 @@ function startApp(DATA, TAX, sync) {
   function setTaste(t) { taste = t; store.set('taste', taste); Object.keys(aiReco).forEach(k => delete aiReco[k]); }
 
   function renderUnicos() {
-    const list = EV.filter(e => e.unico && !isDismissed(e) && parse(e.fin) >= today).sort((a, b) => a.inicio.localeCompare(b.inicio));
+    const list = EV.filter(e => e.unico && !isDismissed(e) && parse(e.fin) >= today && inZone(e)).sort((a, b) => zoneSort(a, b, a.inicio.localeCompare(b.inicio)));
     $('un-list').innerHTML = list.map(e => card(e)).join('') || '<div class="empty">No hay planes únicos en las próximas semanas.</div>';
   }
   function renderExplorar() {
@@ -2195,11 +2216,11 @@ function startApp(DATA, TAX, sync) {
       if (q) { const h = (e.titulo + ' ' + (e.lugar || '') + ' ' + (e.distrito || '') + ' ' + (e.serie || '') + ' ' + (e.temas || []).join(' ') + ' ' + e.cats.map(labelOf).join(' ') + ' ' + (e.descripcion || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); if (!h.includes(q)) continue; }
       res.push({ e, occ });
     }
-    res.sort((x, y) => x.occ.date - y.occ.date);
+    res.sort((x, y) => zoneSort(x.e, y.e, x.occ.date - y.occ.date));
     const f = state.filter;
     $('ex-active').innerHTML = f ? `<button class="filterchip" id="ex-clear" aria-label="Quitar filtro">${esc(f.kind === 'cat' ? labelOf(f.value) : f.kind === 'id' ? f.label : f.value)} <span aria-hidden="true">✕</span></button>` : '';
     $('ex-count').textContent = res.length + (res.length === 1 ? ' evento' : ' eventos');
-    $('ex-list').innerHTML = res.slice(0, state.exShown).map(x => card(x.e, { occ: x.occ })).join('') || '<div class="empty">Ningún evento con esos filtros.</div>';
+    $('ex-list').innerHTML = (res.length ? zoneNote() : '') + (res.slice(0, state.exShown).map(x => card(x.e, { occ: x.occ })).join('') || '<div class="empty">Ningún evento con esos filtros.</div>');
     $('ex-more').hidden = res.length <= state.exShown;
   }
   function renderAgenda() {
@@ -2251,9 +2272,9 @@ function startApp(DATA, TAX, sync) {
     }
   }
   function renderAll() {
-    $('stamp').innerHTML = `<button class="citybtn" id="city-btn" aria-haspopup="dialog" aria-label="Cambiar de ciudad (ahora ${esc(CITY.name)})">${esc(CITY.name)} <span aria-hidden="true">▾</span></button> · ${META.eventos.toLocaleString('es-ES')} eventos`;
-    document.querySelectorAll('.n-unicos').forEach(n => { n.textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || ''; });
-    $('n-unicos').textContent = EV.filter(e => e.unico && parse(e.fin) >= today).length || '';
+    $('stamp').innerHTML = `<button class="citybtn" id="city-btn" aria-haspopup="dialog" aria-label="Cambiar de ciudad (ahora ${esc(CITY.name)})">${esc(CITY.name)} <span aria-hidden="true">▾</span></button> · ${(ZONE ? EV.filter(inZone).length : META.eventos).toLocaleString('es-ES')} eventos`;
+    document.querySelectorAll('.n-unicos').forEach(n => { n.textContent = EV.filter(e => e.unico && parse(e.fin) >= today && inZone(e)).length || ''; });
+    $('n-unicos').textContent = EV.filter(e => e.unico && parse(e.fin) >= today && inZone(e)).length || '';
     renderFilters();
     renderAgenda();
     $('n-calle').textContent = streets.length ? (cutsOn(today).filter(x => x.mine).length || '') : '';
@@ -2396,6 +2417,7 @@ function startApp(DATA, TAX, sync) {
     }
     if (ev.target.closest('[data-sheet-close]')) { closeSheets(); return; }
     if (ev.target.closest('#city-btn') || ev.target.closest('[data-zone-pick]')) { openZone(); return; }
+    if (ev.target.closest('[data-zone-wider]')) { ZONE.r = +ev.target.closest('[data-zone-wider]').dataset.zoneWider; renderAll(); return; }
     if (ev.target.closest('[data-zone-locate]')) { locateZone(ev.target.closest('[data-zone-locate]')); return; }
     if (ev.target.closest('[data-zone-hint-x]')) { store.set('zoneAsked', 1); $('zone-hint').hidden = true; return; }
     if (ev.target.closest('[data-zone-go]')) { const v = $('zone-m').value; if (v !== window.limonCity.zone()) window.limonCity.set(v); else closeSheets(); return; }
