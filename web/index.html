@@ -349,6 +349,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <h1 id="pt-h"></h1>
     <p class="lead" id="pt-lead"></p>
+    <div id="new-hint"></div>
     <div id="zone-hint" hidden></div>
     <div class="seg" role="group" aria-label="Cuándo">
       <button class="pill" data-when="semana">Esta semana</button>
@@ -2178,6 +2179,7 @@ function startApp(DATA, TAX, sync) {
       <div><b>✨ ${n} ${n === 1 ? 'plan nuevo' : 'planes nuevos'}</b> desde tu última visita.</div><button class="btn" data-nuevos-ver>Verlos</button></div>`;
   }
   function renderParaTi() {
+    $('new-hint').innerHTML = newBanner();
     const [a, b] = range(state.when);
     if (!Object.values(prefs).some(v => v === 1) && !Object.values(learned).some(v => v >= 1) && !(taste && ((taste.categorias || []).length || (taste.temas || []).length)) && !Object.keys(FRIENDS).length && !TOPICS.length) {
       const items = [];
@@ -2192,7 +2194,7 @@ function startApp(DATA, TAX, sync) {
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
       logList(items.slice(0, state.ptShown).map(x => x.e.id));
-      $('pt-list').innerHTML = newBanner() + shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
+      $('pt-list').innerHTML = shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
@@ -2215,7 +2217,7 @@ function startApp(DATA, TAX, sync) {
     const html = (dated.length ? `<h2>Con fecha</h2>` + dated.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '') +
       (going.length ? `<h2>En curso: exposiciones y ciclos</h2>` + going.map(x => card(x.e, { occ: x.occ, why: x.sc.hits })).join('') : '');
     logList(top.map(x => x.e.id));
-    $('pt-list').innerHTML = newBanner() + shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
+    $('pt-list').innerHTML = shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + friendsBlock(a, b) + aiBlock() + (html ? '<h2>Todo lo que encaja</h2>' + html.replace('<h2>Con fecha</h2>', '') : '<div class="empty">No hay eventos que encajen con tus intereses en estas fechas.</div>');
     $('pt-more').hidden = items.length <= state.ptShown;
     document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
   }
