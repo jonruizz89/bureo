@@ -669,6 +669,11 @@ function startApp(DATA, TAX, sync) {
   // ---------- planes nuevos: los que no habías visto en este dispositivo antes de esta visita.
   // «Visto» = la ficha estuvo en pantalla. La lista de vistos se guarda por zona y solo en este dispositivo.
   // La primera vez en una zona no sabemos qué viste: cuentan como nuevos los planes que entraron en Limón en las últimas 24 horas.
+  // ?nuevos=reset: olvida lo visto en este dispositivo (vuelven a salir como nuevos los planes de las últimas 24 h)
+  if (new URLSearchParams(location.search).get('nuevos') === 'reset') {
+    try { Object.keys(localStorage).filter(k => /^bureo\.seen2?\./.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+    history.replaceState(null, '', location.pathname);
+  }
   const SEEN_KEY = 'seen2.' + window.limonCity.zone();
   const seen0 = store.get(SEEN_KEY, null), first = !(Array.isArray(seen0) && seen0.length);
   const reciente0 = e => e.alta && Date.now() - new Date(e.alta).getTime() < 864e5;
