@@ -1,7 +1,7 @@
 // Limón · service worker: abre al instante y sin conexión, y recibe los avisos push.
 // Estrategia: la página y los datos, primero la red y si falla la copia; los ficheros propios, la copia y se renueva en segundo plano;
 // las librerías externas (con versión fija), la copia. Los mapas, el tiempo y las funciones del servidor no se guardan.
-const VERSION = 'limon-v2';  // v2: librerías con huella (SRI): se descartan las copias antiguas
+const VERSION = 'limon-v3';  // v3: ficheros con ?v= de versión; se descartan las copias antiguas
 const SHELL = ['./', 'index.html', 'data.js', 'config.js', 'limon.svg', 'limon-180.png', 'limon-192.png', 'manifest.webmanifest'];
 const CDN = /^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

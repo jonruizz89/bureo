@@ -536,8 +536,9 @@ table.cov td.n, table.cov th.n { text-align: right }
 </nav>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js?v=sri" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="config.js"></script>
-<script src="data.js"></script>
+<!-- ?v=: cambia con cada versión del código para que ningún móvil se quede con una copia vieja (súbelo al tocar estos ficheros) -->
+<script src="config.js?v=20261023b"></script>
+<script src="data.js?v=20261023b"></script>
 <script>
 function startApp(DATA, TAX, sync) {
   const EV = DATA.eventos;
@@ -673,18 +674,19 @@ function startApp(DATA, TAX, sync) {
   // La primera vez en una zona no sabemos qué viste: cuentan como nuevos los planes que entraron en Limón en las últimas 24 horas.
   // ?nuevos=reset: olvida lo visto en este dispositivo (vuelven a salir como nuevos los planes de las últimas 24 h)
   if (new URLSearchParams(location.search).get('nuevos') === 'reset') {
-    try { Object.keys(localStorage).filter(k => /^bureo\.seen2?\./.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { }
+    try { Object.keys(localStorage).filter(k => /^bureo\.seen\d?\./.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { }
     history.replaceState(null, '', location.pathname);
   }
-  const SEEN_KEY = 'seen2.' + window.limonCity.zone();
+  const SEEN_KEY = 'seen3.' + window.limonCity.zone();
   const seen0 = store.get(SEEN_KEY, null), first = !(Array.isArray(seen0) && seen0.length);
+  const sinAlta = EV.length && !EV.some(e => e.alta);  // datos de una versión vieja: no se puede saber qué es nuevo, mejor no guardar nada
   const reciente0 = e => e.alta && Date.now() - new Date(e.alta).getTime() < 864e5;
   const muchos = EV.filter(reciente0).length > EV.length * 0.3;  // zona recién cargada entera: no tendría sentido marcarlo todo
   const reciente = e => !muchos && reciente0(e);
   const NEW = new Set(EV.filter(e => first ? reciente(e) : !seen0.includes(e.id)).map(e => e.id));
   const seenNow = new Set(first ? EV.filter(e => !reciente(e)).map(e => e.id) : seen0.filter(id => BYID[id]));
   let seenTimer = null;
-  const saveSeen = () => { clearTimeout(seenTimer); seenTimer = setTimeout(() => store.set(SEEN_KEY, [...seenNow]), 1200); };
+  const saveSeen = () => { if (sinAlta) return; clearTimeout(seenTimer); seenTimer = setTimeout(() => store.set(SEEN_KEY, [...seenNow]), 1200); };
   saveSeen();
   const seenObs = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(x => {
     if (!x.isIntersecting) return; const id = x.target.dataset.eid; seenObs.unobserve(x.target);
