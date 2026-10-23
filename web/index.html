@@ -1714,7 +1714,7 @@ function startApp(DATA, TAX, sync) {
     catch (e) { if (btn) { btn.disabled = false; btn.textContent = t; } toast('Sin permiso de ubicación no puedo saber dónde estás. Elige la zona a mano.'); return; }
     if (btn) { btn.disabled = false; btn.textContent = t; }
     keepDist(); askPos(true);
-    if (!z) { $('zone-hint').hidden = true; toast('Aún no estamos en tu zona: de momento, Madrid, Euskadi y Zaragoza. ¡Iremos añadiendo más!'); return; }
+    if (!z) { $('zone-hint').hidden = true; toast('Aún no estamos en tu zona: de momento, Madrid, Euskadi, Zaragoza y Gijón. ¡Iremos añadiendo más!'); return; }
     if (z === window.limonCity.zone()) { $('zone-hint').hidden = true; closeSheets(); toast('Ya estás viendo los planes de ' + CITY.name + '.'); return; }
     window.limonCity.set(z);
   }
@@ -1738,7 +1738,7 @@ function startApp(DATA, TAX, sync) {
       <label class="note" id="zone-m-wrap" style="display:flex;flex-direction:column;gap:4px">Municipio
         <select class="search" id="zone-m"></select></label>
       <div class="seg"><button class="btn" data-zone-go>Ver planes</button><button class="btn ghost" data-zone-locate>📍 Donde estoy</button></div>
-      <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las zonas.${isAdm ? ' Las zonas en borrador solo las ves tú.' : ''} De momento: Madrid, Euskadi (Bizkaia, Gipuzkoa y Araba) y Zaragoza; iremos añadiendo más.</p>`);
+      <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las zonas.${isAdm ? ' Las zonas en borrador solo las ves tú.' : ''} De momento: Madrid, Euskadi (Bizkaia, Gipuzkoa y Araba), Zaragoza y Gijón; iremos añadiendo más.</p>`);
     const fill = () => {
       const g = groups.find(x => x.id === $('zone-p').value) || groups[0];
       $('zone-m').innerHTML = g.options.map(o => `<option value="${esc(o.v)}" ${o.v === zone ? 'selected' : ''}>${esc(o.t)}</option>`).join('');

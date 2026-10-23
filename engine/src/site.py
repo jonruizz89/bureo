@@ -325,7 +325,7 @@ for z in tops:
     body += f'<h2><a href="/planes/{z["path"]}/">{esc(z["name"])}</a></h2>'
     if z['kids']:
         body += '<div class="chips">' + ''.join(f'<a href="/planes/{k["path"]}/">{esc(k["name"])}</a>' for k in sorted(z['kids'], key=lambda k: slug(k['name'])) if k['evs']) + '</div>'
-page('/planes/', 'Planes por zona · Limón', 'Qué hacer en Madrid, Zaragoza, Bilbao, Donostia, Vitoria-Gasteiz y toda Euskadi: agenda de eventos, conciertos, teatro y actividades, actualizada cada día.', body)
+page('/planes/', 'Planes por zona · Limón', 'Qué hacer en Madrid, Zaragoza, Gijón, Bilbao, Donostia, Vitoria-Gasteiz y toda Euskadi: agenda de eventos, conciertos, teatro y actividades, actualizada cada día.', body)
 
 # eventos
 for e in evs:
