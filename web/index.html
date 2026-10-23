@@ -2343,7 +2343,7 @@ function startApp(DATA, TAX, sync) {
     const nav = (t === 'unicos') ? 'parati' : (t === 'fuentes') ? 'intereses' : t;
     tabs.forEach(x => { $('v-' + x).hidden = x !== t; $('t-' + x).setAttribute('aria-selected', x === nav); });
     document.querySelectorAll('[data-bnav]').forEach(b => { if (b.dataset.bnav === nav) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-    store.set('tab', t);
+    try { sessionStorage.setItem('bureo.tab', t); } catch (e) { }  // solo mientras la app sigue abierta
     renderAll(); window.scrollTo(0, 0);
   }
   tabs.forEach(t => $('t-' + t).addEventListener('click', () => go(t)));
@@ -2536,7 +2536,9 @@ function startApp(DATA, TAX, sync) {
   });
   // enlaces desde los correos: ?ev=e123 abre ese evento, ?tab=calle abre una pestaña, ?baja=…&k=… da de baja un aviso
   const QS = new URLSearchParams(location.search);
-  const t0 = QS.get('tab') || store.get('tab', 'parati');
+  // al abrir la app (tras cerrarla) se empieza en Para ti; al recargar sin cerrarla (cambio de zona, versión nueva) se sigue donde estabas
+  let tabSes = null; try { tabSes = sessionStorage.getItem('bureo.tab'); } catch (e) { }
+  const t0 = QS.get('tab') || tabSes || 'parati';
   const ev0 = QS.get('ev') && BYID[QS.get('ev')];
   if (ev0) { state.filter = { kind: 'id', value: ev0.id, label: ev0.titulo }; state.open[ev0.id] = true; $('ex-when').value = 'todo'; go('explorar'); }
   else go(tabs.includes(t0) ? t0 : 'parati');
