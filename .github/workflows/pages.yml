@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Versión visible en la app (para saber si un móvil tiene la última)
-        run: sed -i "s/__VER__/$(TZ=Europe/Madrid date +'%d-%m %H:%M') · ${GITHUB_SHA::7}/" web/index.html
+        run: sed -i "s/Versión __VER__/Versión $(TZ=Europe/Madrid date +'%d-%m %H:%M') · ${GITHUB_SHA::7}/" web/index.html
       - name: Páginas para buscadores (zonas, categorías y eventos) y sitemap
         working-directory: engine
         run: python3 src/site.py ../web

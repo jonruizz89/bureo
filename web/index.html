@@ -2613,7 +2613,7 @@ function startApp(DATA, TAX, sync) {
   }, true);
   renderSocialAll(); loadIdeas(); loadAffinity(); loadPast();
   renderZoneHint();
-  { const v = $('ver'); if (v && v.textContent.includes('__VER__')) v.textContent = 'Versión en desarrollo'; }
+  { const v = $('ver'); if (v && v.textContent.includes('__' + 'VER__')) v.textContent = 'Versión en desarrollo'; }  // partido para que la sustitución al publicar no lo toque
   document.addEventListener('input', ev => { if (ev.target.id === 'idea-title') { IDEAS_SIM = similarIdeas(ev.target.value); const b = $('idea-sim'); if (b) b.innerHTML = IDEAS_SIM.length ? '<p class="note" style="margin:0">¿Es alguna de estas? Mejor vótala para que sume:</p>' + IDEAS_SIM.map(ideaRow).join('') : ''; } });
   if (QS.get('fui')) go('parati');
   if (QS.get('ideas') !== null) { go('intereses'); openFold('ideas', true); setTimeout(() => { const b = $('ideas'); if (b) b.scrollIntoView({ behavior: 'smooth' }); }, 400); }
