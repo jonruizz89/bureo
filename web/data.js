@@ -38,7 +38,7 @@
   async function loadEvents() {
     const today = ymd(new Date());
     const cols = 'id,city_id,title,description,starts_on,ends_on,time_text,district,price_text,is_free,image_url,organizer_url,' +
-      'is_unique,is_featured,ai_unique,topics,series,lat,lng,venues(name),event_sessions(on_date),event_categories(category_id),event_sources(url,sources(name))';
+      'is_unique,is_featured,ai_unique,topics,series,lat,lng,first_seen_at,venues(name),event_sessions(on_date),event_categories(category_id),event_sources(url,sources(name))';
     const out = [];
     for (let from = 0; ; from += 1000) {
       // zona: una ciudad, una provincia entera (sus eventos + los de sus ciudades) o un municipio de la provincia
@@ -66,6 +66,7 @@
       imagen: e.image_url,
       web_organizador: e.organizer_url,
       unico: e.is_unique || e.ai_unique,
+      alta: e.first_seen_at,  // cuándo entró en Limón
       temas: e.topics || [],
       serie: e.series,
       destacado: e.is_featured,

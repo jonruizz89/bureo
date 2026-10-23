@@ -668,10 +668,14 @@ function startApp(DATA, TAX, sync) {
   }
   // ---------- planes nuevos: los que no habías visto en este dispositivo antes de esta visita.
   // «Visto» = la ficha estuvo en pantalla. La lista de vistos se guarda por zona y solo en este dispositivo.
-  const SEEN_KEY = 'seen.' + window.limonCity.zone();
-  const seen0 = store.get(SEEN_KEY, null);
-  const NEW = new Set(Array.isArray(seen0) && seen0.length ? EV.filter(e => !seen0.includes(e.id)).map(e => e.id) : []);
-  const seenNow = new Set((Array.isArray(seen0) && seen0.length ? seen0 : EV.map(e => e.id)).filter(id => BYID[id]));  // la primera vez, todo cuenta como visto
+  // La primera vez en una zona no sabemos qué viste: cuentan como nuevos los planes que entraron en Limón en las últimas 24 horas.
+  const SEEN_KEY = 'seen2.' + window.limonCity.zone();
+  const seen0 = store.get(SEEN_KEY, null), first = !(Array.isArray(seen0) && seen0.length);
+  const reciente0 = e => e.alta && Date.now() - new Date(e.alta).getTime() < 864e5;
+  const muchos = EV.filter(reciente0).length > EV.length * 0.3;  // zona recién cargada entera: no tendría sentido marcarlo todo
+  const reciente = e => !muchos && reciente0(e);
+  const NEW = new Set(EV.filter(e => first ? reciente(e) : !seen0.includes(e.id)).map(e => e.id));
+  const seenNow = new Set(first ? EV.filter(e => !reciente(e)).map(e => e.id) : seen0.filter(id => BYID[id]));
   let seenTimer = null;
   const saveSeen = () => { clearTimeout(seenTimer); seenTimer = setTimeout(() => store.set(SEEN_KEY, [...seenNow]), 1200); };
   saveSeen();
@@ -2352,7 +2356,8 @@ function startApp(DATA, TAX, sync) {
   tabs.forEach(t => $('t-' + t).addEventListener('click', () => go(t)));
   document.querySelectorAll('[data-when]').forEach(b => b.addEventListener('click', () => { state.when = b.dataset.when; state.ptShown = 12; renderParaTi(); }));
   $('pt-free').addEventListener('click', () => setF('precio', 'gratis'));
-  document.querySelectorAll('[data-nuevos]').forEach(b => b.addEventListener('click', () => { F.nuevos = !F.nuevos; renderAll(); }));
+  // en Para ti solo se ven los mejores de esta semana; los nuevos se repasan todos, por fecha, en Explorar
+  document.querySelectorAll('[data-nuevos]').forEach(b => b.addEventListener('click', () => { F.nuevos = !F.nuevos; if (F.nuevos && state.tab === 'parati') go('explorar'); else renderAll(); }));
   $('pt-more').addEventListener('click', () => { state.ptShown += 12; renderParaTi(); });
   $('ex-more').addEventListener('click', () => { state.exShown += 20; renderExplorar(); });
   ['ex-q', 'ex-grp', 'ex-when'].forEach(id => $(id).addEventListener('input', () => { state.exShown = 20; renderExplorar(); }));
