@@ -154,7 +154,7 @@ def page(path, title, desc, body, crumbs=(), ld=None, app='/'):
 <header><a class="brand" href="/"><img src="/limon.svg" alt="" width="30" height="30">limón</a><a class="cta" href="{esc(app)}">Abrir la app</a></header>
 <main>{f'<nav class="crumbs" aria-label="Estás en">{bc}</nav>' if bc else ''}{body}</main>
 <footer>Limón reúne los planes de tu zona de agendas públicas y webs de organizadores; comprueba siempre la información en la fuente.
-Datos de la agenda municipal de Madrid (datos.madrid.es) y de Kulturklik (Open Data Euskadi, CC BY 4.0), entre otros.
+Datos de la agenda municipal de Madrid (datos.madrid.es) de Kulturklik (Open Data Euskadi, CC BY 4.0) y de la agenda del Ayuntamiento de Zaragoza, entre otros.
 <br><a href="/planes/">Todas las zonas</a> · <a href="/privacidad.html">Privacidad</a> · <a href="/condiciones.html">Condiciones</a></footer>
 </body></html>"""
     out = os.path.join(WEB, path.strip('/'), 'index.html')
@@ -325,7 +325,7 @@ for z in tops:
     body += f'<h2><a href="/planes/{z["path"]}/">{esc(z["name"])}</a></h2>'
     if z['kids']:
         body += '<div class="chips">' + ''.join(f'<a href="/planes/{k["path"]}/">{esc(k["name"])}</a>' for k in sorted(z['kids'], key=lambda k: slug(k['name'])) if k['evs']) + '</div>'
-page('/planes/', 'Planes por zona · Limón', 'Qué hacer en Madrid, Bilbao, Donostia, Vitoria-Gasteiz y toda Euskadi: agenda de eventos, conciertos, teatro y actividades, actualizada cada día.', body)
+page('/planes/', 'Planes por zona · Limón', 'Qué hacer en Madrid, Zaragoza, Bilbao, Donostia, Vitoria-Gasteiz y toda Euskadi: agenda de eventos, conciertos, teatro y actividades, actualizada cada día.', body)
 
 # eventos
 for e in evs:
