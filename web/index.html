@@ -361,6 +361,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <div class="seg" role="group" aria-label="Filtros rápidos">
       <button class="pill" id="pt-free" aria-pressed="false">Solo gratis</button>
       <button class="pill" data-nuevos aria-pressed="false" hidden>✨ Nuevos<span class="n-nuevos"></span></button>
+      <button class="pill" data-fventaja aria-pressed="false" hidden>🎟️ Con ventajas para mí</button>
       <button class="pill" data-ftoggle="pt" aria-expanded="false">Filtros<span class="fcount"></span></button>
     </div>
     <div class="panel fpanel" id="pt-fpanel" hidden></div>
@@ -432,7 +433,7 @@ table.cov td.n, table.cov th.n { text-align: right }
         <option value="todo">Todo lo disponible</option>
       </select>
     </div>
-    <div class="seg"><button class="pill" id="ex-free" aria-pressed="false">Solo gratis</button><button class="pill" data-nuevos aria-pressed="false" hidden>✨ Nuevos<span class="n-nuevos"></span></button><button class="pill" data-ftoggle="ex" aria-expanded="false">Filtros<span class="fcount"></span></button></div>
+    <div class="seg"><button class="pill" id="ex-free" aria-pressed="false">Solo gratis</button><button class="pill" data-nuevos aria-pressed="false" hidden>✨ Nuevos<span class="n-nuevos"></span></button><button class="pill" data-fventaja aria-pressed="false" hidden>🎟️ Con ventajas para mí</button><button class="pill" data-ftoggle="ex" aria-expanded="false">Filtros<span class="fcount"></span></button></div>
     <div class="panel fpanel" id="ex-fpanel" hidden></div>
     <div id="ex-active" class="seg"></div>
     <p class="note" id="ex-count"></p>
@@ -698,6 +699,7 @@ function startApp(DATA, TAX, sync) {
   const nNew = () => EV.filter(e => NEW.has(e.id) && inZone(e) && parse(e.fin) >= today && !isDismissed(e)).length;
   const nFilters = () => [F.dist, F.near && F.pos, F.franja, F.dias, F.precio].filter(Boolean).length;
   function passF(e, occ) {
+    if (F.ventaja && ventajas.length && !(e.gratis || ventajaHit(e))) return false;
     if (F.nuevos && !NEW.has(e.id)) return false;
     if (ZONE && !F.dist && !(F.near && F.pos) && !inZone(e)) return false;
     if (F.dist && e.distrito !== F.dist) return false;
@@ -731,6 +733,8 @@ function startApp(DATA, TAX, sync) {
     const nn = nNew(); if (!nn) F.nuevos = false;
     document.querySelectorAll('[data-nuevos]').forEach(b => { b.hidden = !nn; b.setAttribute('aria-pressed', !!F.nuevos); });
     document.querySelectorAll('.n-nuevos').forEach(x => { x.textContent = nn ? ' ' + nn : ''; });
+    if (!ventajas.length) F.ventaja = false;
+    document.querySelectorAll('[data-fventaja]').forEach(b => { b.hidden = !ventajas.length; b.setAttribute('aria-pressed', !!F.ventaja); b.title = 'Gratis o con descuento para: ' + VENTAJAS.filter(v => ventajas.includes(v[0])).map(v => v[1]).join(', '); });
   }
   function setF(k, v) {
     F[k] = String(F[k]) === String(v) ? (k === 'near' ? 0 : '') : (k === 'near' ? +v : v);
@@ -1964,6 +1968,7 @@ function startApp(DATA, TAX, sync) {
     if (vj) {
       ventajas = vj.checked ? ventajas.concat(vj.dataset.ventaja) : ventajas.filter(x => x !== vj.dataset.ventaja); store.set('ventajas', ventajas);
       const sb = sbx(), id = uid(); if (sb && id) sb.from('profiles').update({ ventajas }).eq('id', id);
+      renderFilters();
       renderAll(); return;
     }
     const lt = ev.target.closest('[data-li-toggle]');
@@ -2392,6 +2397,7 @@ function startApp(DATA, TAX, sync) {
   document.querySelectorAll('[data-when]').forEach(b => b.addEventListener('click', () => { state.when = b.dataset.when; state.ptShown = 12; renderParaTi(); }));
   $('pt-free').addEventListener('click', () => setF('precio', 'gratis'));
   // en Para ti solo se ven los mejores de esta semana; los nuevos se repasan todos, por fecha, en Explorar
+  document.querySelectorAll('[data-fventaja]').forEach(b => b.addEventListener('click', () => { F.ventaja = !F.ventaja; renderAll(); }));
   document.querySelectorAll('[data-nuevos]').forEach(b => b.addEventListener('click', () => { F.nuevos = !F.nuevos; if (F.nuevos && state.tab === 'parati') go('explorar'); else renderAll(); }));
   $('pt-more').addEventListener('click', () => { state.ptShown += 12; renderParaTi(); });
   $('ex-more').addEventListener('click', () => { state.exShown += 20; renderExplorar(); });
