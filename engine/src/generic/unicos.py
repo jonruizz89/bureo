@@ -46,11 +46,12 @@ def main(cid):
               '(la que lleva el nombre del festival), no cada actividad. Sé exigente: normalmente son pocos (de 5 a 40). '
               + ('Es una provincia entera: marca solo fiestas patronales y populares, festivales anuales con nombre propio, ferias y grandes citas '
                  'de cada pueblo. ' if city.get('kind') == 'provincia' else '') +
-              'Responde con marcar_unicos y los ids.')
+              'Responde con marcar_unicos y los ids, del más importante al menos.')
     out = tool_call(system, 'id|título|fechas|lugar|categorías\n' + lines, TOOL, max_tokens=4000) or {}
     valid = {e['id']: e for e in cand}
-    ids = sorted({int(i) for i in out.get('ids') or [] if int(i) in valid and not sesion(valid[int(i)]['title'])})
-    ids = ids[:MAX_UNICOS]
+    # en el orden en que los da la IA y con un tope según el tamaño de la zona (un pueblo o una ciudad pequeña no tiene 40 citas únicas)
+    tope = max(8, min(MAX_UNICOS, len(cand) // 20))
+    ids = [i for i in dict.fromkeys(int(x) for x in out.get('ids') or []) if i in valid and not sesion(valid[i]['title'])][:tope]
     if out.get('ids') is None:
         print('La IA no ha respondido; se deja como estaba'); return
     on = ','.join(map(str, ids))
