@@ -110,6 +110,8 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--quiet) }
 .tag.free { background: var(--ok-soft); color: var(--ok) }
 .tag.uni { background: var(--accent-soft); color: var(--accent-text) }
+.tag.nuevo { background: var(--accent); color: var(--accent-ink); font-weight: 600 }
+.card.nuevo { box-shadow: inset 4px 0 0 var(--accent) }
 .save { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border: 0; border-radius: 10px; background: none; cursor: pointer; color: var(--quiet); display: flex; align-items: center; justify-content: center }
 .save[aria-pressed="true"] { color: var(--accent-text) }
 .more { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px }
@@ -355,6 +357,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     </div>
     <div class="seg" role="group" aria-label="Filtros rápidos">
       <button class="pill" id="pt-free" aria-pressed="false">Solo gratis</button>
+      <button class="pill" data-nuevos aria-pressed="false" hidden>✨ Nuevos<span class="n-nuevos"></span></button>
       <button class="pill" data-ftoggle="pt" aria-expanded="false">Filtros<span class="fcount"></span></button>
     </div>
     <div class="panel fpanel" id="pt-fpanel" hidden></div>
@@ -426,7 +429,7 @@ table.cov td.n, table.cov th.n { text-align: right }
         <option value="todo">Todo lo disponible</option>
       </select>
     </div>
-    <div class="seg"><button class="pill" id="ex-free" aria-pressed="false">Solo gratis</button><button class="pill" data-ftoggle="ex" aria-expanded="false">Filtros<span class="fcount"></span></button></div>
+    <div class="seg"><button class="pill" id="ex-free" aria-pressed="false">Solo gratis</button><button class="pill" data-nuevos aria-pressed="false" hidden>✨ Nuevos<span class="n-nuevos"></span></button><button class="pill" data-ftoggle="ex" aria-expanded="false">Filtros<span class="fcount"></span></button></div>
     <div class="panel fpanel" id="ex-fpanel" hidden></div>
     <div id="ex-active" class="seg"></div>
     <p class="note" id="ex-count"></p>
@@ -663,8 +666,24 @@ function startApp(DATA, TAX, sync) {
     return `<p class="note" style="margin:6px 0 10px">${ZONE.own ? `Primero los planes de ${esc(ZONE.name)} y después los de alrededor (hasta ${ZONE.r} km), del más cercano al más lejano.`
       : `${esc(ZONE.name)} no tiene planes publicados estos días: te enseñamos los de alrededor (hasta ${ZONE.r} km), del más cercano al más lejano.`}${wider}</p>`;
   }
+  // ---------- planes nuevos: los que no habías visto en este dispositivo antes de esta visita.
+  // «Visto» = la ficha estuvo en pantalla. La lista de vistos se guarda por zona y solo en este dispositivo.
+  const SEEN_KEY = 'seen.' + window.limonCity.zone();
+  const seen0 = store.get(SEEN_KEY, null);
+  const NEW = new Set(Array.isArray(seen0) && seen0.length ? EV.filter(e => !seen0.includes(e.id)).map(e => e.id) : []);
+  const seenNow = new Set((Array.isArray(seen0) && seen0.length ? seen0 : EV.map(e => e.id)).filter(id => BYID[id]));  // la primera vez, todo cuenta como visto
+  let seenTimer = null;
+  const saveSeen = () => { clearTimeout(seenTimer); seenTimer = setTimeout(() => store.set(SEEN_KEY, [...seenNow]), 1200); };
+  saveSeen();
+  const seenObs = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(x => {
+    if (!x.isIntersecting) return; const id = x.target.dataset.eid; seenObs.unobserve(x.target);
+    if (id && !seenNow.has(id)) { seenNow.add(id); saveSeen(); }
+  }), { threshold: 0.6 }) : null;
+  function watchSeen() { if (seenObs) document.querySelectorAll('.card[data-eid]').forEach(c => { if (!seenNow.has(c.dataset.eid)) seenObs.observe(c); }); }
+  const nNew = () => EV.filter(e => NEW.has(e.id) && inZone(e) && parse(e.fin) >= today && !isDismissed(e)).length;
   const nFilters = () => [F.dist, F.near && F.pos, F.franja, F.dias, F.precio].filter(Boolean).length;
   function passF(e, occ) {
+    if (F.nuevos && !NEW.has(e.id)) return false;
     if (ZONE && !F.dist && !(F.near && F.pos) && !inZone(e)) return false;
     if (F.dist && e.distrito !== F.dist) return false;
     if (F.near && F.pos) { if (!e.lat || km(F.pos, [e.lat, e.lng]) > F.near) return false; }
@@ -694,6 +713,9 @@ function startApp(DATA, TAX, sync) {
     document.querySelectorAll('.fcount').forEach(x => { x.textContent = nFilters() || ''; });
     const fr = state.tab === 'parati';
     $('pt-free').setAttribute('aria-pressed', F.precio === 'gratis'); $('ex-free').setAttribute('aria-pressed', F.precio === 'gratis');
+    const nn = nNew(); if (!nn) F.nuevos = false;
+    document.querySelectorAll('[data-nuevos]').forEach(b => { b.hidden = !nn; b.setAttribute('aria-pressed', !!F.nuevos); });
+    document.querySelectorAll('.n-nuevos').forEach(x => { x.textContent = nn ? ' ' + nn : ''; });
   }
   function setF(k, v) {
     F[k] = String(F[k]) === String(v) ? (k === 'near' ? 0 : '') : (k === 'near' ? +v : v);
@@ -810,7 +832,7 @@ function startApp(DATA, TAX, sync) {
         ${state.inviting === e.id ? inviteForm(e) : ''}
         ${state.route && state.route[e.id] ? `<div class="routewarn">${state.route[e.id]}</div>` : ''}
       </div>` : '';
-    return `<article class="card" data-eid="${e.id}">
+    return `<article class="card${NEW.has(e.id) ? ' nuevo' : ''}" data-eid="${e.id}">
       <div class="row1">${dateBox(e, occ)}
         <div class="body">
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
@@ -819,7 +841,7 @@ function startApp(DATA, TAX, sync) {
           ${streetWarn(e, occ)}${rainWarn(e, occ)}${crewHtml(e)}${friendsHtml(e)}
           ${e.serie ? `<button class="serie link" data-f-serie="${esc(e.serie)}" aria-label="Ver todo el ciclo: ${esc(e.serie)}">${esc(e.serie)} ›</button>` : ''}
         </div></div>
-      <div class="tags">${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${(e.temas || []).slice(0, 2).map(t => `<button class="tag tema link" data-f-tema="${esc(t)}" aria-label="Más planes sobre ${esc(t)}">${esc(t)}</button>`).join('')}${cats.map(c => `<button class="tag link" data-f-cat="${esc(c)}" aria-label="Más planes de ${esc(labelOf(c))}">${esc(labelOf(c))}</button>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
+      <div class="tags">${NEW.has(e.id) ? '<span class="tag nuevo">Nuevo</span>' : ''}${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${(e.temas || []).slice(0, 2).map(t => `<button class="tag tema link" data-f-tema="${esc(t)}" aria-label="Más planes sobre ${esc(t)}">${esc(t)}</button>`).join('')}${cats.map(c => `<button class="tag link" data-f-cat="${esc(c)}" aria-label="Más planes de ${esc(labelOf(c))}">${esc(labelOf(c))}</button>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
       ${why}${more}
       <button class="save" data-save="${e.id}" aria-pressed="${isSaved}" aria-label="${isSaved ? 'Quitar de mi agenda' : 'Guardar en mi agenda'}">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
@@ -2301,6 +2323,7 @@ function startApp(DATA, TAX, sync) {
     $('b-calle').hidden = !(streets.length && cutsOn(today).some(x => x.mine));
     $('b-agenda').hidden = !saved.length;
     ({ parati: renderParaTi, calle: renderCalle, unicos: renderUnicos, explorar: renderExplorar, agenda: () => { }, intereses: renderIntereses, fuentes: renderFuentes })[state.tab]();
+    watchSeen();
   }
 
   // ---------- eventos de interfaz
@@ -2326,6 +2349,7 @@ function startApp(DATA, TAX, sync) {
   tabs.forEach(t => $('t-' + t).addEventListener('click', () => go(t)));
   document.querySelectorAll('[data-when]').forEach(b => b.addEventListener('click', () => { state.when = b.dataset.when; state.ptShown = 12; renderParaTi(); }));
   $('pt-free').addEventListener('click', () => setF('precio', 'gratis'));
+  document.querySelectorAll('[data-nuevos]').forEach(b => b.addEventListener('click', () => { F.nuevos = !F.nuevos; renderAll(); }));
   $('pt-more').addEventListener('click', () => { state.ptShown += 12; renderParaTi(); });
   $('ex-more').addEventListener('click', () => { state.exShown += 20; renderExplorar(); });
   ['ex-q', 'ex-grp', 'ex-when'].forEach(id => $(id).addEventListener('input', () => { state.exShown = 20; renderExplorar(); }));
