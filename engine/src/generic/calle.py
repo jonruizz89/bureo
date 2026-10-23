@@ -1,7 +1,7 @@
 """Pestaña «Calle» en ciudades del motor genérico: cortes, obras y eventos en la vía pública.
 
-Fuente: Tráfico Euskadi (api.euskadi.eus/traffic), que publica las incidencias de cada ayuntamiento con fechas y coordenadas
-(Bilbao = fuente 5, Vitoria-Gasteiz = 6). Se queda con lo vigente o próximo (30 días) que afecta a la calle y reemplaza las filas
+Fuentes: Tráfico Euskadi (api.euskadi.eus/traffic), que publica las incidencias de cada ayuntamiento con fechas y coordenadas
+(Bilbao = 5, Vitoria-Gasteiz = 6, Donostia = 7), y la web del Ayuntamiento de Gijón (cortes de tráfico y cambios de autobús). Se queda con lo vigente o próximo (30 días) que afecta a la calle y reemplaza las filas
 de `closures` de esa ciudad. Las ocupaciones menores (contenedores, andamios, aleros, toldos…) se descartan.
 """
 import datetime as dt, html, json, re, sys
@@ -92,8 +92,51 @@ def polish(rows, city):
     return out
 
 
+GIJON = 'https://drupal.gijon.es/es/jsonapi/node/incidencias_de_trafico'
+
+
+def gijon_rows(cid):
+    """Gijón/Xixón: cortes de tráfico y cambios de autobús que publica el Ayuntamiento en su web (Drupal JSON:API)."""
+    import urllib.parse
+    today = dt.date.today()
+    until = (today + dt.timedelta(days=30)).isoformat()
+    q = {'filter[f][condition][path]': 'field_fecha_fin_corte', 'filter[f][condition][operator]': '>=', 'filter[f][condition][value]': today.isoformat(),
+         'page[limit]': '50'}
+    url, rows = f'{GIJON}?{urllib.parse.urlencode(q)}', []
+    while url:
+        st, _, txt, _ = fetch(url, accept='application/vnd.api+json', ua=UA_API)
+        if st != 200:
+            print('Gijón', st); break
+        d = json.loads(txt)
+        for e in d.get('data') or []:
+            a = e.get('attributes') or {}
+            ini, h1 = day_time(a.get('field_fecha_inicio_corte'))
+            fin, h2 = day_time(a.get('field_fecha_fin_corte'))
+            fin = fin or ini
+            if not ini or fin < today.isoformat() or ini > until:
+                continue
+            name = nice(a.get('title') or '')
+            body = re.sub(r'<[^>]+>', ' ', html.unescape(((a.get('body') or {}).get('value') if isinstance(a.get('body'), dict) else '') or ''))
+            body = re.sub(r'\s+', ' ', body).strip()
+            lines = [x for x in a.get('field_lineas_de_autobus') or []]
+            kind = 'autobus' if lines and not TRAFFIC.search(name) else 'evento' if EVENT.search(name + ' ' + body[:200]) else 'obras' if re.search(r'obra', name + body[:200], re.I) else 'otro'
+            if h2 == '23:59':
+                h2 = None
+            alias = ((a.get('path') or {}).get('alias') or '').lstrip('/')
+            dist = a.get('field_distrito') or []
+            rows.append({'city_id': cid, 'title': name[:120], 'kind': kind, 'summary': (body or name)[:600], 'streets': streets_of(name + '. ' + body)[:4],
+                         'lines': lines[:12], 'stations': [], 'district': dist[0] if len(dist) == 1 else None,
+                         'ranges': [{'from': ini, 'to': fin, 'start': h1, 'end': h2, 'holidays': True, 'weekdays': []}],
+                         'source_url': f'https://www.gijon.es/es/{alias}' if alias else 'https://www.gijon.es/', 'source_name': 'Ayuntamiento de Gijón/Xixón', 'geom': None})
+        url = ((d.get('links') or {}).get('next') or {}).get('href')
+    print(f'{len(rows)} avisos vigentes o próximos')
+    return rows
+
+
 def main(cid):
     city = load_city(cid)
+    if cid == 'gijon':
+        return save(cid, gijon_rows(cid), city)
     if cid not in SOURCES:
         print('Sin fuente de calle para', cid); return
     src, src_name = SOURCES[cid]
@@ -142,6 +185,10 @@ def main(cid):
         if recent == 0 and page > 3:  # páginas ya solo con incidencias pasadas
             break
     print(f'{kept} avisos vigentes o próximos · {minor} ocupaciones menores descartadas')
+    save(cid, rows, city)
+
+
+def save(cid, rows, city):
     if os.environ.get('ANTHROPIC_API_KEY') and rows:
         rows = polish(rows, city)
         print(f'{len(rows)} tras revisarlos con IA · {round(usd(), 3)} $')

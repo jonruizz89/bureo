@@ -142,11 +142,76 @@ def zgz_read(cfg, max_pages=20):
     return out
 
 
+# ---------- Gijón/Xixón · contenidos del Ayuntamiento (Drupal JSON:API: eventos con fechas, distrito y la ficha del lugar)
+GIJ = 'https://drupal.gijon.es/es/jsonapi/node/eventos'
+
+
+def gij_match(city):
+    return {'method': 'gijon'} if fold(city.get('name')).startswith('gijon') or fold(city.get('name')).startswith('xixon') else None
+
+
+def gij_read(cfg, max_pages=40):
+    hoy = dt.date.today().isoformat()
+    q = {'filter[f][condition][path]': 'field_rango_de_fechas.end_value', 'filter[f][condition][operator]': '>=', 'filter[f][condition][value]': hoy,
+         'page[limit]': '50', 'include': 'field_localizacion_en_el_directo'}
+    url, out, pages = f'{GIJ}?{urllib.parse.urlencode(q)}', [], 0
+    while url and pages < max_pages:
+        for intento in range(3):
+            st, _, txt, _ = fetch(url, accept='application/vnd.api+json', ua=UA_API)
+            if st == 200:
+                break
+            time.sleep(5 * (intento + 1))
+        if st != 200:
+            print(f'  Gijón: página {pages + 1} sin respuesta ({st})')
+            return out or None
+        d = json.loads(txt)
+        pages += 1
+        lugares = {i['id']: i.get('attributes') or {} for i in d.get('included') or []}
+        for e in d.get('data') or []:
+            a = e.get('attributes') or {}
+            name = _clean(a.get('title'))
+            fechas = [f for f in a.get('field_rango_de_fechas') or [] if f.get('value')]
+            if not name or not fechas or a.get('status') is False:
+                continue
+            ini = min(f['value'][:10] for f in fechas)
+            fin = max((f.get('end_value') or f['value'])[:10] for f in fechas)
+            if fin < hoy:
+                continue
+            horas = {f['value'][11:16] for f in fechas if f['value'][11:16] not in ('', '00:00')}
+            rel = ((e.get('relationships') or {}).get('field_localizacion_en_el_directo') or {}).get('data') or []
+            lug = lugares.get(rel[0]['id'], {}) if rel else {}
+            lat = lng = None
+            try:
+                lat, lng = float(lug.get('field_latitud')), float(lug.get('field_longitud'))
+            except (TypeError, ValueError):
+                lo = (lug.get('field_lo') or [{}])[0] if isinstance(lug.get('field_lo'), list) else {}
+                try:
+                    lat, lng = float(lo.get('lat')), float(lo.get('lon'))
+                except (TypeError, ValueError):
+                    pass
+            dist = a.get('field_distrito') or []
+            alias = ((a.get('path') or {}).get('alias') or '').lstrip('/')
+            web = f'https://www.gijon.es/es/eventos/{alias}' if alias else 'https://www.gijon.es/es/eventos'
+            body = _clean((a.get('body') or {}).get('value') if isinstance(a.get('body'), dict) else a.get('body'))
+            out.append({
+                'titulo': name[:300], 'descripcion': body[:600], 'inicio': ini, 'fin': max(ini, fin),
+                'hora': next(iter(horas)) if ini == fin and len(horas) == 1 else None,
+                'lugar': _clean(lug.get('title')) or None, 'direccion': _clean(lug.get('field_direccion')) or None,
+                'lat': lat, 'lng': lng, 'distrito': dist[0] if len(dist) == 1 else None,
+                'precio': None, 'gratis': bool(re.search(r'\b(gratis|gratuit|entrada libre)', fold(body))),
+                'imagen': None, 'web_organizador': web, 'url': web,
+            })
+        url = ((d.get('links') or {}).get('next') or {}).get('href')
+    return out
+
+
 CONNECTORS = {
     'kulturklik': {'name': 'Kulturklik · Agenda cultural de Euskadi', 'url': 'https://www.kulturklik.euskadi.eus/', 'layer': 'regional',
                    'license': 'Open Data Euskadi (CC BY 4.0)', 'match': kk_match, 'read': kk_read},
     'zaragoza': {'name': 'Agenda de Zaragoza (datos abiertos del Ayuntamiento)', 'url': 'https://www.zaragoza.es/sede/servicio/cultura/evento/',
                  'layer': 'municipal', 'license': 'Datos abiertos del Ayuntamiento de Zaragoza (CC BY 4.0)', 'match': zgz_match, 'read': zgz_read},
+    'gijon': {'name': 'Agenda del Ayuntamiento de Gijón/Xixón', 'url': 'https://www.gijon.es/es/eventos', 'layer': 'municipal',
+              'license': 'Enlace a la ficha original', 'match': gij_match, 'read': gij_read},
 }
 
 
