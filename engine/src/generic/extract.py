@@ -127,7 +127,9 @@ def main(cid):
     city = load_city(cid)
     prov = city.get('kind') == 'provincia'
     if prov:
-        city['_children'] = {fold(c['name']) for c in sb('GET', f'cities?select=name&parent=eq.{cid}') or []}
+        # las ciudades con zona propia dentro de la provincia (Bilbao, Donostia…) no se repiten en ella; features.aliases = otros nombres
+        kids = sb('GET', f'cities?select=name,features&parent=eq.{cid}') or []
+        city['_children'] = {fold(n) for c in kids for n in [c['name']] + list((c.get('features') or {}).get('aliases') or [])}
     srcs = sb('GET', f'sources?select=id,name,url,layer,config&city_id=eq.{cid}&status=eq.activa&order=id')
     raw, per = [], {}
     for s in srcs:
