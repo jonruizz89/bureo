@@ -1695,14 +1695,14 @@ function startApp(DATA, TAX, sync) {
     catch (e) { if (btn) { btn.disabled = false; btn.textContent = t; } toast('Sin permiso de ubicación no puedo saber dónde estás. Elige la zona a mano.'); return; }
     if (btn) { btn.disabled = false; btn.textContent = t; }
     keepDist(); askPos(true);
-    if (!z) { $('zone-hint').hidden = true; toast('Aún no estamos en tu zona: de momento, Madrid y Bizkaia. ¡Iremos añadiendo más!'); return; }
+    if (!z) { $('zone-hint').hidden = true; toast('Aún no estamos en tu zona: de momento, Madrid y Euskadi. ¡Iremos añadiendo más!'); return; }
     if (z === window.limonCity.zone()) { $('zone-hint').hidden = true; closeSheets(); toast('Ya estás viendo los planes de ' + CITY.name + '.'); return; }
     window.limonCity.set(z);
   }
   function renderZoneHint() {
     const box = $('zone-hint'); if (!box) return;
     if (window.__limonAutoZone) { window.__limonAutoZone = false; toast('Te enseñamos los planes de ' + CITY.name + ', donde estás. Puedes cambiar de zona arriba.'); }
-    if (window.__limonNoZone) { window.__limonNoZone = false; store.set('zoneAsked', 1); toast('Aún no estamos en tu zona: te enseñamos Madrid. Puedes cambiar a Bizkaia arriba.'); }
+    if (window.__limonNoZone) { window.__limonNoZone = false; store.set('zoneAsked', 1); toast('Aún no estamos en tu zona: te enseñamos Madrid. Puedes cambiar de zona arriba.'); }
     const show = !window.limonCity.chosen() && !store.get('zoneAsked', 0) && 'geolocation' in navigator;
     box.hidden = !show; if (!show) return;
     box.innerHTML = `<div class="consent" role="region" aria-label="Tu zona" style="margin:10px 0">
@@ -1719,7 +1719,7 @@ function startApp(DATA, TAX, sync) {
       <label class="note" id="zone-m-wrap" style="display:flex;flex-direction:column;gap:4px">Municipio
         <select class="search" id="zone-m"></select></label>
       <div class="seg"><button class="btn" data-zone-go>Ver planes</button><button class="btn ghost" data-zone-locate>📍 Donde estoy</button></div>
-      <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las zonas.${isAdm ? ' Las zonas en borrador solo las ves tú.' : ''} De momento: Madrid y Bizkaia; iremos añadiendo más.</p>`);
+      <p class="note" style="margin:0">Tus intereses, tu agenda y tus amigos son los mismos en todas las zonas.${isAdm ? ' Las zonas en borrador solo las ves tú.' : ''} De momento: Madrid y Euskadi (Bizkaia, Gipuzkoa y Araba); iremos añadiendo más.</p>`);
     const fill = () => {
       const g = groups.find(x => x.id === $('zone-p').value) || groups[0];
       $('zone-m').innerHTML = g.options.map(o => `<option value="${esc(o.v)}" ${o.v === zone ? 'selected' : ''}>${esc(o.t)}</option>`).join('');
