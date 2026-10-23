@@ -3,12 +3,23 @@
 En Madrid se marcan con reglas propias (pipeline.py); en las demás ciudades lo decide la IA con la lista de eventos ya clasificados.
 Coste: una llamada por ciudad y noche (unos céntimos).
 """
-import datetime as dt, sys
+import datetime as dt, re, sys
 from lib import sb, tool_call, load_city, usd
 
 TOOL = {'name': 'marcar_unicos', 'description': 'Guarda qué eventos son planes únicos de la ciudad.',
         'input_schema': {'type': 'object', 'required': ['ids'], 'properties': {
             'ids': {'type': 'array', 'items': {'type': 'integer'}, 'description': 'Ids de los eventos que son planes únicos'}}}}
+
+
+# Lo que la IA a veces cuela y nunca es un plan único: funciones sueltas de un festival («Festival X 2026: obra»), ciclos
+# comerciales que se repiten en muchas ciudades, clubes de lectura, sesiones de cine…
+SESION = re.compile(r'^[^:]{3,80}\b20\d\d\b[^:]*:\s*\S|^[^:]{3,60}\(\d{1,2}/\d{1,2}\)|candlelight|club de lectura|cine-?club|irakurle|'
+                    r'entrega de dorsales|visitas? guiadas?|mercado de trueque|^\W*(concierto|recital)\b', re.I)
+MAX_UNICOS = 40
+
+
+def sesion(t):
+    return bool(SESION.search(t or ''))
 
 
 def main(cid):
@@ -31,14 +42,15 @@ def main(cid):
               '(música, cine, teatro, danza), grandes ferias y mercados de temporada, carreras populares conocidas, tradiciones, cabalgatas, '
               'celebraciones de Navidad o de una fecha concreta. NO marques: conciertos o funciones sueltas, obras en gira, exposiciones, talleres, '
               'cursos, conferencias, ciclos semanales, sesiones de cine, cuentacuentos, clubes de lectura, visitas guiadas, conciertos de bandas '
-              'o escuelas de música, ni una función suelta aunque forme parte de un festival. Si un festival tiene varias actividades sueltas, marca la principal '
+              'o escuelas de música, ni una función suelta aunque forme parte de un festival (si el título es «Festival X 2026: obra», NO es único), ni ciclos comerciales que se repiten en muchas ciudades (Candlelight, galas de ballet en gira, tributos). Si un festival tiene varias actividades sueltas, marca la principal '
               '(la que lleva el nombre del festival), no cada actividad. Sé exigente: normalmente son pocos (de 5 a 40). '
               + ('Es una provincia entera: marca solo fiestas patronales y populares, festivales anuales con nombre propio, ferias y grandes citas '
                  'de cada pueblo. ' if city.get('kind') == 'provincia' else '') +
               'Responde con marcar_unicos y los ids.')
     out = tool_call(system, 'id|título|fechas|lugar|categorías\n' + lines, TOOL, max_tokens=4000) or {}
-    valid = {e['id'] for e in cand}
-    ids = sorted({int(i) for i in out.get('ids') or [] if int(i) in valid})
+    valid = {e['id']: e for e in cand}
+    ids = sorted({int(i) for i in out.get('ids') or [] if int(i) in valid and not sesion(valid[int(i)]['title'])})
+    ids = ids[:MAX_UNICOS]
     if out.get('ids') is None:
         print('La IA no ha respondido; se deja como estaba'); return
     on = ','.join(map(str, ids))
