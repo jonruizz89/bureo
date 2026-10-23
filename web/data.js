@@ -130,6 +130,9 @@
   // ---------- cuenta
   let app = null, user = null, timers = {};
 
+  // planes guardados en la cuenta tal como se leyeron por última vez: solo se borra lo que se quitó de esa lista,
+  // nunca «todo lo que no esté aquí» (si un dispositivo llega sin datos, no se lleva por delante los de la cuenta)
+  let savedBase = null;
   async function pushKey(k, v) {
     if (!user) return;
     const uid = user.id;
@@ -141,10 +144,10 @@
       if (ids.length) await sb.from('user_interests').upsert(ids.map((c) => ({ user_id: uid, category_id: c, value: v[c], updated_at: new Date().toISOString() })));
     } else if (k === 'saved') {
       const ids = v.map(toDbId).filter(Boolean);
-      let del = sb.from('saved_events').delete().eq('user_id', uid);
-      if (ids.length) del = del.not('event_id', 'in', '(' + ids.join(',') + ')');
-      await del;
+      const gone = savedBase ? [...savedBase].filter((id) => !ids.includes(id)) : [];
+      if (gone.length) await sb.from('saved_events').delete().eq('user_id', uid).in('event_id', gone);
       if (ids.length) await sb.from('saved_events').upsert(ids.map((id) => ({ user_id: uid, event_id: id })), { ignoreDuplicates: true });
+      savedBase = new Set(ids);
     } else if (k === 'dismissed' || k === 'went' || k === 'nofui') {
       // attendance guarda «fui» (went = true) y «no pude ir» (went = false, la respuesta a «¿Al final fuiste?»)
       const table = k === 'dismissed' ? 'dismissed_events' : 'attendance';
@@ -185,7 +188,7 @@
     ]);
     const remote = {
       prefs: Object.fromEntries((i.data || []).map((r) => [r.category_id, r.value])),
-      saved: (s.data || []).map((r) => 'e' + r.event_id),
+      saved: s.error ? app.get().saved : (s.data || []).map((r) => 'e' + r.event_id),  // si falla la lectura, no se pisa lo guardado aquí
       opts: { ninos: !!(p.data && p.data.with_kids), perro: !!(p.data && p.data.with_dog) },
       streets: (p.data && p.data.my_streets) || [],
       dismissed: (d.data || []).map((r) => 'e' + r.event_id),
@@ -195,6 +198,7 @@
       taste: (p.data && p.data.taste) || null,
       taste_text: (p.data && p.data.taste_text) || ''
     };
+    if (!s.error) savedBase = new Set((s.data || []).map((r) => r.event_id));
     // el permiso de estadísticas va con la cuenta; si se dio antes de entrar, se guarda en ella
     const pa = p.data ? p.data.analytics : null;
     if (pa === true || pa === false) { try { localStorage.setItem('bureo.analytics', pa ? '1' : '0'); } catch (e) { } }

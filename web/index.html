@@ -539,8 +539,8 @@ table.cov td.n, table.cov th.n { text-align: right }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js?v=sri" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
 <!-- ?v=: cambia con cada versión del código para que ningún móvil se quede con una copia vieja (súbelo al tocar estos ficheros) -->
-<script src="config.js?v=20261023b"></script>
-<script src="data.js?v=20261023b"></script>
+<script src="config.js?v=20261023c"></script>
+<script src="data.js?v=20261023c"></script>
 <script>
 function startApp(DATA, TAX, sync) {
   const EV = DATA.eventos;
@@ -1385,7 +1385,7 @@ function startApp(DATA, TAX, sync) {
   }
   function renderLists() {
     const box = $('ag-lists'); if (!box) return;
-    if (!logged) { box.innerHTML = '<h2 style="margin:0">Mis listas</h2><p class="note">Entra con tu cuenta para hacer listas de planes («${esc(CITY.name)} con niños», «Jazz en salas pequeñas»…) y compartirlas.</p>'; return; }
+    if (!logged) { box.innerHTML = `<h2 style="margin:0">Mis listas</h2><p class="note">Entra con tu cuenta para hacer listas de planes («${esc(CITY.name)} con niños», «Jazz en salas pequeñas»…) y compartirlas.</p>`; return; }
     box.innerHTML = `<h2 style="margin:0">Mis listas</h2>
       <p class="note" style="margin:0">Desde cualquier plan, «Añadir a lista». Las públicas las puede ver y seguir cualquiera con el enlace.</p>
       ${MYLISTS.map(l => `<div class="row-item"><div style="min-width:0;flex:1"><button class="btnlink" data-list="${l.id}"><b>${esc(l.title)}</b></button><div class="note">${l.items.length} planes · ${l.is_public ? 'pública' : 'privada'}</div></div>
