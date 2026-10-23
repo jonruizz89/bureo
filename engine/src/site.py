@@ -362,11 +362,19 @@ for e in evs:
         ld['description'] = txt[:500]
     if e.get('image_url') and e['image_url'].startswith('https://'):
         ld['image'] = [e['image_url']]
+    # entradas y organizador: solo lo que sabemos (no se inventa disponibilidad ni fecha de venta)
+    web = e.get('organizer_url') or (srcs[0]['url'] if srcs else None)
+    m = re.search(r'(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)', e.get('price_text') or '', re.I) or re.search(r'(?:€|euros?)\s*(\d+(?:[.,]\d{1,2})?)', e.get('price_text') or '', re.I)
     if e.get('is_free'):
         ld['isAccessibleForFree'] = True
-        ld['offers'] = {'@type': 'Offer', 'price': 0, 'priceCurrency': 'EUR', 'url': BASE + e['url']}
-    if e.get('organizer_url'):
-        ld['organizer'] = {'@type': 'Organization', 'name': (srcs[0].get('sources') or {}).get('name') if srcs else e['lugar'] or 'Organizador', 'url': e['organizer_url']}
+        ld['offers'] = {'@type': 'Offer', 'price': 0, 'priceCurrency': 'EUR', 'url': web or BASE + e['url']}
+    elif m:
+        ld['offers'] = {'@type': 'Offer', 'price': float(m.group(1).replace(',', '.')), 'priceCurrency': 'EUR', 'url': web or BASE + e['url']}
+    quien = e['lugar'] or ((srcs[0].get('sources') or {}).get('name') if srcs else None)
+    if quien:
+        ld['organizer'] = {'@type': 'Organization', 'name': quien}
+        if web:
+            ld['organizer']['url'] = web
     desc = f"{cuando(e)}{' en ' + sitio if sitio else ''}. " + (txt or f"{e['title']}: fecha, horario, lugar y precio.")
     cr = (crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")]) if z else [('Planes', '/planes/')]
     page(e['url'], f"{e['title']} · {cuando(e)}{' · ' + z['name'] if z else ''}", desc, body, cr, ld=[ld], app=app_link(e))
