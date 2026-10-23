@@ -1,0 +1,34 @@
+name: Probar una URL
+
+# Herramienta de diagnóstico: comprueba si una web o un fichero de datos abiertos se puede descargar desde GitHub
+# (algunas webs bloquean otros servidores). Solo informa de código, tamaño, tipo y el principio del contenido.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL a probar"
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar
+        env:
+          URL: ${{ inputs.url }}
+        run: |
+          curl -sSL -m 300 -A "LimonBot/1.0 (+https://limonplanes.com; hola@limonplanes.com)" -o out -w 'código %{http_code} · %{size_download} bytes · %{content_type}\n' "$URL" || true
+          echo "--- principio:"; head -c 1500 out; echo
+          python3 - <<'PY'
+          import json
+          try:
+              d = json.load(open('out'))
+              items = d if isinstance(d, list) else next((v for v in d.values() if isinstance(v, list)), [])
+              print('JSON con', len(items), 'elementos')
+              if items: print(json.dumps(items[0], ensure_ascii=False)[:2500])
+              fechas = sorted(str(x.get(k))[:10] for x in items for k in x if 'date' in k.lower() or 'data' in k.lower() and isinstance(x.get(k), str))
+              if fechas: print('fechas desde', fechas[0], 'hasta', fechas[-1])
+          except Exception as e:
+              print('no es JSON:', e)
+          PY
