@@ -1867,15 +1867,18 @@ function startApp(DATA, TAX, sync) {
     if ($('o-stats')) $('o-stats').checked = !!(window.limonConsent && window.limonConsent.get() === '1');
     if (!logged || !me) {
       org.hidden = true; adm.hidden = true; mail.hidden = true;
-      cal.innerHTML = `<h2 style="margin:0">En tu calendario</h2><p class="note">Entra con tu cuenta (en Perfil) y tus planes guardados y los cortes de tus calles aparecerán en Google Calendar, Apple u Outlook, y se actualizarán solos.</p>`;
+      cal.innerHTML = `<h2 style="margin:0">Sincronizar con tu calendario</h2><p class="note">Entra con tu cuenta (en Perfil) y tus planes guardados y los cortes de tus calles aparecerán en Google Calendar, Apple u Outlook, y se actualizarán solos.</p>`;
       return;
     }
     const ics = `${CONF.supabaseUrl}/functions/v1/limon-ical?t=${me.ical_token}`, webcal = ics.replace(/^https:/, 'webcal:');
-    cal.innerHTML = `<h2 style="margin:0">En tu calendario</h2>
-      <p class="note">Tus planes guardados y los cortes de tus calles y líneas aparecen en tu calendario y se actualizan varias veces al día. El enlace es personal: no lo compartas.</p>
-      <div class="seg"><a class="btn" href="${esc(webcal)}" style="display:inline-flex;align-items:center;text-decoration:none">Suscribirme</a>
-      <a class="btn ghost" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Google Calendar</a>
-      <button class="btn ghost" data-copy="${esc(ics)}">Copiar enlace</button></div>`;
+    const android = /Android/i.test(navigator.userAgent);
+    const gcal = `<a class="btn${android ? '' : ' ghost'}" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">📅 Sincronizar con Google Calendar</a>`;
+    const devcal = `<a class="btn${android ? ' ghost' : ''}" href="${esc(webcal)}" style="display:inline-flex;align-items:center;text-decoration:none">📅 Sincronizar con el calendario ${isIOS || /Mac/.test(navigator.platform) ? 'de Apple' : 'del dispositivo'}</a>`;
+    cal.innerHTML = `<h2 style="margin:0">Sincronizar con tu calendario</h2>
+      <p class="note">Tus planes guardados y los cortes de tus calles y líneas aparecen solos en tu calendario y se actualizan varias veces al día: si guardas o quitas un plan aquí, cambia también allí. Solo hay que hacerlo una vez.</p>
+      <div class="seg">${android ? gcal + devcal : devcal + gcal}
+      <button class="btn ghost" data-copy="${esc(ics)}">Copiar enlace (Outlook y otros)</button></div>
+      <p class="note" style="margin:0">El enlace es personal: no lo compartas.</p>`;
     const nt = Object.assign({ semanal: false, calle: false, lluvia: false, organizador: true, admin: true, quedadas: true, amigos: true, ideas: true }, me.notify || {});
     const box = (k, txt) => `<label class="toggle">${txt}<input type="checkbox" data-notify="${k}" ${nt[k] ? 'checked' : ''}></label>`;
     mail.hidden = false;
@@ -1987,7 +1990,7 @@ function startApp(DATA, TAX, sync) {
       toast(r.error ? r.error : r.sent ? 'Enviado: mira tu correo.' : 'No hay planes que encajen esta semana: prueba a marcar intereses.'); return true;
     }
     const cp = t.closest('[data-copy]');
-    if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast('Enlace copiado. Pégalo en tu calendario como «suscripción».'); } catch (e) { prompt('Copia este enlace:', cp.dataset.copy); } return true; }
+    if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast('Enlace copiado. En tu calendario, busca «Añadir calendario desde URL» (o «suscribirse») y pégalo.'); } catch (e) { prompt('Copia este enlace:', cp.dataset.copy); } return true; }
     return false;
   }
   document.addEventListener('submit', async ev => {
