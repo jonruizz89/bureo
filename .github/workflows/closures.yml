@@ -53,14 +53,14 @@ jobs:
             engine/raw/osm_ways.json
           key: closures-${{ github.run_id }}
 
-  # resto de ciudades con fuente de calle (motor genérico): Bilbao por ahora
+  # resto de ciudades con fuente de calle (motor genérico): ayuntamientos de Bilbao, Vitoria-Gasteiz y Donostia (Tráfico Euskadi)
   otras:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        city: [bilbao]
+        city: [bilbao, vitoria, donostia]
     defaults:
       run:
         working-directory: engine/src/generic

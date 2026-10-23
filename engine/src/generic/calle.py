@@ -9,7 +9,7 @@ import os
 from lib import sb, fetch, load_city, fold, UA_API, tool_call, usd
 
 API = 'https://api.euskadi.eus/traffic/v1.0'
-SOURCES = {'bilbao': ('5', 'Ayuntamiento de Bilbao'), 'vitoria-gasteiz': ('6', 'Ayuntamiento de Vitoria-Gasteiz')}
+SOURCES = {'bilbao': ('5', 'Ayuntamiento de Bilbao'), 'vitoria': ('6', 'Ayuntamiento de Vitoria-Gasteiz'), 'donostia': ('7', 'Ayuntamiento de Donostia / San Sebastián')}
 PORTAL = 'https://www.trafikoa.eus/'
 MINOR = re.compile(r'contenedor|andamio|alero|toldo|fachada|cubierta|tejado|canal[oó]n|plataforma elevadora|mudanza|camion grua|'
                    r'cami[oó]n pluma|marquesina|terraza|mesas y sillas|carga y descarga|vado|cata|sondeo', re.I)
