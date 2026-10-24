@@ -145,6 +145,9 @@ async function flush() {
       } else if (m.kind === 'admin_idea') {
         const KN: Record<string, string> = { idea: 'Idea', fallo: 'Fallo', fuente: 'Falta un sitio o evento' };
         mail = { subject: `${KN[pl.kind] || 'Idea'}: ${pl.title}`, html: layout({ title: 'Nueva propuesta para revisar', intro: `<b>${esc(pl.title)}</b> (${esc(KN[pl.kind] || pl.kind)})`, cta: { label: 'Revisar', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
+      } else if (m.kind === 'admin_signup') {
+        const tot = Number(pl.total) || 0, hoy = Number(pl.hoy) || 0;
+        mail = { subject: `Nuevo registro en Limón (ya sois ${tot})`, html: layout({ title: 'Alguien se ha registrado', intro: `Una persona nueva ha creado su cuenta en Limón.<br><br>Usuarios registrados: <b>${tot}</b>${hoy > 1 ? ` · ${hoy} hoy` : ''}.`, cta: { label: 'Ver estadísticas', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_editor') {
         mail = { subject: `Solicitud de organizador: ${pl.nombre || 'sin nombre'}`, html: layout({ title: 'Nueva solicitud de organizador', intro: `<b>${esc(pl.nombre)}</b>${pl.web ? ' · ' + esc(pl.web) : ''}<br>${esc(pl.que || '')}`, cta: { label: 'Revisar', url: APP + '?tab=intereses' }, footer: footer(p, k, 'Eres administrador de Limón.') }) };
       } else if (m.kind === 'admin_event') {

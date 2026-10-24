@@ -281,6 +281,7 @@
       else if (mode === 'reset') r = await sb.auth.resetPasswordForEmail(email, { redirectTo: back, captchaToken });
       else r = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: back, captchaToken } });
       if (r.error) { msg(ES(r.error.message)); return; }
+      if (mode === 'signup') window.limonFn('limon-mail', { body: { action: 'flush' } }).catch(() => { });  // aviso al admin de un registro nuevo
       $('acc-pass').value = '';
       if (mode === 'login') msg('');
       else if (mode === 'signup') {
@@ -362,6 +363,8 @@
 
       if (app && app.setUser) app.setUser(!!user);
       if (user && user.id !== was) pullAccount().catch((e) => console.warn('pull', e));
+      // cuenta recién creada (con Google o con enlace): que el aviso al admin salga ya
+      if (user && user.id !== was && Date.now() - new Date(user.created_at).getTime() < 10 * 60e3) window.limonFn('limon-mail', { body: { action: 'flush' } }).catch(() => { });
     });
   }
 
