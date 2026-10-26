@@ -10,6 +10,8 @@ import datetime as dt, html, json, math, os, re, sys, urllib.parse, urllib.reque
 from collections import defaultdict
 
 WEB = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '../web')
+# imágenes solo de fuentes oficiales o de datos abiertos (las publican para difundir los eventos); las de salas y promotores no se muestran
+OFICIAL = re.compile(r'https://([a-z0-9-]+\.)*(euskadi\.eus|zaragoza\.es|esmadrid\.com|madrid\.es|donostiakultura\.eus|donostia\.eus|bilbao\.eus|vitoria-gasteiz\.org|gijon\.es|bizkaia\.eus|gipuzkoa\.eus|araba\.eus)/')
 BASE = 'https://limonplanes.com'
 cfg = open(os.path.join(WEB, 'config.js'), encoding='utf-8').read()
 SB_URL = re.search(r"supabaseUrl:\s*'([^']+)'", cfg).group(1)
@@ -77,6 +79,7 @@ for e in evs:
     e['lugar'] = (e.get('venues') or {}).get('name')
     e['url'] = f"/evento/{e['id']}-{slug(e['title'])}/"
     e['largo'] = (d(e['ends_on']) - d(e['starts_on'])).days > 6
+    e['img'] = e['image_url'] if OFICIAL.match(e.get('image_url') or '') else ''
 
 # ---------- zonas: ciudades, provincias, municipios de cada provincia y distritos de las ciudades
 zonas = []  # {path, name, titulo, evs, parent, center, kids}
@@ -220,7 +223,7 @@ def li(e, z=None):
     if zz and z is not zz and zz['name'] not in sitio:
         sitio = (sitio + ' · ' if sitio else '') + zz['name']
     g = (e['grupos'] or [''])[0]
-    img = e.get('image_url') if (e.get('image_url') or '').startswith('https://') else ''
+    img = e['img']
     th = f'<img src="{esc(img)}" alt="" loading="lazy" decoding="async">' if img else f'<span>{EMO.get(g, "🍋")}</span>'
     tags = ('<b class="gr">Gratis</b>' if e.get('is_free') else '') + (f'<b>{esc(groups[g])}</b>' if g else '')
     return (f'<li><a href="{e["url"]}"><div class="th">{th}</div><div class="tx"><div class="dt">{esc(etiqueta(e))}</div>'
@@ -266,7 +269,7 @@ def picks(lista, vie, dom, n=12):
     cand = [e for e in lista if d(e['starts_on']) <= dom and d(e['ends_on']) >= vie]
     def score(e):
         return (3 if e.get('is_unique') or e.get('ai_unique') else 0) + (0 if e['largo'] else 1.5) + (0.7 if e.get('is_free') else 0) + \
-               (0.5 if e.get('image_url') else 0) + (0.5 if e.get('description') or e.get('details') else 0) + 0.3 * len(e.get('event_sources') or [])
+               (0.5 if e['img'] else 0) + (0.5 if e.get('description') or e.get('details') else 0) + 0.3 * len(e.get('event_sources') or [])
     out, por_grupo = [], defaultdict(int)
     for e in sorted(cand, key=lambda e: (-score(e), e['starts_on'], e['id'])):
         g = (e['grupos'] or ['otros'])[0]
@@ -324,7 +327,7 @@ for z in zonas:
     if len(top) >= 4:
         def tc(e):
             g = (e['grupos'] or [''])[0]
-            img = e.get('image_url') if (e.get('image_url') or '').startswith('https://') else ''
+            img = e['img']
             im = f'<img src="{esc(img)}" alt="" loading="lazy" decoding="async">' if img else EMO.get(g, '🍋')
             return (f'<a href="{e["url"]}"><div class="im">{im}</div><div class="tx"><div class="dt">{esc(etiqueta(e))}</div>'
                     f'<div class="tt">{esc(e["title"])}</div><div class="m">{esc(sitio_corto(e["lugar"]) if e["lugar"] else z["name"])}</div></div></a>')
@@ -393,8 +396,8 @@ for e in evs:
     if e.get('organizer_url') and not any(s['url'] == e['organizer_url'] for s in srcs):
         links += f'<p><a href="{esc(e["organizer_url"])}" rel="nofollow noopener" target="_blank">Web del organizador ↗</a></p>'
     body = f"<h1>{esc(e['title'])}</h1><p class='lead'>{esc(cuando(e))}{' · ' + esc(sitio) if sitio else ''}</p>"
-    if e.get('image_url') and e['image_url'].startswith('https://'):
-        body += f'<img class="hero" src="{esc(e["image_url"])}" alt="" loading="lazy">'
+    if e['img']:
+        body += f'<img class="hero" src="{esc(e["img"])}" alt="" loading="lazy">'
     body += '<div class="card">' + (f'<p>{esc(txt)}</p>' if txt else '') + \
         (f'<p class="m">Precio: {esc(precio)}</p>' if precio else '') + (f'<p class="m">{esc(gs)}</p>' if gs else '') + links + \
         f'<p><a class="cta" href="{esc(app_link(e))}">Guardar en Limón y ver en el mapa</a></p></div>'
@@ -410,8 +413,8 @@ for e in evs:
           'url': BASE + e['url']}
     if txt:
         ld['description'] = txt[:500]
-    if e.get('image_url') and e['image_url'].startswith('https://'):
-        ld['image'] = [e['image_url']]
+    if e['img']:
+        ld['image'] = [e['img']]
     # entradas y organizador: solo lo que sabemos (no se inventa disponibilidad ni fecha de venta)
     web = e.get('organizer_url') or (srcs[0]['url'] if srcs else None)
     m = re.search(r'(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)', e.get('price_text') or '', re.I) or re.search(r'(?:€|euros?)\s*(\d+(?:[.,]\d{1,2})?)', e.get('price_text') or '', re.I)
