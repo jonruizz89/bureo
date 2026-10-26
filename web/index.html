@@ -107,10 +107,9 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .meta { font-size: 13px; color: var(--quiet); overflow-wrap: anywhere }
 .why { font-size: 13px; background: var(--ok-soft); color: var(--ok); border-radius: 8px; padding: 6px 10px; font-weight: 500 }
 .tags { display: flex; gap: 6px; flex-wrap: wrap }
-.lcol { flex: 0 0 60px; display: flex; flex-direction: column; gap: 6px }
-.lcol .date { flex: none }
-.thumb { width: 60px; height: 60px; border-radius: 10px; overflow: hidden; background: var(--chip); display: grid; place-items: center; font-size: 26px; position: relative }
-.thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover }
+.lcol { flex: 0 0 52px; display: flex; flex-direction: column; align-items: center; gap: 6px }
+.lcol .date { flex: none; width: 100% }
+.ico { font-size: 20px; line-height: 1 }
 .evimg { width: 100%; max-height: 240px; object-fit: cover; border-radius: 10px; display: block; margin-bottom: 8px; background: var(--chip) }
 .tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--quiet) }
 .tag.free { background: var(--ok-soft); color: var(--ok) }
@@ -834,9 +833,10 @@ function startApp(DATA, TAX, sync) {
   const AHORRO = !!(navigator.connection && navigator.connection.saveData);
   const imgOf = e => (!AHORRO && e.imagen && OFICIAL.test(e.imagen)) ? e.imagen : '';
   const EMO = { musica: '🎵', escena: '🎭', arte: '🖼️', patrimonio: '🏛️', cine: '🎬', letras: '📚', ciencia: '🔬', gastro: '🍽️', aprender: '✏️', naturaleza: '🌿', ciudad: '🎉', deporte: '🏃', mascotas: '🐾', ferias: '🛍️', familia: '🧒', comunidad: '🤝' };
+  // icono del tipo de plan bajo la fecha (la imagen solo se ve al abrir la ficha)
   function thumb(e) {
-    const g = e.cats.map(groupOf).find(x => EMO[x]), im = imgOf(e);
-    return `<div class="thumb" aria-hidden="true"><span>${EMO[g] || '🍋'}</span>${im ? `<img src="${esc(im)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ''}</div>`;
+    const g = e.cats.map(groupOf).find(x => EMO[x]);
+    return g ? `<div class="ico" aria-hidden="true">${EMO[g]}</div>` : '';
   }
   function card(e, opt) {
     opt = opt || {};
