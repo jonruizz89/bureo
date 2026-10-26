@@ -247,8 +247,12 @@ table.cov td.n, table.cov th.n { text-align: right }
 }
 /* Para ti / Únicos se eligen con estas pestañas también en escritorio */
 .mapwrap { padding: 8px 8px 12px; gap: 8px }
-#ca-map .leaflet-tile-pane { filter: grayscale(.75) brightness(1.04) }
-#ca-map.night .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) grayscale(.6) brightness(.9) contrast(.85) }
+#ca-map[data-capa="Gris"] .leaflet-tile-pane { filter: grayscale(.75) brightness(1.04) }
+#ca-map.night:not([data-capa="Satélite"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) grayscale(.6) brightness(.9) contrast(.85) }
+.ca-gps { width: 34px; height: 34px; display: grid; place-items: center; background: #fff; color: #231D02; cursor: pointer; padding: 0 }
+.ca-gps.busy svg { animation: gpsspin 1s linear infinite }
+@keyframes gpsspin { to { transform: rotate(360deg) } }
+.leaflet-control-layers-base label { font: 13px var(--f-body); padding: 2px 0 }
 #ca-map { height: 360px; border-radius: 10px; position: relative; z-index: 0; isolation: isolate; background: var(--chip) }
 @media (max-width: 760px) { #ca-map { height: 300px } }
 .mapwrap .legend, .mapwrap .note { padding-inline: 6px }
@@ -987,11 +991,44 @@ function startApp(DATA, TAX, sync) {
     loadLeaflet().then(() => {
       if (!MAP) {
         MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5, zoomAnimation: false })  /* sin animación: al repintar las capas durante el zoom Leaflet fallaba */.setView(CENTER, 12);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        }).addTo(MAP);
+        // fondos gratuitos sin clave: «Callejero» (Esri, limpio, parecido a Google Maps), «Gris» (OpenStreetMap atenuado, el de siempre) y «Satélite» (Esri)
+        const OSM = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', ESRI = 'Mapa © <a href="https://www.esri.com">Esri</a> y colaboradores';
+        const capas = {
+          'Callejero': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: ESRI }),
+          'Gris': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: OSM }),
+          'Satélite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: ESRI })
+        };
+        let capa = 'Callejero'; try { const c = localStorage.getItem('bureo.mapa'); if (capas[c]) capa = c; } catch (e) { }
+        capas[capa].addTo(MAP);
+        $('ca-map').dataset.capa = capa;
+        L.control.layers(capas, null, { position: 'topright' }).addTo(MAP);
+        MAP.on('baselayerchange', (ev) => { $('ca-map').dataset.capa = ev.name; try { localStorage.setItem('bureo.mapa', ev.name); } catch (e) { } });
         $('ca-map').classList.toggle('night', dark());
         LAYER = L.layerGroup().addTo(MAP);
+        // botón «dónde estoy»: pide la ubicación, pone un punto azul y acerca el mapa
+        let yo = null;
+        const verme = (zoom) => new Promise((ok) => navigator.geolocation ? navigator.geolocation.getCurrentPosition((p) => {
+          const ll = [p.coords.latitude, p.coords.longitude];
+          if (!yo) yo = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: '#1C7ED6', fillOpacity: 1 }).bindTooltip('Estás aquí').addTo(MAP);
+          else yo.setLatLng(ll);
+          if (zoom) MAP.setView(ll, zoom);
+          ok(ll);
+        }, () => ok(null), { timeout: 10000, maximumAge: 60e3, enableHighAccuracy: true }) : ok(null));
+        const Gps = L.Control.extend({ onAdd() {
+          const b = L.DomUtil.create('button', 'leaflet-bar ca-gps');
+          b.type = 'button'; b.title = 'Ir a mi ubicación'; b.setAttribute('aria-label', 'Ir a mi ubicación');
+          b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
+          L.DomEvent.disableClickPropagation(b);
+          b.onclick = async () => { b.classList.add('busy'); const ll = await verme(16); b.classList.remove('busy'); if (!ll) toast('No hemos podido saber dónde estás. Revisa el permiso de ubicación del navegador.'); };
+          return b;
+        } });
+        new Gps({ position: 'topleft' }).addTo(MAP);
+        // si ya diste permiso de ubicación y estás en esta ciudad, el mapa empieza centrado en ti
+        (async () => {
+          try { if (!navigator.permissions || (await navigator.permissions.query({ name: 'geolocation' })).state !== 'granted') return; } catch (e) { return; }
+          const ll = await verme(0);
+          if (ll && MAP.distance(ll, CENTER) < 25000 && !CUTS_NOW.some((x) => x.mine)) MAP.setView(ll, 14);
+        })();
       }
       MAP.invalidateSize();
       LAYER.clearLayers(); SHAPES = {};
