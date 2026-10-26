@@ -967,15 +967,18 @@ function startApp(DATA, TAX, sync) {
   let MAP = null, LAYER = null, CUTS_NOW = [], SHAPES = {}, CA_DATE = null;
   const KCOLOR = { autobus: '#1E5BA8', obras: '#E8590C', cercanias: '#C92A2A', metro_ligero: '#3A86C8' };
   const dark = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  // una sola carga aunque se pida a la vez desde varios sitios: si el script entra dos veces, hay dos «L» distintos y los mapas fallan al dibujar
+  let leafletP = null;
   function loadLeaflet() {
     if (window.L) return Promise.resolve();
-    return new Promise((ok, ko) => {
+    if (leafletP) return leafletP;
+    return leafletP = new Promise((ok, ko) => {
       const css = document.createElement('link');
       css.rel = 'stylesheet'; css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'; css.integrity = 'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H'; css.crossOrigin = 'anonymous';
       document.head.appendChild(css);
       const js = document.createElement('script');
       js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'; js.integrity = 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH'; js.crossOrigin = 'anonymous';
-      js.onload = ok; js.onerror = ko;
+      js.onload = ok; js.onerror = () => { leafletP = null; ko(); };
       document.head.appendChild(js);
     });
   }
@@ -989,6 +992,8 @@ function startApp(DATA, TAX, sync) {
     if (!withGeo) return;
     $('ca-mapnote').textContent = withGeo < list.length ? `${list.length - withGeo} de ${list.length} avisos no se pueden situar en el mapa porque no nombran calles ni estaciones concretas.` : '';
     loadLeaflet().then(() => {
+      // con la pestaña oculta el mapa no tiene tamaño y Leaflet falla al dibujar: se pinta al abrir «Calle» (go → renderAll)
+      if (!$('ca-map').offsetWidth) return;
       if (!MAP) {
         MAP = L.map('ca-map', { scrollWheelZoom: false, zoomSnap: 0.5, zoomAnimation: false })  /* sin animación: al repintar las capas durante el zoom Leaflet fallaba */.setView(CENTER, 12);
         // fondos gratuitos sin clave: «Callejero» (Esri, limpio, parecido a Google Maps), «Gris» (OpenStreetMap atenuado, el de siempre) y «Satélite» (Esri)
