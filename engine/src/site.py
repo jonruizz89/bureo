@@ -127,8 +127,24 @@ header{display:flex;align-items:center;justify-content:space-between;padding-top
 .cta{display:inline-block;background:var(--a);color:var(--ai);font-weight:600;text-decoration:none;border-radius:10px;padding:10px 16px}
 h1{font:700 30px/1.2 'Space Grotesk',system-ui,sans-serif;margin:10px 0 8px}h2{font:600 20px 'Space Grotesk',system-ui,sans-serif;margin:28px 0 8px}
 .lead,.q{color:var(--q)}.crumbs{font-size:14px;color:var(--q);margin-top:6px}.crumbs a{color:var(--q)}
-ul.ev{list-style:none;padding:0;margin:0}ul.ev li{background:var(--s);border:1px solid var(--l);border-radius:12px;padding:12px 14px;margin:8px 0}
-ul.ev a{font-weight:600;text-decoration:none}ul.ev a:hover{text-decoration:underline}.m{font-size:14px;color:var(--q)}
+ul.ev{list-style:none;padding:0;margin:0}ul.ev li{background:var(--s);border:1px solid var(--l);border-radius:14px;margin:10px 0;overflow:hidden}
+ul.ev li>a{display:flex;gap:12px;padding:10px;text-decoration:none}ul.ev li>a:hover .tt{text-decoration:underline}
+.th{flex:0 0 84px;height:84px;align-self:flex-start;border-radius:10px;overflow:hidden;background:#FFF3BF;display:grid;place-items:center;font-size:34px}
+.th img{width:100%;height:100%;object-fit:cover}.tx{min-width:0;flex:1}
+.dt{font-size:13px;font-weight:700;color:var(--at);text-transform:uppercase;letter-spacing:.02em}
+.tt{font:600 16.5px/1.3 'Space Grotesk',system-ui,sans-serif;margin:2px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.m{font-size:14px;color:var(--q)}.tx .m{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tg{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.tg b{font-size:12px;font-weight:600;background:var(--bg);border:1px solid var(--l);border-radius:999px;padding:1px 9px}.tg b.gr{background:#D3F9D8;border-color:#B2F2BB;color:#1B5E20}
+.top{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:16px;padding:4px 16px 10px;margin:0 -16px}
+.top a{display:flex;flex-direction:column;flex:0 0 74%;max-width:300px;scroll-snap-align:start;background:var(--s);border:1px solid var(--l);border-radius:16px;overflow:hidden;text-decoration:none}
+.top .im{height:150px;flex:none;overflow:hidden;background:#FFE066;display:grid;place-items:center;font-size:56px}.top .im img{width:100%;height:100%;object-fit:cover}
+.top .tx{padding:10px 12px 12px}
+.fbar{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px;position:relative}
+.fbar summary{list-style:none;cursor:pointer;border:1px solid var(--l);background:var(--s);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600}
+.fbar summary::-webkit-details-marker{display:none}.fbar summary::after{content:' ▾'}.fbar details[open] summary{background:var(--ink);color:var(--bg)}
+.fbar details[open] summary::after{content:' ▴'}
+.fbar .chips{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:5;margin:0;padding:12px;background:var(--s);border:1px solid var(--l);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.15);max-height:60vh;overflow:auto}
+.fbar>a{border:1px solid var(--l);background:var(--s);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;text-decoration:none}
 .share{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.share a{border:1px solid var(--l);background:var(--s);border-radius:10px;padding:8px 14px;text-decoration:none;font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.chips a{background:var(--s);border:1px solid var(--l);border-radius:999px;padding:5px 12px;font-size:14px;text-decoration:none}
 .card{background:var(--s);border:1px solid var(--l);border-radius:14px;padding:16px;margin:12px 0}.card p{margin:8px 0}
@@ -183,13 +199,32 @@ def zone_app(z):
     return f"/?c={top['path']}&m={urllib.parse.quote(z['name'])}" if not z.get('distrito') else f"/?c={top['path']}"
 
 
+EMO = {'musica': '🎵', 'escena': '🎭', 'arte': '🖼️', 'patrimonio': '🏛️', 'cine': '🎬', 'letras': '📚', 'ciencia': '🔬', 'gastro': '🍽️', 'aprender': '✏️',
+       'naturaleza': '🌿', 'ciudad': '🎉', 'deporte': '🏃', 'mascotas': '🐾', 'ferias': '🛍️', 'familia': '🧒', 'comunidad': '🤝'}
+
+
+def etiqueta(e):
+    a, b = d(e['starts_on']), d(e['ends_on'])
+    m = lambda x: f"{x.day} {MESES[x.month - 1][:3]}"
+    if a <= HOY and b > HOY:
+        return 'Hasta el ' + m(b)
+    if a == b:
+        h = e.get('time_text') if e.get('time_text') and len(e['time_text']) <= 12 else ''
+        return ('Hoy' if a == HOY else 'Mañana' if a == HOY + dt.timedelta(days=1) else DIAS[a.weekday()][:3].capitalize() + ' ' + m(a)) + (' · ' + h if h else '')
+    return f'{m(a)} – {m(b)}'
+
+
 def li(e, z=None):
     sitio = e['lugar'] or ''
     zz = zpath.get(e['id'])
     if zz and z is not zz and zz['name'] not in sitio:
         sitio = (sitio + ' · ' if sitio else '') + zz['name']
-    g = ', '.join(groups[x] for x in e['grupos'][:2])
-    return f'<li><a href="{e["url"]}">{esc(e["title"])}</a><div class="m">{esc(cuando(e))}{" · " + esc(sitio) if sitio else ""}{" · Gratis" if e.get("is_free") else ""}{" · " + esc(g) if g else ""}</div></li>'
+    g = (e['grupos'] or [''])[0]
+    img = e.get('image_url') if (e.get('image_url') or '').startswith('https://') else ''
+    th = f'<img src="{esc(img)}" alt="" loading="lazy" decoding="async">' if img else f'<span>{EMO.get(g, "🍋")}</span>'
+    tags = ('<b class="gr">Gratis</b>' if e.get('is_free') else '') + (f'<b>{esc(groups[g])}</b>' if g else '')
+    return (f'<li><a href="{e["url"]}"><div class="th">{th}</div><div class="tx"><div class="dt">{esc(etiqueta(e))}</div>'
+            f'<div class="tt">{esc(e["title"])}</div>{f"<div class=m>{esc(sitio)}</div>" if sitio else ""}<div class="tg">{tags}</div></div></a></li>')
 
 
 def finde():
@@ -227,44 +262,6 @@ def vecinos(z):
     return sorted(sib, key=lambda k: km(z['center'], k['center']))[:8]
 
 
-# zonas
-for z in zonas:
-    lista = z['evs']
-    if not lista:
-        continue
-    n = len(lista)
-    gr = defaultdict(list)
-    for e in lista:
-        for g in e['grupos']:
-            gr[g].append(e)
-    gl = [(g, gr[g]) for g in groups if len(gr[g]) >= 3]
-    tit = f"Planes en {z['name']}: agenda de eventos, conciertos y actividades"
-    desc = f"Qué hacer en {z['name']} esta semana y este fin de semana: {n} planes entre conciertos, teatro, exposiciones, actividades infantiles y más. Agenda actualizada cada día."
-    body = f"<h1>Planes en {esc(z['name'])}</h1><p class='lead'>{n} planes y eventos en {esc(z['name'])} en las próximas semanas, actualizados cada día.</p>"
-    body += f'<p><a class="cta" href="{esc(zone_app(z))}">Ver en Limón con mapa y filtros</a></p>'
-    vie0, dom0 = finde()
-    if sum(1 for e in lista if d(e['starts_on']) <= dom0 and d(e['ends_on']) >= vie0) >= 3:
-        body += f'<p><a href="/planes/{z["path"]}/este-finde/"><b>Qué hacer este fin de semana en {esc(z["name"])} ›</b></a></p>'
-    if gl:
-        body += '<div class="chips">' + ''.join(f'<a href="/planes/{z["path"]}/{g}/">{esc(groups[g])} ({len(l)})</a>' for g, l in gl) + '</div>'
-    if z['kids']:
-        body += '<h2>Por zona</h2><div class="chips">' + ''.join(f'<a href="/planes/{k["path"]}/">{esc(k["name"])}</a>' for k in sorted(z['kids'], key=lambda k: -len(k['evs'])) if k['evs']) + '</div>'
-    body += secciones(lista, z)
-    vz = vecinos(z)
-    if vz:
-        body += '<h2>Cerca</h2><div class="chips">' + ''.join(f'<a href="/planes/{k["path"]}/">{esc(k["name"])}</a>' for k in vz if k['evs']) + '</div>'
-    page(f"/planes/{z['path']}/", tit, desc, body, crumbs_of(z), app=zone_app(z),
-         ld=[{'@context': 'https://schema.org', '@type': 'BreadcrumbList', 'itemListElement': [
-             {'@type': 'ListItem', 'position': i + 1, 'name': t, 'item': BASE + u} for i, (t, u) in enumerate(crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")])]}])
-    for g, l in gl:
-        gn = groups[g]
-        page(f"/planes/{z['path']}/{g}/", f"{gn} en {z['name']}: agenda y próximos planes",
-             f"{gn} en {z['name']}: {len(l)} planes en las próximas semanas. Fechas, horarios, lugares y precios, actualizados cada día.",
-             f"<h1>{esc(gn)} en {esc(z['name'])}</h1><p class='lead'>{len(l)} planes de {esc(gn.lower())} en {esc(z['name'])}.</p>"
-             f'<p><a class="cta" href="{esc(zone_app(z))}">Ver en Limón</a></p>' + secciones(l, z),
-             crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")], app=zone_app(z))
-
-# ---------- «Este finde en …»: los mejores planes del fin de semana, para compartir por WhatsApp o Telegram
 def picks(lista, vie, dom, n=12):
     cand = [e for e in lista if d(e['starts_on']) <= dom and d(e['ends_on']) >= vie]
     def score(e):
@@ -298,6 +295,56 @@ def corto(e, vie):
     return f"{dia}{' ' + h if h else ''}"
 
 
+# zonas
+for z in zonas:
+    lista = z['evs']
+    if not lista:
+        continue
+    n = len(lista)
+    gr = defaultdict(list)
+    for e in lista:
+        for g in e['grupos']:
+            gr[g].append(e)
+    gl = [(g, gr[g]) for g in groups if len(gr[g]) >= 3]
+    tit = f"Planes en {z['name']}: agenda de eventos, conciertos y actividades"
+    desc = f"Qué hacer en {z['name']} esta semana y este fin de semana: {n} planes entre conciertos, teatro, exposiciones, actividades infantiles y más. Agenda actualizada cada día."
+    body = f"<h1>Planes en {esc(z['name'])}</h1><p class='lead'>{n} planes en las próximas semanas, actualizados cada día.</p>"
+    body += f'<p><a class="cta" href="{esc(zone_app(z))}">Abrir en la app, con mapa y tu agenda</a></p>'
+    vie0, dom0 = finde()
+    fb = ''
+    if sum(1 for e in lista if d(e['starts_on']) <= dom0 and d(e['ends_on']) >= vie0) >= 3:
+        fb += f'<a href="/planes/{z["path"]}/este-finde/">Este finde</a>'
+    if gl:
+        fb += '<details name="f"><summary>Categorías</summary><div class="chips">' + ''.join(f'<a href="/planes/{z["path"]}/{g}/">{esc(groups[g])} ({len(l)})</a>' for g, l in gl) + '</div></details>'
+    if z['kids']:
+        fb += '<details name="f"><summary>Zonas</summary><div class="chips">' + ''.join(f'<a href="/planes/{k["path"]}/">{esc(k["name"])}</a>' for k in sorted(z['kids'], key=lambda k: -len(k['evs'])) if k['evs']) + '</div></details>'
+    if fb:
+        body += f'<nav class="fbar" aria-label="Filtrar">{fb}</nav>'
+    top = [e for e in picks(lista, vie0, dom0, n=8)]
+    if len(top) >= 4:
+        def tc(e):
+            g = (e['grupos'] or [''])[0]
+            img = e.get('image_url') if (e.get('image_url') or '').startswith('https://') else ''
+            im = f'<img src="{esc(img)}" alt="" loading="lazy" decoding="async">' if img else EMO.get(g, '🍋')
+            return (f'<a href="{e["url"]}"><div class="im">{im}</div><div class="tx"><div class="dt">{esc(etiqueta(e))}</div>'
+                    f'<div class="tt">{esc(e["title"])}</div><div class="m">{esc(sitio_corto(e["lugar"]) if e["lugar"] else z["name"])}</div></div></a>')
+        body += '<h2>Destacados de esta semana</h2><div class="top">' + ''.join(tc(e) for e in top) + '</div>'
+    body += secciones(lista, z)
+    vz = vecinos(z)
+    if vz:
+        body += '<h2>Cerca</h2><div class="chips">' + ''.join(f'<a href="/planes/{k["path"]}/">{esc(k["name"])}</a>' for k in vz if k['evs']) + '</div>'
+    page(f"/planes/{z['path']}/", tit, desc, body, crumbs_of(z), app=zone_app(z),
+         ld=[{'@context': 'https://schema.org', '@type': 'BreadcrumbList', 'itemListElement': [
+             {'@type': 'ListItem', 'position': i + 1, 'name': t, 'item': BASE + u} for i, (t, u) in enumerate(crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")])]}])
+    for g, l in gl:
+        gn = groups[g]
+        page(f"/planes/{z['path']}/{g}/", f"{gn} en {z['name']}: agenda y próximos planes",
+             f"{gn} en {z['name']}: {len(l)} planes en las próximas semanas. Fechas, horarios, lugares y precios, actualizados cada día.",
+             f"<h1>{esc(gn)} en {esc(z['name'])}</h1><p class='lead'>{len(l)} planes de {esc(gn.lower())} en {esc(z['name'])}.</p>"
+             f'<p><a class="cta" href="{esc(zone_app(z))}">Ver en Limón</a></p>' + secciones(l, z),
+             crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")], app=zone_app(z))
+
+# ---------- «Este finde en …»: los mejores planes del fin de semana, para compartir por WhatsApp o Telegram
 vie, dom = finde()
 FINDE = {}
 for z in zonas:
@@ -391,8 +438,6 @@ CUENTAS = [('madrid', 'madrid', 'Madrid', '#madrid #planesmadrid #quehacerenmadr
            ('gasteiz', 'araba', 'Vitoria-Gasteiz y Araba', '#vitoria #gasteiz #vitoriagasteiz #araba #alava #planesvitoria #findesemana'),
            ('zaragoza', 'zaragoza', 'Zaragoza', '#zaragoza #planeszaragoza #quehacerenzaragoza #agendazaragoza #findesemana'),
            ('gijon', 'gijon', 'Gijón', '#gijon #xixon #asturias #planesgijon #agendagijon #findesemana')]
-EMO = {'musica': '🎵', 'escena': '🎭', 'arte': '🖼️', 'patrimonio': '🏛️', 'cine': '🎬', 'letras': '📚', 'ciencia': '🔬', 'gastro': '🍽️', 'aprender': '✏️',
-       'naturaleza': '🌿', 'ciudad': '🎉', 'deporte': '🏃', 'mascotas': '🐾', 'ferias': '🛍️', 'familia': '🧒', 'comunidad': '🤝'}
 LEMON = open(os.path.join(WEB, 'limon.svg'), encoding='utf-8').read().replace('<title>Limón</title>', '')
 SLIDE_CSS = """*{box-sizing:border-box;margin:0}html,body{width:1080px;height:1350px;overflow:hidden}
 body{font-family:'IBM Plex Sans',sans-serif;color:#231D02;display:flex;flex-direction:column;align-items:center;text-align:center;padding:175px 140px}
