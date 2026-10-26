@@ -3,7 +3,7 @@ name: Publicar la web
 on:
   push:
     branches: [main]
-    paths: ["web/**", ".github/workflows/pages.yml", "engine/src/site.py"]
+    paths: ["web/**", ".github/workflows/pages.yml", "engine/src/site.py", "engine/src/redes.mjs"]
   schedule:
     - cron: "37 4 * * *"   # cada mañana, con los planes del día en las páginas para buscadores
   workflow_dispatch:
@@ -34,6 +34,16 @@ jobs:
       - name: Páginas para buscadores (zonas, categorías y eventos) y sitemap
         working-directory: engine
         run: python3 src/site.py ../web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Imágenes del carrusel semanal para Instagram (/redes/)
+        continue-on-error: true   # si falla, la web se publica igual
+        working-directory: engine/src
+        run: |
+          npm i --no-save --no-package-lock playwright@1.49.1
+          npx playwright install --with-deps chromium
+          node redes.mjs ../../web
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

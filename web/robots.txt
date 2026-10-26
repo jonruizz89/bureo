@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /*?
+Disallow: /redes/
 
 Sitemap: https://limonplanes.com/sitemap.xml

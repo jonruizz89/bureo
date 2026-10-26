@@ -382,6 +382,73 @@ for e in evs:
     cr = (crumbs_of(z) + [(z['name'], f"/planes/{z['path']}/")]) if z else [('Planes', '/planes/')]
     page(e['url'], f"{e['title']} · {cuando(e)}{' · ' + z['name'] if z else ''}", desc, body, cr, ld=[ld], app=app_link(e))
 
+# ---------- Redes: carrusel semanal «Este finde en …» para Instagram (una cuenta por provincia, con el nombre de su capital)
+# Se escribe cada diapositiva en HTML (1080×1350) y engine/src/redes.mjs las convierte en PNG; la página /redes/<cuenta>/ (sin indexar)
+# muestra las imágenes para guardarlas en el móvil y el texto del post para copiarlo.
+CUENTAS = [('madrid', 'madrid', 'Madrid', '#madrid #planesmadrid #quehacerenmadrid #agendamadrid #madridcultural #findesemana'),
+           ('bilbao', 'bizkaia', 'Bilbao y Bizkaia', '#bilbao #bizkaia #planesbilbao #quehacerenbilbao #agendabilbao #bilbo #findesemana'),
+           ('donostia', 'gipuzkoa', 'Donostia y Gipuzkoa', '#donostia #sansebastian #gipuzkoa #planesdonostia #agendadonostia #findesemana'),
+           ('gasteiz', 'araba', 'Vitoria-Gasteiz y Araba', '#vitoria #gasteiz #vitoriagasteiz #araba #alava #planesvitoria #findesemana'),
+           ('zaragoza', 'zaragoza', 'Zaragoza', '#zaragoza #planeszaragoza #quehacerenzaragoza #agendazaragoza #findesemana'),
+           ('gijon', 'gijon', 'Gijón', '#gijon #xixon #asturias #planesgijon #agendagijon #findesemana')]
+EMO = {'musica': '🎵', 'escena': '🎭', 'arte': '🖼️', 'patrimonio': '🏛️', 'cine': '🎬', 'letras': '📚', 'ciencia': '🔬', 'gastro': '🍽️', 'aprender': '✏️',
+       'naturaleza': '🌿', 'ciudad': '🎉', 'deporte': '🏃', 'mascotas': '🐾', 'ferias': '🛍️', 'familia': '🧒', 'comunidad': '🤝'}
+LEMON = open(os.path.join(WEB, 'limon.svg'), encoding='utf-8').read().replace('<title>Limón</title>', '')
+SLIDE_CSS = """*{box-sizing:border-box;margin:0}html,body{width:1080px;height:1350px;overflow:hidden}
+body{font-family:'IBM Plex Sans',sans-serif;color:#231D02;display:flex;flex-direction:column;padding:90px 84px}
+.y{background:#FFD43B}.w{background:#FFF8DC}.brand{display:flex;align-items:center;gap:14px;font:italic 700 46px 'Space Grotesk'}
+.brand svg{width:64px;height:64px}h1{font:700 104px/1 'Space Grotesk';letter-spacing:-3px;margin-top:auto}
+.sub{font:500 46px/1.25 'IBM Plex Sans';margin-top:28px}.n{font:600 34px 'IBM Plex Sans';opacity:.65;margin-top:auto}
+.dia{font:700 56px 'Space Grotesk';background:#231D02;color:#FFD43B;align-self:flex-start;padding:12px 26px;border-radius:18px;margin-top:auto}
+.t{font:700 84px/1.06 'Space Grotesk';letter-spacing:-2px;margin-top:44px;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.l{font:500 42px/1.3 'IBM Plex Sans';margin-top:36px;opacity:.85}.tags{display:flex;gap:16px;margin-top:34px;flex-wrap:wrap}
+.tag{font:600 36px 'IBM Plex Sans';background:#FFD43B;padding:10px 24px;border-radius:999px}.w .tag{background:#FFE88A}
+.big{width:300px;height:300px;margin:auto auto 0}.url{font:700 54px 'Space Grotesk';margin-top:40px}"""
+
+
+def slide(path, body, cls):
+    out = os.path.join(WEB, path.strip('/'))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    open(out, 'w', encoding='utf-8').write(
+        '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="robots" content="noindex">'
+        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@500;600&display=swap">'
+        f'<style>{SLIDE_CSS}</style></head><body class="{cls}">{body}</body></html>')
+
+
+REDES = []
+byz = {z['path']: z for z in zonas}
+for cuenta, zid, nombre, tags in CUENTAS:
+    z = byz.get(zid)
+    if not z:
+        continue
+    sel = picks([e for e in z['evs'] if not re.search(r'agotad|sold.?out|completo', e['title'], re.I)], vie, dom, n=7)
+    if len(sel) < 3:
+        continue
+    rango = f"{vie.day}–{dom.day} {MESES[dom.month - 1][:3]}" if vie.month == dom.month else f"{vie.day} {MESES[vie.month - 1][:3]} – {dom.day} {MESES[dom.month - 1][:3]}"
+    base = f'/redes/{cuenta}/'
+    brand = f'<div class="brand">{LEMON}limón</div>'
+    slide(base + 's0.html', f'{brand}<h1>Este finde en {esc(nombre)}</h1><div class="sub">{len(sel)} planes que no te puedes perder · <span style="white-space:nowrap">{rango}</span></div>'
+                            '<div class="n">Desliza →</div>', 'y')
+    for i, e in enumerate(sel, 1):
+        g = (e['grupos'] or [''])[0]
+        dia = 'Todo el finde' if e['largo'] or d(e['starts_on']) < vie else DIAS[d(e['starts_on']).weekday()].capitalize() + f" {d(e['starts_on']).day}"
+        h = e.get('time_text') if e.get('time_text') and len(e['time_text']) <= 12 and not e['largo'] else ''
+        zz = zpath.get(e['id'])
+        sitio = ', '.join(x for x in (sitio_corto(e['lugar']) if e['lugar'] else None, zz['name'] if zz and zz is not z and zz['name'] not in (e['lugar'] or '') else None) if x)
+        tg = ('<span class="tag">Gratis</span>' if e.get('is_free') else '') + (f'<span class="tag">{EMO.get(g, "")} {esc(groups.get(g, ""))}</span>' if g else '')
+        slide(base + f's{i}.html', f'{brand}<div class="dia">{esc(dia)}{" · " + esc(h) if h else ""}</div><div class="t">{esc(e["title"])}</div>'
+                                   f'<div class="l">📍 {esc(sitio or z["name"])}</div><div class="tags">{tg}</div><div class="n">{i}/{len(sel)}</div>', 'w')
+    slide(base + f's{len(sel) + 1}.html', brand + LEMON.replace('<svg ', '<svg class="big" ', 1) +
+                                         '<h1 style="margin-top:50px;font-size:84px">Y muchos más planes</h1><div class="sub">Con mapa, filtros y tu agenda, gratis.</div>'
+                                         '<div class="url">limonplanes.com</div><div class="n">Enlace en la bio</div>', 'y')
+    texto = (f"🍋 Este finde en {nombre} ({rango}): {len(sel)} planes que no te puedes perder\n\n" +
+             '\n'.join(f"{i}. {e['title']} — {corto(e, vie)}" + (f", {sitio_corto(e['lugar'])}" if e['lugar'] else '') for i, e in enumerate(sel, 1)) +
+             f"\n\nTodos los planes de {nombre}, con mapa y filtros, en limonplanes.com (enlace en la bio) 👆\n\n{tags}")
+    REDES.append({'cuenta': cuenta, 'nombre': nombre, 'rango': rango, 'slides': len(sel) + 2, 'texto': texto, 'enlace': f"{BASE}/planes/{zid}/este-finde/"})
+if REDES:
+    json.dump(REDES, open(os.path.join(WEB, 'redes', 'redes.json'), 'w', encoding='utf-8'), ensure_ascii=False)
+print(len(REDES), 'carruseles para redes')
+
 # sitemap
 hoy = HOY.isoformat()
 sm = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + \

@@ -8,3 +8,5 @@ __pycache__/
 web/planes/
 web/evento/
 web/sitemap.xml
+web/redes/
+engine/src/node_modules/
