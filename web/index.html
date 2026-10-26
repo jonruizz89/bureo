@@ -107,11 +107,10 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 8
 .meta { font-size: 13px; color: var(--quiet); overflow-wrap: anywhere }
 .why { font-size: 13px; background: var(--ok-soft); color: var(--ok); border-radius: 8px; padding: 6px 10px; font-weight: 500 }
 .tags { display: flex; gap: 6px; flex-wrap: wrap }
-.thumb { flex: 0 0 64px; height: 64px; border-radius: 10px; overflow: hidden; background: var(--chip); display: grid; place-items: center; font-size: 28px; position: relative }
+.lcol { flex: 0 0 60px; display: flex; flex-direction: column; gap: 6px }
+.lcol .date { flex: none }
+.thumb { width: 60px; height: 60px; border-radius: 10px; overflow: hidden; background: var(--chip); display: grid; place-items: center; font-size: 26px; position: relative }
 .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover }
-.card .title { padding-right: 0 }
-.card .save { top: auto; bottom: 6px }
-.card .tags { padding-right: 44px; min-height: 22px }
 .evimg { width: 100%; max-height: 240px; object-fit: cover; border-radius: 10px; display: block; margin-bottom: 8px; background: var(--chip) }
 .tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--quiet) }
 .tag.free { background: var(--ok-soft); color: var(--ok) }
@@ -872,14 +871,14 @@ function startApp(DATA, TAX, sync) {
         ${state.route && state.route[e.id] ? `<div class="routewarn">${state.route[e.id]}</div>` : ''}
       </div>` : '';
     return `<article class="card${NEW.has(e.id) ? ' nuevo' : ''}" data-eid="${e.id}">
-      <div class="row1">${dateBox(e, occ)}
+      <div class="row1"><div class="lcol">${dateBox(e, occ)}${thumb(e)}</div>
         <div class="body">
           <h3 class="title"><button data-open="${e.id}" aria-expanded="${open}" aria-controls="m-${e.id}">${esc(e.titulo)}</button></h3>
           <div class="meta">${esc(whenText(e, occ))}</div>
           <div class="meta">${esc(e.lugar || 'Lugar por confirmar')}${userPos && e.lat ? ` · <span class="dist">a ${fmtDist(km(userPos, [e.lat, e.lng]))}</span>` : ''}${ZONE && zkm(e) > 0 && zkm(e) < 999 ? ` · <span class="dist">${e.distrito && !(e.lugar || '').includes(e.distrito) ? esc(e.distrito) + ', ' : ''}a ${fmtDist(zkm(e))} de ${esc(ZONE.name)}</span>` : ''}</div>
           ${streetWarn(e, occ)}${rainWarn(e, occ)}${crewHtml(e)}${friendsHtml(e)}
           ${e.serie ? `<button class="serie link" data-f-serie="${esc(e.serie)}" aria-label="Ver todo el ciclo: ${esc(e.serie)}">${esc(e.serie)} ›</button>` : ''}
-        </div>${thumb(e)}</div>
+        </div></div>
       <div class="tags">${NEW.has(e.id) ? '<span class="tag nuevo">Nuevo</span>' : ''}${price}${e.unico ? '<span class="tag uni">Único</span>' : ''}${(e.temas || []).slice(0, 2).map(t => `<button class="tag tema link" data-f-tema="${esc(t)}" aria-label="Más planes sobre ${esc(t)}">${esc(t)}</button>`).join('')}${cats.map(c => `<button class="tag link" data-f-cat="${esc(c)}" aria-label="Más planes de ${esc(labelOf(c))}">${esc(labelOf(c))}</button>`).join('')}${e.fuentes.length > 1 ? `<span class="tag">${e.fuentes.length} fuentes</span>` : ''}</div>
       ${why}${more}
       <button class="save" data-save="${e.id}" aria-pressed="${isSaved}" aria-label="${isSaved ? 'Quitar de mi agenda' : 'Guardar en mi agenda'}">
