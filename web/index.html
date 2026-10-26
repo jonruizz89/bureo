@@ -375,7 +375,7 @@ table.cov td.n, table.cov th.n { text-align: right }
     <div class="panel fpanel" id="pt-fpanel" hidden></div>
     <div id="pt-list" class="view"></div>
     <button class="btn ghost" id="pt-more" hidden>Ver más</button>
-    <p class="note iglink-pt" id="ig-pt" hidden></p>
+    <p class="note iglink-pt" id="ig-pt" hidden style="text-align:center"></p>
   </section>
 
   <section class="view" id="v-calle" hidden>
@@ -523,7 +523,7 @@ table.cov td.n, table.cov th.n { text-align: right }
           <p class="note" id="acc-del-msg" role="status"></p></details>
       </div>
     </div>
-      <a class="btn ghost iglink" id="ig-perfil" hidden target="_blank" rel="noopener" style="align-self:flex-start;text-decoration:none;display:inline-flex;align-items:center"></a>
+      <a class="btn ghost iglink" id="ig-perfil" hidden target="_blank" rel="noopener" style="align-self:flex-start;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0"></a>
       <button class="btn ghost" data-goto="fuentes" style="align-self:flex-start">Fuentes y cobertura ›</button>
       <p class="note" id="ver" style="opacity:.6">Versión __VER__</p>
       <p class="note"><a href="/planes/">Agenda por zonas</a> · <a href="?ideas">Ideas y sugerencias</a> · <a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones de uso</a> · <a href="mailto:hola@limonplanes.com">hola@limonplanes.com</a></p>
@@ -2441,9 +2441,9 @@ function startApp(DATA, TAX, sync) {
   { const ig = (CITY.features || {}).instagram;
     if (ig && /^[a-z0-9._]{1,30}$/i.test(ig)) {
       const url = 'https://www.instagram.com/' + ig + '/';
-      const icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>';
-      const a = $('ig-perfil'); a.href = url; a.innerHTML = icon + 'Síguenos: @' + esc(ig); a.hidden = false;
-      const p = $('ig-pt'); p.innerHTML = `${icon}Cada jueves, los planes del finde en <a href="${url}" target="_blank" rel="noopener">@${esc(ig)}</a>`; p.hidden = false;
+      const icon = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>';
+      const a = $('ig-perfil'); a.href = url; a.innerHTML = icon.replace('margin-right:6px', ''); a.title = a.ariaLabel = 'Instagram: @' + ig; a.hidden = false;
+      const p = $('ig-pt'); p.innerHTML = `<a href="${url}" target="_blank" rel="noopener" title="Instagram: @${esc(ig)}" aria-label="Instagram: @${esc(ig)}" style="color:inherit;display:inline-flex;padding:10px">${icon.replace('width="22" height="22"', 'width="26" height="26"').replace('margin-right:6px', '')}</a>`; p.hidden = false;
     } }
   // textos de la pestaña Calle propios de cada ciudad (tabla cities, campo features)
   { const f = CITY.features || {};
