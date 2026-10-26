@@ -206,6 +206,10 @@ EMO = {'musica': '🎵', 'escena': '🎭', 'arte': '🖼️', 'patrimonio': '�
        'naturaleza': '🌿', 'ciudad': '🎉', 'deporte': '🏃', 'mascotas': '🐾', 'ferias': '🛍️', 'familia': '🧒', 'comunidad': '🤝'}
 
 
+def ico(e):
+    return next((EMO[g] for g in e['grupos'] if g in EMO), '🍋')
+
+
 def etiqueta(e):
     a, b = d(e['starts_on']), d(e['ends_on'])
     m = lambda x: f"{x.day} {MESES[x.month - 1][:3]}"
@@ -356,7 +360,7 @@ for z in zonas:
         continue
     path = f"/planes/{z['path']}/este-finde/"
     FINDE[z['path']] = path
-    msg = f"🍋 Planes este finde en {z['name']}:\n" + '\n'.join(f"• {corto(e, vie)} · {recorta(e['title'], 70)}" + (f" ({sitio_corto(e['lugar'])})" if e['lugar'] else '') for e in sel[:8]) + \
+    msg = f"🍋 Planes este finde en {z['name']}:\n" + '\n'.join(f"{ico(e)} {corto(e, vie)} · {recorta(e['title'], 70)}" + (f" ({sitio_corto(e['lugar'])})" if e['lugar'] else '') for e in sel[:8]) + \
           f"\n\nTodos: {BASE}{path}"
     wa = 'https://wa.me/?text=' + urllib.parse.quote(msg)
     tg = 'https://t.me/share/url?' + urllib.parse.urlencode({'url': BASE + path, 'text': msg.rsplit('\n\n', 1)[0]})
@@ -490,8 +494,10 @@ for cuenta, zid, nombre, tags in CUENTAS:
                                          '<h1 style="margin-top:44px;font-size:78px">Y muchos más planes</h1><div class="sub">Con mapa, filtros y tu agenda, gratis.</div>'
                                          '<div class="url">limonplanes.com</div><div class="n">Enlace en la bio</div>', 'y')
     texto = (f"🍋 Este finde en {nombre} ({rango}): {len(sel)} planes que no te puedes perder\n\n" +
-             '\n'.join(f"{i}. {e['title']} — {corto(e, vie)}" + (f", {sitio_corto(e['lugar'])}" if e['lugar'] else '') for i, e in enumerate(sel, 1)) +
-             f"\n\nTodos los planes de {nombre}, con mapa y filtros, en limonplanes.com (enlace en la bio) 👆\n\n{tags}")
+             '\n'.join(f"{ico(e)} {e['title']} — {corto(e, vie)}" + (f", {sitio_corto(e['lugar'])}" if e['lugar'] else '') for e in sel) +
+             f"\n\n✌️ Y esto es solo una parte: todos los planes de {nombre}, con mapa y filtros, en limonplanes.com (enlace en la bio) 👆"
+             "\n\n🔒 Guárdate este carrusel para cuando toque decidir plan y compártelo con quien siempre te pregunta «¿qué hacemos este finde?»"
+             f"\n\n{tags}")
     REDES.append({'cuenta': cuenta, 'nombre': nombre, 'rango': rango, 'slides': len(sel) + 2, 'texto': texto, 'enlace': f"{BASE}/planes/{zid}/este-finde/"})
 if REDES:
     json.dump(REDES, open(os.path.join(WEB, 'redes', 'redes.json'), 'w', encoding='utf-8'), ensure_ascii=False)
