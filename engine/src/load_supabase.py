@@ -90,10 +90,10 @@ mios = {r['ext_key'] for r in rows}
 prev = {}
 off = 0
 while True:
-    got = api('GET', f'events?select=id,ext_key,title,starts_on,venue_id&city_id=eq.{CITY}&ends_on=gte.{desde}&order=id&offset={off}&limit=1000')
+    got = api('GET', f'events?select=id,ext_key,title,starts_on,venue_id,lat,lng&city_id=eq.{CITY}&ends_on=gte.{desde}&order=id&offset={off}&limit=1000')
     for r in got:
         if r['ext_key'] not in mios:
-            prev.setdefault(r['starts_on'], []).append((norm(r['title']), r['id'], r['ext_key'], r['venue_id']))
+            prev.setdefault(r['starts_on'], []).append((norm(r['title']), r['id'], r['ext_key'], r['venue_id'], r['lat'], r['lng']))
     if len(got) < 1000:
         break
     off += 1000
@@ -102,8 +102,16 @@ def igual(a, b):
     return a == b or (min(len(a), len(b)) >= 12 and (a.startswith(b) or b.startswith(a)))
 for r in rows:
     t = norm(r['title'])
-    # títulos cortos y genéricos («Club de lectura», «Cuentacuentos») solo si además coincide el recinto
-    hit = next(((i, k) for (pt, i, k, v) in prev.get(r['starts_on'], []) if igual(t, pt) and (len(t) >= 20 or (v and v == r['venue_id']))), None)
+    # títulos cortos y genéricos («Club de lectura», «Cuentacuentos») solo si además es el mismo sitio:
+    # mismo recinto o a menos de 600 m (si falta la ubicación, títulos de 8 letras o más)
+    def cerca(v, la, lo):
+        if v and v == r['venue_id']:
+            return True
+        if la is not None and r.get('lat') is not None:
+            return abs(la - r['lat']) < 0.0055 and abs(lo - r['lng']) < 0.0075
+        # sin coordenadas para comparar: basta un título que no sea genérico
+        return len(t) >= 8 and not t.startswith(('club de lectura', 'cuentacuentos', 'visita guiada', 'visitas guiadas', 'taller', 'concierto', 'cine', 'exposicion', 'charla', 'conferencia', 'hora del cuento'))
+    hit = next(((i, k) for (pt, i, k, v, la, lo) in prev.get(r['starts_on'], []) if igual(t, pt) and (len(t) >= 20 or cerca(v, la, lo))), None)
     if hit:
         ajenos[r['ext_key']] = hit[0]
         ajenos_keys.append(hit[1])
