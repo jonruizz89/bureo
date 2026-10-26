@@ -81,7 +81,37 @@ for e in evs:
     })
     if PFX:  # en las demás ciudades «único» lo decide unicos.py después de clasificar: no se pisa
         rows[-1].pop('is_unique')
-eid = {}
+# 2b) mismo plan ya cargado por otra vía (p. ej. Conde Duque o Matadero, que también salen en la agenda municipal):
+#     si coincide la fecha de inicio y el título (normalizado, o uno empieza por el otro), se añade la fuente al evento
+#     que ya existe en lugar de crear un duplicado; sus sesiones y categorías no se tocan
+import datetime as _d0
+desde = (_d0.date.today() - _d0.timedelta(days=2)).isoformat()
+mios = {r['ext_key'] for r in rows}
+prev = {}
+off = 0
+while True:
+    got = api('GET', f'events?select=id,ext_key,title,starts_on,venue_id&city_id=eq.{CITY}&ends_on=gte.{desde}&order=id&offset={off}&limit=1000')
+    for r in got:
+        if r['ext_key'] not in mios:
+            prev.setdefault(r['starts_on'], []).append((norm(r['title']), r['id'], r['ext_key'], r['venue_id']))
+    if len(got) < 1000:
+        break
+    off += 1000
+ajenos, ajenos_keys = {}, []
+def igual(a, b):
+    return a == b or (min(len(a), len(b)) >= 12 and (a.startswith(b) or b.startswith(a)))
+for r in rows:
+    t = norm(r['title'])
+    # títulos cortos y genéricos («Club de lectura», «Cuentacuentos») solo si además coincide el recinto
+    hit = next(((i, k) for (pt, i, k, v) in prev.get(r['starts_on'], []) if igual(t, pt) and (len(t) >= 20 or (v and v == r['venue_id']))), None)
+    if hit:
+        ajenos[r['ext_key']] = hit[0]
+        ajenos_keys.append(hit[1])
+if ajenos:
+    print('ya estaban por otra fuente', len(ajenos))
+rows = [r for r in rows if r['ext_key'] not in ajenos]
+
+eid = dict(ajenos)
 for part in chunks(rows, 400):
     for r in api('POST', 'events?on_conflict=ext_key&select=id,ext_key', part,
                  'resolution=merge-duplicates,return=representation'):
@@ -90,7 +120,7 @@ print('eventos', len(eid))
 
 # 3) sesiones, categorías y fuentes (se reemplazan)
 #    Las categorías de los eventos ya clasificados con IA no se tocan: las reglas solo sirven de pista inicial.
-ids = list(eid.values())
+ids = [i for k, i in eid.items() if k not in ajenos]
 ai_done = set()
 for part in chunks(ids, 300):
     flt = 'id=in.(' + ','.join(map(str, part)) + ')'
@@ -106,6 +136,9 @@ for e in evs:
     i = eid.get(e.get('_key'))
     if not i:
         continue
+    if e['_key'] in ajenos:  # solo se añade la fuente
+        srcs += [{'event_id': i, 'source_id': sources[f['nombre']], 'url': f.get('url')} for f in e['fuentes'] if f['nombre'] in sources]
+        continue
     sess += [{'event_id': i, 'on_date': d} for d in sorted(set(e['sesiones']))]
     if i not in ai_done:
         cats += [{'event_id': i, 'category_id': c} for c in dict.fromkeys(e['cats']) if c in cats_ok]
@@ -120,7 +153,7 @@ for tbl, rws, conflict in (('event_sessions', sess, 'event_id,on_date'), ('event
 # 4) ciudades del motor genérico: retirar lo que ya no publica ninguna de sus fuentes (si todas se leyeron bien)
 leidas = [sources[n] for n in (data.get('meta') or {}).get('por_fuente', {}) if n in sources]
 if PFX and leidas:
-    print('retirados', api('POST', 'rpc/retire_stale_events', {'p_city': CITY, 'p_keep': [r['ext_key'] for r in rows], 'p_sources': leidas}))
+    print('retirados', api('POST', 'rpc/retire_stale_events', {'p_city': CITY, 'p_keep': [r['ext_key'] for r in rows] + ajenos_keys, 'p_sources': leidas}))
 import datetime as _dt
 api('PATCH', f'sources?city_id=eq.{CITY}&status=eq.activa', {'last_run_at': _dt.datetime.now(_dt.timezone.utc).isoformat()}, 'return=minimal')
 print('ok')
