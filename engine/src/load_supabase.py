@@ -102,15 +102,16 @@ def igual(a, b):
     return a == b or (min(len(a), len(b)) >= 12 and (a.startswith(b) or b.startswith(a)))
 for r in rows:
     t = norm(r['title'])
-    # títulos cortos y genéricos («Club de lectura», «Cuentacuentos») solo si además es el mismo sitio:
-    # mismo recinto o a menos de 600 m (si falta la ubicación, títulos de 8 letras o más)
+    # los títulos cortos se unen solo si además es el mismo sitio; los genéricos («Club de lectura», «Cuentacuentos») con más exigencia
+    generico = t.startswith(('club de lectura', 'cuentacuentos', 'visita guiada', 'visitas guiadas', 'taller', 'concierto', 'cine', 'exposicion',
+                             'charla', 'conferencia', 'hora del cuento')) or len(t) < 8
     def cerca(v, la, lo):
         if v and v == r['venue_id']:
             return True
-        if la is not None and r.get('lat') is not None:
-            return abs(la - r['lat']) < 0.0055 and abs(lo - r['lng']) < 0.0075
-        # sin coordenadas para comparar: basta un título que no sea genérico
-        return len(t) >= 8 and not t.startswith(('club de lectura', 'cuentacuentos', 'visita guiada', 'visitas guiadas', 'taller', 'concierto', 'cine', 'exposicion', 'charla', 'conferencia', 'hora del cuento'))
+        if la is None or r.get('lat') is None:  # sin coordenadas para comparar: basta un título que no sea genérico
+            return not generico
+        m = 1 if generico else 2.5  # 600 m para títulos genéricos; 1,5 km para el resto (las fuentes sitúan distinto un mismo recinto)
+        return abs(la - r['lat']) < 0.0055 * m and abs(lo - r['lng']) < 0.0075 * m
     hit = next(((i, k) for (pt, i, k, v, la, lo) in prev.get(r['starts_on'], []) if igual(t, pt) and (len(t) >= 20 or cerca(v, la, lo))), None)
     if hit:
         ajenos[r['ext_key']] = hit[0]
