@@ -1,7 +1,7 @@
 // Limón · service worker: abre al instante y sin conexión, y recibe los avisos push.
 // Estrategia: la página y los datos, primero la red y si falla la copia; los ficheros propios, la copia y se renueva en segundo plano;
 // las librerías externas (con versión fija), la copia. Los mapas, el tiempo y las funciones del servidor no se guardan.
-const VERSION = 'limon-v3';  // v3: ficheros con ?v= de versión; se descartan las copias antiguas
+const VERSION = 'limon-v4';  // v4: la página y el código se comprueban siempre con el servidor (sin la caché HTTP del navegador)
 const SHELL = ['./', 'index.html', 'data.js', 'config.js', 'limon.svg', 'limon-180.png', 'limon-192.png', 'manifest.webmanifest'];
 const CDN = /^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 
@@ -12,10 +12,12 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
-async function networkFirst(req, fallbackUrl) {
+// fresh: pregunta al servidor aunque el navegador tenga una copia reciente en su caché HTTP (GitHub Pages la deja 10 min);
+// sin esto, al recargar en otra dirección (p. ej. «/» al cambiar de ciudad) se abría la versión anterior de la app
+async function networkFirst(req, fallbackUrl, fresh) {
   const c = await caches.open(VERSION);
   try {
-    const r = await fetch(req);
+    const r = await fetch(fresh ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : req);
     if (r && r.ok) c.put(req, r.clone());
     return r;
   } catch (e) {
@@ -39,10 +41,10 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const u = new URL(req.url);
-  if (req.mode === 'navigate') { e.respondWith(networkFirst(req, 'index.html')); return; }
+  if (req.mode === 'navigate') { e.respondWith(networkFirst(req, 'index.html', true)); return; }
   if (u.origin === self.location.origin) {
     // código (html, js): siempre la última versión si hay red, para que la página y su código no se desfasen
-    e.respondWith(/\.(js|html|webmanifest)$|\/$/.test(u.pathname) ? networkFirst(req) : staleWhileRevalidate(req)); return;
+    e.respondWith(/\.(js|html|webmanifest)$|\/$/.test(u.pathname) ? networkFirst(req, null, true) : staleWhileRevalidate(req)); return;
   }
   // datos de Supabase (eventos, tu agenda…): para poder abrir la app sin cobertura con lo último que se cargó
   if (/\.supabase\.co$/.test(u.hostname) && u.pathname.startsWith('/rest/v1/')) { e.respondWith(networkFirst(req)); return; }
