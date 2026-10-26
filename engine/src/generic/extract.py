@@ -146,6 +146,8 @@ def main(cid):
         for e in evs:
             if not e.get('inicio') or (e.get('fin') or e['inicio']) < HOY.isoformat() or e['inicio'] > HASTA.isoformat():
                 continue
+            if e['inicio'] < (HOY - dt.timedelta(days=730)).isoformat():
+                continue  # «eventos» que empezaron hace años (programas permanentes, secciones de la web): no son planes
             if s.get('layer') == 'regional' and not e.get('municipio') and not (e.get('lat') and e.get('lng')):
                 continue  # agendas autonómicas: solo si sabemos que es en la ciudad
             if not in_city(e, city):
