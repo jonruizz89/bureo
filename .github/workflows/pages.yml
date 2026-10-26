@@ -43,6 +43,7 @@ jobs:
         run: |
           npm i --no-save --no-package-lock playwright@1.49.1
           npx playwright install --with-deps chromium
+          sudo apt-get install -y -qq ffmpeg >/dev/null
           node redes.mjs ../../web
       - uses: actions/upload-pages-artifact@v3
         with:
