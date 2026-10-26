@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacidad · Limón</title>
 <link rel="icon" href="limon.svg" type="image/svg+xml">
@@ -31,7 +31,7 @@ th { font-weight: 600 }
   <a class="top" href="./"><img src="limon.svg" alt="">Limón</a>
   <article class="doc">
     <h1>Política de privacidad</h1>
-    <p class="quiet">Última actualización: 20 de octubre de 2026 (edad y sexo opcionales, «¿Al final fuiste?») · <a href="condiciones.html">Condiciones de uso</a></p>
+    <p class="quiet">Última actualización: 26 de octubre de 2026 (recuento de visitas sin cookies con Cloudflare Web Analytics) · <a href="condiciones.html">Condiciones de uso</a></p>
 
     <p>Limón es una agenda de planes en Madrid, Bilbao y otras ciudades. Puedes usarla sin cuenta: en ese caso tus intereses y tu agenda se guardan solo en tu navegador y no recibimos ningún dato tuyo, salvo que aceptes ayudarnos con estadísticas de uso (apartado 3). Esta página explica qué datos tratamos si creas una cuenta o usas funciones que los necesitan, para qué y qué puedes hacer con ellos.</p>
 
@@ -78,7 +78,7 @@ th { font-weight: 600 }
       <tr><td>Cloudflare</td><td>Dominio, recepción de correo en hola@limonplanes.com y comprobación anti-robots (Turnstile) al entrar o crear la cuenta</td><td>Global</td></tr>
     </table></div>
     <p>Cuando hay transferencias fuera del Espacio Económico Europeo se amparan en el Marco de Privacidad de Datos UE-EE. UU. o en cláusulas contractuales tipo de la Comisión Europea.</p>
-    <p>Además, al usar la web tu navegador se conecta directamente a servicios de terceros que reciben tu IP: los mapas de OpenStreetMap, la previsión del tiempo de Open-Meteo (se pide la de Madrid, no la de tu ubicación), las tipografías de Google Fonts y las librerías de jsDelivr. Al usar el formulario de entrar o crear cuenta, se carga la comprobación anti-robots de Cloudflare Turnstile, que recibe tu IP y datos técnicos del navegador solo para distinguir personas de programas automáticos; no usa cookies de seguimiento. Si usas «¿Cortes en el camino?», nuestro servidor pide la ruta al servicio público OSRM (project-osrm.org) con tu punto de partida redondeado a unos 100 metros; OSRM no recibe tu IP. Si pulsas «Cómo llegar» o añades el calendario a Google Calendar, se abre el servicio de Google con sus propias condiciones.</p>
+    <p>Para contar las visitas usamos Cloudflare Web Analytics, que no usa cookies ni identifica a nadie: solo cuenta páginas vistas, de qué web llegas, el país y el tipo de dispositivo, de forma agregada, y no guarda tu IP. Además, al usar la web tu navegador se conecta directamente a servicios de terceros que reciben tu IP: los mapas de OpenStreetMap, la previsión del tiempo de Open-Meteo (se pide la de Madrid, no la de tu ubicación), las tipografías de Google Fonts y las librerías de jsDelivr. Al usar el formulario de entrar o crear cuenta, se carga la comprobación anti-robots de Cloudflare Turnstile, que recibe tu IP y datos técnicos del navegador solo para distinguir personas de programas automáticos; no usa cookies de seguimiento. Si usas «¿Cortes en el camino?», nuestro servidor pide la ruta al servicio público OSRM (project-osrm.org) con tu punto de partida redondeado a unos 100 metros; OSRM no recibe tu IP. Si pulsas «Cómo llegar» o añades el calendario a Google Calendar, se abre el servicio de Google con sus propias condiciones.</p>
 
     <h2>6. Cuánto tiempo los guardamos</h2>
     <p>Los datos de tu cuenta, mientras la mantengas. Si te das de baja se borran al momento la cuenta y todos sus datos, incluidas las estadísticas de uso unidas a ella, y los eventos que publicaste dejan de mostrarse. El detalle de las estadísticas de uso se guarda un máximo de 18 meses. El registro de correos enviados se conserva un máximo de 12 meses. Los registros técnicos de nuestros proveedores se eliminan según sus propios plazos, normalmente en semanas.</p>
@@ -102,5 +102,6 @@ th { font-weight: 600 }
     <p>Si cambiamos esta política de forma importante te lo avisaremos en la app o por correo antes de que se aplique.</p>
   </article>
 </main>
+<script>/* Cloudflare Web Analytics: visitas sin cookies, solo en la web pública (no en pruebas) */if (location.hostname === 'limonplanes.com') { const s = document.createElement('script'); s.type = 'module'; s.src = 'https://static.cloudflareinsights.com/beacon.min.js'; s.setAttribute('data-cf-beacon', '{"token": "279d742c8af84146b16f4ef30d20adcc"}'); document.head.appendChild(s); }</script>
 </body>
 </html>

@@ -134,8 +134,11 @@ ul.ev a{font-weight:600;text-decoration:none}ul.ev a:hover{text-decoration:under
 .card{background:var(--s);border:1px solid var(--l);border-radius:14px;padding:16px;margin:12px 0}.card p{margin:8px 0}
 img.hero{width:100%;max-height:340px;object-fit:cover;border-radius:14px;margin:8px 0}
 footer{color:var(--q);font-size:13px;padding-top:30px;padding-bottom:40px}"""
+# Cloudflare Web Analytics: visitas sin cookies (token público)
+BEACON = '<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon=\'{"token": "279d742c8af84146b16f4ef30d20adcc"}\'></script>'
 CSP = ("default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-       "font-src https://fonts.gstatic.com; script-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'")
+       "font-src https://fonts.gstatic.com; script-src https://static.cloudflareinsights.com; connect-src https://cloudflareinsights.com; "
+       "object-src 'none'; base-uri 'self'; form-action 'none'")
 
 
 def page(path, title, desc, body, crumbs=(), ld=None, app='/'):
@@ -156,7 +159,7 @@ def page(path, title, desc, body, crumbs=(), ld=None, app='/'):
 <footer>Limón reúne los planes de tu zona de agendas públicas y webs de organizadores; comprueba siempre la información en la fuente.
 Datos de la agenda municipal de Madrid (datos.madrid.es) de Kulturklik (Open Data Euskadi, CC BY 4.0) y de la agenda del Ayuntamiento de Zaragoza, entre otros.
 <br><a href="/planes/">Todas las zonas</a> · <a href="/privacidad.html">Privacidad</a> · <a href="/condiciones.html">Condiciones</a></footer>
-</body></html>"""
+@@LIMON_BEACON@@</body></html>""".replace('@@LIMON_BEACON@@', BEACON)
     out = os.path.join(WEB, path.strip('/'), 'index.html')
     os.makedirs(os.path.dirname(out), exist_ok=True)
     open(out, 'w', encoding='utf-8').write(doc)
