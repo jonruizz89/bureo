@@ -395,15 +395,15 @@ EMO = {'musica': '🎵', 'escena': '🎭', 'arte': '🖼️', 'patrimonio': '�
        'naturaleza': '🌿', 'ciudad': '🎉', 'deporte': '🏃', 'mascotas': '🐾', 'ferias': '🛍️', 'familia': '🧒', 'comunidad': '🤝'}
 LEMON = open(os.path.join(WEB, 'limon.svg'), encoding='utf-8').read().replace('<title>Limón</title>', '')
 SLIDE_CSS = """*{box-sizing:border-box;margin:0}html,body{width:1080px;height:1350px;overflow:hidden}
-body{font-family:'IBM Plex Sans',sans-serif;color:#231D02;display:flex;flex-direction:column;padding:90px 84px}
-.y{background:#FFD43B}.w{background:#FFF8DC}.brand{display:flex;align-items:center;gap:14px;font:italic 700 46px 'Space Grotesk'}
-.brand svg{width:64px;height:64px}h1{font:700 104px/1 'Space Grotesk';letter-spacing:-3px;margin-top:auto}
-.sub{font:500 46px/1.25 'IBM Plex Sans';margin-top:28px}.n{font:600 34px 'IBM Plex Sans';opacity:.65;margin-top:auto}
-.dia{font:700 56px 'Space Grotesk';background:#231D02;color:#FFD43B;align-self:flex-start;padding:12px 26px;border-radius:18px;margin-top:auto}
-.t{font:700 84px/1.06 'Space Grotesk';letter-spacing:-2px;margin-top:44px;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
-.l{font:500 42px/1.3 'IBM Plex Sans';margin-top:36px;opacity:.85}.tags{display:flex;gap:16px;margin-top:34px;flex-wrap:wrap}
-.tag{font:600 36px 'IBM Plex Sans';background:#FFD43B;padding:10px 24px;border-radius:999px}.w .tag{background:#FFE88A}
-.big{width:300px;height:300px;margin:auto auto 0}.url{font:700 54px 'Space Grotesk';margin-top:40px}"""
+body{font-family:'IBM Plex Sans',sans-serif;color:#231D02;display:flex;flex-direction:column;align-items:center;text-align:center;padding:175px 140px}
+.y{background:#FFD43B}.w{background:#FFF8DC}.brand{display:flex;align-items:center;gap:12px;font:italic 700 40px 'Space Grotesk'}
+.brand svg{width:56px;height:56px}h1{font:700 92px/1.02 'Space Grotesk';letter-spacing:-2px;margin-top:auto}
+.sub{font:500 42px/1.3 'IBM Plex Sans';margin-top:30px}.n{font:600 32px 'IBM Plex Sans';opacity:.65;margin-top:auto}
+.dia{font:700 50px 'Space Grotesk';background:#231D02;color:#FFD43B;padding:12px 26px;border-radius:18px;margin-top:auto}
+.t{font:700 74px/1.08 'Space Grotesk';letter-spacing:-1.5px;margin-top:40px;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.l{font:500 40px/1.3 'IBM Plex Sans';margin-top:34px;opacity:.85}.tags{display:flex;gap:16px;margin-top:32px;flex-wrap:wrap;justify-content:center}
+.tag{font:600 34px 'IBM Plex Sans';background:#FFD43B;padding:10px 24px;border-radius:999px}.w .tag{background:#FFE88A}
+.big{width:260px;height:260px;margin:auto auto 0}.url{font:700 52px 'Space Grotesk';margin-top:36px}"""
 
 
 def slide(path, body, cls):
@@ -439,7 +439,7 @@ for cuenta, zid, nombre, tags in CUENTAS:
         slide(base + f's{i}.html', f'{brand}<div class="dia">{esc(dia)}{" · " + esc(h) if h else ""}</div><div class="t">{esc(e["title"])}</div>'
                                    f'<div class="l">📍 {esc(sitio or z["name"])}</div><div class="tags">{tg}</div><div class="n">{i}/{len(sel)}</div>', 'w')
     slide(base + f's{len(sel) + 1}.html', brand + LEMON.replace('<svg ', '<svg class="big" ', 1) +
-                                         '<h1 style="margin-top:50px;font-size:84px">Y muchos más planes</h1><div class="sub">Con mapa, filtros y tu agenda, gratis.</div>'
+                                         '<h1 style="margin-top:44px;font-size:78px">Y muchos más planes</h1><div class="sub">Con mapa, filtros y tu agenda, gratis.</div>'
                                          '<div class="url">limonplanes.com</div><div class="n">Enlace en la bio</div>', 'y')
     texto = (f"🍋 Este finde en {nombre} ({rango}): {len(sel)} planes que no te puedes perder\n\n" +
              '\n'.join(f"{i}. {e['title']} — {corto(e, vie)}" + (f", {sitio_corto(e['lugar'])}" if e['lugar'] else '') for i, e in enumerate(sel, 1)) +
