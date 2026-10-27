@@ -156,6 +156,8 @@ def yo(z):
     faltan = [k for k, v in zip(('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET'), cred) if not v]
     if faltan:
         raise SystemExit('Faltan los secretos: ' + ', '.join(faltan))
+    # pistas para errores de credenciales sin enseñar ningún valor: longitudes y forma del token
+    print('Longitudes:', [len(c) for c in cred], '· el token empieza por número y guion:', bool(re.match(r'^\d+-', cred[2])))
     url = 'https://api.x.com/2/users/me'
     req = urllib.request.Request(url, headers={'Authorization': firma('GET', url, *cred)})
     try:
