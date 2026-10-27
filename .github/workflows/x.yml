@@ -1,0 +1,57 @@
+name: Publicar en X
+
+# Cuentas de Limón en X por zona. Sin los secretos de una cuenta solo se escribe el texto en el registro (prueba).
+# Horas en UTC: en invierno Madrid va una hora por delante (en verano, dos).
+on:
+  schedule:
+    - cron: "5 6 * * *"     # ~7:05 · cortes y avisos del día
+    - cron: "35 10 * * *"   # ~11:35 · planes de hoy (de lunes a jueves; el finde ya lo cubre «finde»)
+    - cron: "10 17 * * 4"   # jueves ~18:10 · este finde
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "cortes, hoy o finde"
+        required: true
+        default: cortes
+      prueba:
+        description: "1 = solo enseñar el texto, sin publicar"
+        default: "1"
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        zona: [madrid]   # añadir aquí cada zona cuando tenga su cuenta y sus secretos X_<ZONA>_TOKEN / X_<ZONA>_SECRET
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Elegir qué toca
+        id: m
+        run: |
+          case "${{ github.event.schedule }}" in
+            "5 6 * * *") m=cortes ;;
+            "35 10 * * *") [ "$(date -u +%u)" -le 4 ] && m=hoy || m=none ;;
+            "10 17 * * 4") m=finde ;;
+            *) m="${{ inputs.modo }}" ;;
+          esac
+          echo "modo=$m" >> "$GITHUB_OUTPUT"
+      - name: Publicar
+        if: steps.m.outputs.modo != 'none'
+        env:
+          TZ: Europe/Madrid
+          X_DRY: ${{ inputs.prueba || '0' }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_MADRID_TOKEN: ${{ secrets.X_MADRID_TOKEN }}
+          X_MADRID_SECRET: ${{ secrets.X_MADRID_SECRET }}
+        run: python3 src/x_post.py ${{ matrix.zona }} ${{ steps.m.outputs.modo }}
