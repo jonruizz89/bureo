@@ -13,7 +13,7 @@ RAW = os.environ.get('BUREO_RAW', 'raw')
 CALLEJERO = ('https://datos.madrid.es/dataset/213605-0-callejero-oficial-madrid/resource/'
              '213605-4-callejero-oficial-madrid-csv/download/213605-4-callejero-oficial-madrid-csv.csv')
 METRO_GTFS = 'https://www.arcgis.com/sharing/rest/content/items/5c7f2951962540d69ffe8f640d94c246/data'
-UA = 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)'
+UA = 'LimonBot/1.0 (+https://limonplanes.com)'
 
 TIPOS = ('calle', 'avenida', 'paseo', 'plaza', 'glorieta', 'ronda', 'carretera', 'camino', 'travesia', 'pasaje',
          'autovia', 'autopista', 'bulevar', 'callejon', 'cuesta', 'costanilla', 'carrera', 'plazuela', 'puerta',

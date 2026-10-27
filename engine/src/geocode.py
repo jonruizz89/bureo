@@ -7,7 +7,7 @@ por segundo). El distrito sale de la rejilla de portales del callejero.
 import json, os, re, subprocess, time, unicodedata, urllib.parse
 from geo_index import RAW, street_key, fold
 
-UA = 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)'
+UA = 'LimonBot/1.0 (+https://limonplanes.com)'
 DISTRITOS = {1: 'Centro', 2: 'Arganzuela', 3: 'Retiro', 4: 'Salamanca', 5: 'Chamartín', 6: 'Tetuán', 7: 'Chamberí',
              8: 'Fuencarral-El Pardo', 9: 'Moncloa-Aravaca', 10: 'Latina', 11: 'Carabanchel', 12: 'Usera',
              13: 'Puente de Vallecas', 14: 'Moratalaz', 15: 'Ciudad Lineal', 16: 'Hortaleza', 17: 'Villaverde',

@@ -1,4 +1,4 @@
-// Configuración pública de Bureo. La clave publicable solo permite lo que dejan
+// Configuración pública de Limón. La clave publicable solo permite lo que dejan
 // las políticas de seguridad por filas: leer el catálogo y gestionar los datos propios.
 window.BUREO_CONFIG = {
   supabaseUrl: 'https://pxeqbxxfsrvsxcdfiddc.supabase.co',

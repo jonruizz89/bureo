@@ -60,7 +60,7 @@ for u in todo[:LIMIT]:
         print('tiempo agotado: el resto queda para la próxima noche')
         break
     try:
-        s = subprocess.run(['curl', '-sSL', '-m', '30', '-A', 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)', u],
+        s = subprocess.run(['curl', '-sSL', '-m', '30', '-A', 'LimonBot/1.0 (+https://limonplanes.com)', u],
                            capture_output=True, text=True).stdout
         blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', s, re.S)
         web = re.search(r'field-name-field-web.*?<a href="([^"]+)"', s, re.S)

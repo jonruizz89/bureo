@@ -32,7 +32,7 @@ async function geocode(q: string, city: City) {
   try {  // Nominatim (OpenStreetMap)
     const r = await fetch('https://nominatim.openstreetmap.org/search?' + new URLSearchParams({
       q: q + ', ' + city.name, format: 'jsonv2', limit: '5', addressdetails: '1', countrycodes: 'es' }),
-      { headers: { 'User-Agent': 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)' } });
+      { headers: { 'User-Agent': 'LimonBot/1.0 (+https://limonplanes.com)' } });
     if (r.ok) {
       const x = (await r.json()).find((y: { address?: { city?: string; town?: string } }) => same((y.address || {}).city || (y.address || {}).town));
       if (x) return { lat: Number(x.lat), lng: Number(x.lon), district: pick(x.address.city_district || x.address.suburb || '') };

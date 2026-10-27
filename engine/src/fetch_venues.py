@@ -17,7 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CONF = json.load(open(os.path.join(HERE, '..', 'sources_extra.json'), encoding='utf-8'))
 CACHE = os.path.join(RAW, 'extra_llm_cache.json')
 OUT = os.path.join(RAW, 'extra_events.json')
-UA = 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)'
+UA = 'LimonBot/1.0 (+https://limonplanes.com)'
 AKEY = os.environ.get('ANTHROPIC_API_KEY')
 MODEL = os.environ.get('BUREO_AI_MODEL', 'claude-haiku-5-5')
 MAX_USD = float(os.environ.get('BUREO_EXTRA_MAX_USD', '0.15'))

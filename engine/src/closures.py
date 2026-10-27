@@ -23,7 +23,7 @@ MAX_USD = float(os.environ.get('BUREO_CLOSURES_MAX_USD', '0.20'))
 BASE = 'https://www.madrid.es'
 INDEX = (BASE + '/portales/munimadrid/es/Inicio/Movilidad-y-transportes/Incidencias-de-Trafico/'
          'Principales-incidencias-en-la-ciudad/?vgnextfmt=default&vgnextchannel=cbe0aa2dedcb1610VgnVCM2000001f4a900aRCRD')
-UA = 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)'  # madrid.es bloquea agentes que se hacen pasar por navegador
+UA = 'LimonBot/1.0 (+https://limonplanes.com)'  # madrid.es bloquea agentes que se hacen pasar por navegador
 SKIP = ('Recomendaciones', 'aparcamientos', 'Estado del tráfico', 'Zonas de Bajas', 'Medidas a adoptar',
         'Servicio sustitutivo', 'ColIncidencias', 'Planifica')
 

@@ -1,6 +1,6 @@
-# Bureo
+# Limón (antes Bureo)
 
-Los planes de tu ciudad que van contigo. Bureo reúne la agenda de Madrid (Ayuntamiento, esMadrid y grandes recintos),
+Los planes de tu ciudad que van contigo. Limón (limonplanes.com) reúne la agenda de Madrid (Ayuntamiento, esMadrid y grandes recintos),
 une los duplicados, clasifica cada evento en 152 categorías y te enseña lo que encaja con tus intereses.
 
 Nació en 2013 como **Everent**, un proyecto fin de carrera.

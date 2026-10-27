@@ -6,7 +6,7 @@ RAW = os.environ.get('BUREO_RAW', 'raw')
 os.makedirs(RAW, exist_ok=True)
 
 
-UAS = ['BureoBot/0.1 (+https://github.com/jonruizz89/bureo)', 'curl/8.5.0',
+UAS = ['LimonBot/1.0 (+https://limonplanes.com)', 'curl/8.5.0',
        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36']
 
 

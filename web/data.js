@@ -474,7 +474,7 @@
     chosen: () => { try { return !!localStorage.getItem('bureo.city') || new URLSearchParams(location.search).has('c'); } catch (e) { return true; } }
   };
 
-  window.bootBureo = async function (startApp) {
+  window.bootLimon = async function (startApp) {
     $('pt-h').textContent = 'Cargando planes…';
     try {
       const sp = window.limonSplash || (() => { });

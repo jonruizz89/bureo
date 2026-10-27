@@ -8,7 +8,7 @@ x = true si es el tramo exacto que da el aviso; false si se pinta la vía entera
 import heapq, json, math, os, re, subprocess, time, urllib.parse
 from geo_index import RAW, street_key, name_key, fold, dist, simplify
 
-UA = 'BureoBot/0.1 (+https://github.com/jonruizz89/bureo)'
+UA = 'LimonBot/1.0 (+https://limonplanes.com)'
 OSM_CACHE = os.path.join(RAW, 'osm_ways.json')
 OSM_DAYS = 30
 _O = None
