@@ -2335,8 +2335,8 @@ function startApp(DATA, TAX, sync) {
     else if ($('ts-msg').textContent.startsWith('Entra')) $('ts-msg').textContent = '';
     if (!taste) { $('ts-out').innerHTML = ''; return; }
     const cats = (taste.categorias || []).slice().sort((a, b) => b.peso - a.peso);
-    $('ts-out').innerHTML = `<div class="why" style="background:var(--chip);color:var(--ink);font-weight:400">${esc(taste.resumen || '')}</div>
-      ${(taste.temas || []).length ? `<h3 style="margin:4px 0 0;font:600 13px var(--f-body);color:var(--quiet)">Temas que busco por ti</h3><div class="seg">${taste.temas.map((t, i) => `<button class="tchip" data-rmtema="${i}" aria-label="Quitar ${esc(t)}">${esc(t)} <span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}
+    // sin el resumen en prosa: repetía casi lo que escribió el usuario; quedan los temas y categorías, que sí se pueden corregir
+    $('ts-out').innerHTML = `${(taste.temas || []).length ? `<h3 style="margin:4px 0 0;font:600 13px var(--f-body);color:var(--quiet)">Temas que busco por ti</h3><div class="seg">${taste.temas.map((t, i) => `<button class="tchip" data-rmtema="${i}" aria-label="Quitar ${esc(t)}">${esc(t)} <span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}
       ${cats.length ? `<h3 style="margin:4px 0 0;font:600 13px var(--f-body);color:var(--quiet)">Categorías</h3><div class="seg">${cats.map((c, i) => `<button class="tchip" style="background:var(--chip);color:var(--ink)" data-rmtcat="${esc(c.id)}" aria-label="Quitar ${esc(labelOf(c.id))}">${esc(labelOf(c.id))}${c.peso === 3 ? ' ★' : ''} <span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}
       ${(taste.evitar || []).length ? `<p class="note">Evito: ${taste.evitar.map(c => esc(labelOf(c))).join(', ')}</p>` : ''}
       ${taste.pregunta ? `<p class="note"><b>Para afinar:</b> ${esc(taste.pregunta)} Añádelo al texto y vuelve a interpretarlo.</p>` : ''}`;
