@@ -523,7 +523,7 @@ table.cov td.n, table.cov th.n { text-align: right }
           <p class="note" id="acc-del-msg" role="status"></p></details>
       </div>
     </div>
-      <a class="btn ghost iglink" id="ig-perfil" hidden target="_blank" rel="noopener" style="align-self:flex-start;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0"></a>
+      <div id="ig-perfil" hidden style="display:flex;gap:8px"></div>
       <button class="btn ghost" data-goto="fuentes" style="align-self:flex-start">Fuentes y cobertura ›</button>
       <p class="note" id="ver" style="opacity:.6">Versión __VER__</p>
       <p class="note"><a href="/planes/">Agenda por zonas</a> · <a href="?ideas">Ideas y sugerencias</a> · <a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones de uso</a> · <a href="mailto:hola@limonplanes.com">hola@limonplanes.com</a></p>
@@ -550,8 +550,8 @@ table.cov td.n, table.cov th.n { text-align: right }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js?v=sri" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
 <!-- ?v=: cambia con cada versión del código para que ningún móvil se quede con una copia vieja (súbelo al tocar estos ficheros) -->
-<script src="config.js?v=20261026a"></script>
-<script src="data.js?v=20261026a"></script>
+<script src="config.js?v=20261027a"></script>
+<script src="data.js?v=20261027a"></script>
 <script>
 function startApp(DATA, TAX, sync) {
   const EV = DATA.eventos;
@@ -2437,13 +2437,19 @@ function startApp(DATA, TAX, sync) {
   // nombre de la ciudad en textos fijos; sin datos de cortes, la pestaña Calle no aparece
   document.querySelectorAll('.cityname').forEach(x => { x.textContent = CITY.name; });
   document.title = (window.LIMON_STAGING ? '[Pruebas] ' : '') + 'Limón · ' + CITY.name;
-  // cuenta de Instagram de la zona (cities.features.instagram); solo se enseña donde existe
-  { const ig = (CITY.features || {}).instagram;
-    if (ig && /^[a-z0-9._]{1,30}$/i.test(ig)) {
-      const url = 'https://www.instagram.com/' + ig + '/';
-      const icon = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>';
-      const a = $('ig-perfil'); a.href = url; a.innerHTML = icon.replace('margin-right:6px', ''); a.title = a.ariaLabel = 'Instagram: @' + ig; a.hidden = false;
-      const p = $('ig-pt'); p.innerHTML = `<a href="${url}" target="_blank" rel="noopener" title="Instagram: @${esc(ig)}" aria-label="Instagram: @${esc(ig)}" style="color:inherit;display:inline-flex;padding:10px">${icon.replace('width="22" height="22"', 'width="26" height="26"').replace('margin-right:6px', '')}</a>`; p.hidden = false;
+  // redes de la zona (cities.features.instagram / .x): solo se enseñan las que existen, como iconos
+  { const f = CITY.features || {}, ok = v => v && /^[a-z0-9._]{1,30}$/i.test(v);
+    const svg = (n, d) => `<svg width="${n}" height="${n}" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+    const redes = [
+      ok(f.instagram) && { url: 'https://www.instagram.com/' + f.instagram + '/', nombre: 'Instagram: @' + f.instagram,
+        d: '<g fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/></g><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/>' },
+      ok(f.x) && { url: 'https://x.com/' + f.x, nombre: 'X: @' + f.x,
+        d: '<path fill="currentColor" d="M17.8 3h3.1l-6.8 7.8L22 21h-6.3l-4.9-6.4L5.2 21H2.1l7.3-8.3L1.8 3h6.4l4.4 5.9zm-1.1 16.2h1.7L7.4 4.7H5.6z"/>' }
+    ].filter(Boolean);
+    if (redes.length) {
+      const a = (r, n, cls, st) => `<a class="${cls}" href="${r.url}" target="_blank" rel="noopener" title="${esc(r.nombre)}" aria-label="${esc(r.nombre)}" style="${st}">${svg(n, r.d)}</a>`;
+      const box = $('ig-perfil'); box.innerHTML = redes.map(r => a(r, 22, 'btn ghost', 'display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0')).join(''); box.hidden = false;
+      const p = $('ig-pt'); p.innerHTML = redes.map(r => a(r, 24, '', 'color:inherit;display:inline-flex;padding:10px')).join(''); p.hidden = false;
     } }
   // textos de la pestaña Calle propios de cada ciudad (tabla cities, campo features)
   { const f = CITY.features || {};

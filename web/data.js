@@ -442,7 +442,7 @@
     if (muni) {
       // un municipio: se cargan los planes de toda la provincia y la app enseña los del pueblo y, después, los de alrededor por distancia
       const ll = (base.munis || {})[muni];
-      CITY = Object.assign({}, base, { name: muni, muni, province: base.name, districts: [], features: { instagram: (base.features || {}).instagram }, stadiums: [] }, ll ? { lat: ll[0], lng: ll[1], muniCenter: true } : {});
+      CITY = Object.assign({}, base, { name: muni, muni, province: base.name, districts: [], features: { instagram: (base.features || {}).instagram, x: (base.features || {}).x }, stadiums: [] }, ll ? { lat: ll[0], lng: ll[1], muniCenter: true } : {});
     }
     else if (base.kind === 'provincia') CITY = Object.assign({}, base, { districts: [...new Set((base.districts || []).concat(kids.map((k) => k.name)))].sort((a, b) => a.localeCompare(b, 'es')) });
     else CITY = base;
