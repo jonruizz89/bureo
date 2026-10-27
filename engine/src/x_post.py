@@ -134,7 +134,7 @@ def firma(method, url, ck, cs, tk, ts):
 
 def publica(z, texto):
     p = 'X_' + z.upper().replace('-', '_')
-    cred = [os.environ.get(k) for k in ('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET')]
+    cred = [(os.environ.get(k) or '').strip() for k in ('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET')]
     print(texto, f'\n({len(texto)} caracteres)')
     if os.environ.get('X_DRY') == '1' or not all(cred):
         print('Sin publicar (prueba o faltan credenciales).')
@@ -152,7 +152,7 @@ def publica(z, texto):
 def yo(z):
     """Comprueba las credenciales sin publicar: devuelve el usuario de la cuenta."""
     p = 'X_' + z.upper().replace('-', '_')
-    cred = [os.environ.get(k) for k in ('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET')]
+    cred = [(os.environ.get(k) or '').strip() for k in ('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET')]
     faltan = [k for k, v in zip(('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET'), cred) if not v]
     if faltan:
         raise SystemExit('Faltan los secretos: ' + ', '.join(faltan))
