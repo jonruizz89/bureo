@@ -7,7 +7,7 @@ Credenciales (secretos de GitHub, nunca en el código):
 Sin credenciales o con X_DRY=1 solo escribe el texto en la salida (sirve para probar).
 Coste: X cobra por publicación y bastante más si el texto lleva un enlace, así que solo «finde» lleva enlace; el resto remite al perfil.
 """
-import base64, datetime as dt, hashlib, hmac, json, os, re, secrets, sys, time, urllib.parse, urllib.request
+import base64, datetime as dt, hashlib, hmac, json, os, re, secrets, sys, time, urllib.error, urllib.parse, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 cfg = open(os.path.join(HERE, '..', '..', 'web', 'config.js'), encoding='utf-8').read()
@@ -149,8 +149,28 @@ def publica(z, texto):
         raise SystemExit(f'X respondió {e.code}: {e.read().decode()[:400]}')
 
 
+def yo(z):
+    """Comprueba las credenciales sin publicar: devuelve el usuario de la cuenta."""
+    p = 'X_' + z.upper().replace('-', '_')
+    cred = [os.environ.get(k) for k in ('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET')]
+    faltan = [k for k, v in zip(('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET'), cred) if not v]
+    if faltan:
+        raise SystemExit('Faltan los secretos: ' + ', '.join(faltan))
+    url = 'https://api.x.com/2/users/me'
+    req = urllib.request.Request(url, headers={'Authorization': firma('GET', url, *cred)})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            d = json.load(r).get('data', {})
+            print(f"Credenciales correctas: @{d.get('username')} ({d.get('name')})")
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f'X respondió {e.code}: {e.read().decode()[:400]}')
+
+
 if __name__ == '__main__':
     z, modo = sys.argv[1], sys.argv[2]
+    if modo == 'yo':
+        yo(z)
+        sys.exit()
     t = {'cortes': cortes, 'hoy': hoy, 'finde': finde}[modo](z)
     if t:
         publica(z, t)

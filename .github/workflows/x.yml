@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: "cortes, hoy o finde"
+        description: "cortes, hoy, finde o yo (comprobar las credenciales sin publicar)"
         required: true
         default: cortes
       prueba:
