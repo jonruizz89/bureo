@@ -65,7 +65,9 @@ def km(a, b):
 
 
 # ---------- datos
-cities = get('cities?select=id,name,kind,parent,status,districts,munis,lat,lng&status=eq.publicada&order=position')
+cities = get('cities?select=id,name,kind,parent,status,districts,munis,lat,lng,features&status=eq.publicada&order=position')
+# cuentas en redes de cada zona (cities.features.instagram / .x): se enlazan en el pie de sus páginas
+REDES_Z = {c['id']: {k: (c.get('features') or {}).get(k) for k in ('instagram', 'x') if re.fullmatch(r'[A-Za-z0-9._]{1,30}', (c.get('features') or {}).get(k) or '')} for c in cities}
 groups = {g['id']: g['name'] for g in get('category_groups?select=id,name&order=position') if g['id'] != 'otros'}
 cats = {c['id']: c for c in get('categories?select=id,group_id,label&order=position')}
 cols = ('id,city_id,title,description,details,starts_on,ends_on,time_text,district,price_text,is_free,image_url,organizer_url,lat,lng,is_unique,ai_unique,'
@@ -162,6 +164,11 @@ CSP = ("default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsaf
 
 def page(path, title, desc, body, crumbs=(), ld=None, app='/'):
     bc = ' › '.join(f'<a href="{esc(u)}">{esc(t)}</a>' for t, u in crumbs)
+    raiz = path.strip('/').split('/')[1] if path.startswith('/planes/') and path.count('/') > 2 else None
+    rz = REDES_Z.get(raiz) or {}
+    sig = ('<br>Síguenos: ' + ' · '.join(x for x in (
+        f'<a href="https://x.com/{rz["x"]}" rel="noopener">X @{rz["x"]}</a>' if rz.get('x') else '',
+        f'<a href="https://www.instagram.com/{rz["instagram"]}/" rel="noopener">Instagram @{rz["instagram"]}</a>' if rz.get('instagram') else '') if x)) if rz else ''
     ldj = ''.join(f'<script type="application/ld+json">{json.dumps(x, ensure_ascii=False).replace("</", "<\\/")}</script>' for x in (ld or []))
     doc = f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="{CSP}">
@@ -177,7 +184,7 @@ def page(path, title, desc, body, crumbs=(), ld=None, app='/'):
 <main>{f'<nav class="crumbs" aria-label="Estás en">{bc}</nav>' if bc else ''}{body}</main>
 <footer>Limón reúne los planes de tu zona de agendas públicas y webs de organizadores; comprueba siempre la información en la fuente.
 Datos de la agenda municipal de Madrid (datos.madrid.es) de Kulturklik (Open Data Euskadi, CC BY 4.0) y de la agenda del Ayuntamiento de Zaragoza, entre otros.
-<br><a href="/planes/">Todas las zonas</a> · <a href="/privacidad.html">Privacidad</a> · <a href="/condiciones.html">Condiciones</a></footer>
+{sig}<br><a href="/planes/">Todas las zonas</a> · <a href="/privacidad.html">Privacidad</a> · <a href="/condiciones.html">Condiciones</a></footer>
 @@LIMON_BEACON@@</body></html>""".replace('@@LIMON_BEACON@@', BEACON)
     out = os.path.join(WEB, path.strip('/'), 'index.html')
     os.makedirs(os.path.dirname(out), exist_ok=True)

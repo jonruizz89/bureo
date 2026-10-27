@@ -19,6 +19,10 @@ EMO = {'musica': '🎵', 'escena': '🎭', 'arte': '🖼️', 'patrimonio': '�
        'naturaleza': '🌿', 'ciudad': '🎉', 'deporte': '🏃', 'mascotas': '🐾', 'ferias': '🛍️', 'familia': '🧒', 'comunidad': '🤝'}
 KIND = {'manifestacion': ('📣', 0), 'evento': ('🎉', 1), 'metro': ('🚇', 1), 'cercanias': ('🚆', 1), 'autobus': ('🚌', 2), 'obras': ('🚧', 3), 'recurrente': ('🔁', 4), 'otro': ('⚠️', 4)}
 MAX = 255  # X cuenta los emojis como 2 caracteres: margen
+# uno o dos hashtags por zona y tipo de post (más parecería spam)
+TAGS = {'madrid': {'cortes': '#Madrid', 'metro': '#MetroMadrid', 'hoy': '#QuéHacerEnMadrid', 'finde': '#QuéHacerEnMadrid'}}
+# carpeta de /redes/ con la portada del carrusel de cada zona (la imagen del post del jueves)
+CUENTA = {'madrid': 'madrid', 'bizkaia': 'bilbao', 'gipuzkoa': 'donostia', 'araba': 'gasteiz', 'zaragoza': 'zaragoza', 'gijon': 'gijon'}
 
 
 def get(path):
@@ -62,8 +66,10 @@ def cortes(z):
     if not vale:
         return None
     vale.sort(key=lambda x: x[0])
+    t = TAGS.get(z, {})
+    tags = ' '.join(x for x in (t.get('cortes'), t.get('metro') if any(v.startswith('🚇') for _, v in vale[:4]) else None) if x)
     return junta(f"Cortes y avisos hoy en {c['name']} ({DIAS[HOY.weekday()]} {HOY.day}):", [t for _, t in vale],
-                 f"Todos ({len(vale)}) en el mapa de Limón: enlace en el perfil 🍋")
+                 f"Todos ({len(vale)}) en el mapa de Limón: enlace en el perfil 🍋" + (' ' + tags if tags else ''))
 
 
 def grupos():
@@ -104,7 +110,7 @@ def hoy(z):
     c, sel = planes(z, HOY.isoformat(), HOY.isoformat(), 6)
     if len(sel) < 2:
         return None
-    return junta(f"Planes para hoy en {c['name']} ({DIAS[HOY.weekday()]} {HOY.day}):", [linea(e, g) for e, g in sel], 'Muchos más en Limón: enlace en el perfil 🍋')
+    return junta(f"Planes para hoy en {c['name']} ({DIAS[HOY.weekday()]} {HOY.day}):", [linea(e, g) for e, g in sel], 'Muchos más en Limón: enlace en el perfil 🍋' + (' ' + TAGS[z]['hoy'] if TAGS.get(z, {}).get('hoy') else ''))
 
 
 def finde(z):
@@ -113,11 +119,12 @@ def finde(z):
     c, sel = planes(z, vie.isoformat(), dom.isoformat(), 6)
     if len(sel) < 3:
         return None
-    url = f"https://limonplanes.com/planes/{z}/este-finde/"  # un enlace cuenta como 23 caracteres en X
+    tag = TAGS.get(z, {}).get('finde')
+    url = f"https://limonplanes.com/planes/{z}/este-finde/" + (f' {tag}' if tag else '')  # el enlace cuenta como 23 caracteres en X
     cab = f"Este finde en {c['name']} 🍋"
     out = cab
     for e, g in sel:
-        if len(out) + 1 + len(linea(e, g, True, vie)) + 2 + 23 > MAX:
+        if len(out) + 1 + len(linea(e, g, True, vie)) + 2 + 23 + (len(tag) + 1 if tag else 0) > MAX:
             break
         out += '\n' + linea(e, g, True, vie)
     return out + '\n\n' + url
@@ -132,15 +139,41 @@ def firma(method, url, ck, cs, tk, ts):
     return 'OAuth ' + ', '.join(f'{q(k)}="{q(v)}"' for k, v in sorted(o.items()))
 
 
-def publica(z, texto):
+def sube_imagen(img_url, cred):
+    """Sube una imagen a X y devuelve su id; si algo falla se publica sin imagen."""
+    try:
+        with urllib.request.urlopen(img_url, timeout=60) as r:
+            datos = r.read()
+        url = 'https://api.x.com/2/media/upload'
+        b = 'limon' + secrets.token_hex(8)
+        cuerpo = (f'--{b}\r\nContent-Disposition: form-data; name="media_category"\r\n\r\ntweet_image\r\n'
+                  f'--{b}\r\nContent-Disposition: form-data; name="media"; filename="limon.png"\r\nContent-Type: image/png\r\n\r\n').encode() + datos + f'\r\n--{b}--\r\n'.encode()
+        req = urllib.request.Request(url, data=cuerpo, method='POST',
+                                     headers={'Authorization': firma('POST', url, *cred), 'Content-Type': f'multipart/form-data; boundary={b}'})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            d = json.load(r)
+        mid = (d.get('data') or {}).get('id') or d.get('media_id_string')
+        print('Imagen subida:', mid)
+        return mid
+    except Exception as e:  # noqa: BLE001
+        msg = e.read().decode()[:300] if isinstance(e, urllib.error.HTTPError) else str(e)[:300]
+        print('No se pudo subir la imagen, va sin ella:', msg)
+        return None
+
+
+def publica(z, texto, imagen=None):
     p = 'X_' + z.upper().replace('-', '_')
     cred = [(os.environ.get(k) or '').strip() for k in ('X_API_KEY', 'X_API_SECRET', p + '_TOKEN', p + '_SECRET')]
-    print(texto, f'\n({len(texto)} caracteres)')
+    print(texto, f'\n({len(texto)} caracteres)' + (f' · imagen: {imagen}' if imagen else ''))
     if os.environ.get('X_DRY') == '1' or not all(cred):
         print('Sin publicar (prueba o faltan credenciales).')
         return
+    body = {'text': texto}
+    mid = sube_imagen(imagen, cred) if imagen else None
+    if mid:
+        body['media'] = {'media_ids': [str(mid)]}
     url = 'https://api.x.com/2/tweets'
-    req = urllib.request.Request(url, data=json.dumps({'text': texto}).encode(), method='POST',
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method='POST',
                                  headers={'Authorization': firma('POST', url, *cred), 'Content-Type': 'application/json'})
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
@@ -175,6 +208,6 @@ if __name__ == '__main__':
         sys.exit()
     t = {'cortes': cortes, 'hoy': hoy, 'finde': finde}[modo](z)
     if t:
-        publica(z, t)
+        publica(z, t, f'https://limonplanes.com/redes/{CUENTA[z]}/s0.png' if modo == 'finde' and z in CUENTA else None)
     else:
         print('Nada que publicar hoy.')
