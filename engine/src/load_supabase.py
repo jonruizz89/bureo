@@ -154,6 +154,16 @@ for e in evs:
     for f in e['fuentes']:
         if f['nombre'] in sources:
             srcs.append({'event_id': i, 'source_id': sources[f['nombre']], 'url': f.get('url')})
+# sin filas repetidas en un mismo envío (pasa cuando dos fichas nuevas se unen al mismo plan que ya existía)
+def unicas(rws, campos):
+    vistos, out = set(), []
+    for r in rws:
+        k = tuple(r[c] for c in campos)
+        if k not in vistos:
+            vistos.add(k)
+            out.append(r)
+    return out
+sess, cats, srcs = unicas(sess, ('event_id', 'on_date')), unicas(cats, ('event_id', 'category_id')), unicas(srcs, ('event_id', 'source_id'))
 for tbl, rws, conflict in (('event_sessions', sess, 'event_id,on_date'), ('event_categories', cats, 'event_id,category_id'),
                            ('event_sources', srcs, 'event_id,source_id')):
     for part in chunks(rws, 1000):
