@@ -69,8 +69,8 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_MADRID_TOKEN: ${{ secrets.X_MADRID_TOKEN }}
           X_MADRID_SECRET: ${{ secrets.X_MADRID_SECRET }}
-          X_BIZKAIA_TOKEN: ${{ secrets.X_BIZKAIA_TOKEN }}
-          X_BIZKAIA_SECRET: ${{ secrets.X_BIZKAIA_SECRET }}
+          X_BIZKAIA_TOKEN: ${{ secrets.X_BILBAO_TOKEN }}   # la cuenta de Bilbao publica la zona Bizkaia
+          X_BIZKAIA_SECRET: ${{ secrets.X_BILBAO_SECRET }}
         run: python3 src/x_post.py ${{ matrix.zona }} ${{ steps.m.outputs.modo }}
       - name: Marcar como publicado hoy
         if: github.event_name == 'schedule' && steps.m.outputs.modo != 'none' && steps.hecho.outputs.cache-hit != 'true' && success()
