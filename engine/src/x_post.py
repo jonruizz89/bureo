@@ -20,7 +20,10 @@ EMO = {'musica': '🎵', 'escena': '🎭', 'arte': '🖼️', 'patrimonio': '�
 KIND = {'manifestacion': ('📣', 0), 'evento': ('🎉', 1), 'metro': ('🚇', 1), 'cercanias': ('🚆', 1), 'autobus': ('🚌', 2), 'obras': ('🚧', 3), 'recurrente': ('🔁', 4), 'otro': ('⚠️', 4)}
 MAX = 255  # X cuenta los emojis como 2 caracteres: margen
 # uno o dos hashtags por zona y tipo de post (más parecería spam)
-TAGS = {'madrid': {'cortes': '#Madrid', 'metro': '#MetroMadrid', 'hoy': '#QuéHacerEnMadrid', 'finde': '#QuéHacerEnMadrid'}}
+TAGS = {'madrid': {'cortes': '#Madrid', 'metro': '#MetroMadrid', 'hoy': '#QuéHacerEnMadrid', 'finde': '#QuéHacerEnMadrid'},
+        'bizkaia': {'cortes': '#Bilbao', 'hoy': '#Bilbao #Bizkaia', 'finde': '#Bilbao #Bizkaia'}}
+# nombre en los posts cuando el de la zona no basta (los cortes de Bizkaia son solo de Bilbao)
+NOMBRE = {'bizkaia': {'cortes': 'Bilbao', 'hoy': 'Bilbao y Bizkaia', 'finde': 'Bilbao y Bizkaia'}}
 # carpeta de /redes/ con la portada del carrusel de cada zona (la imagen del post del jueves)
 CUENTA = {'madrid': 'madrid', 'bizkaia': 'bilbao', 'gipuzkoa': 'donostia', 'araba': 'gasteiz', 'zaragoza': 'zaragoza', 'gijon': 'gijon'}
 
@@ -68,7 +71,7 @@ def cortes(z):
     vale.sort(key=lambda x: x[0])
     t = TAGS.get(z, {})
     tags = ' '.join(x for x in (t.get('cortes'), t.get('metro') if any(v.startswith('🚇') for _, v in vale[:4]) else None) if x)
-    return junta(f"Cortes y avisos hoy en {c['name']} ({DIAS[HOY.weekday()]} {HOY.day}):", [t for _, t in vale],
+    return junta(f"Cortes y avisos hoy en {NOMBRE.get(z, {}).get('cortes', c['name'])} ({DIAS[HOY.weekday()]} {HOY.day}):", [t for _, t in vale],
                  f"Todos ({len(vale)}) en el mapa de Limón: enlace en el perfil 🍋" + (' ' + tags if tags else ''))
 
 
@@ -110,7 +113,7 @@ def hoy(z):
     c, sel = planes(z, HOY.isoformat(), HOY.isoformat(), 6)
     if len(sel) < 2:
         return None
-    return junta(f"Planes para hoy en {c['name']} ({DIAS[HOY.weekday()]} {HOY.day}):", [linea(e, g) for e, g in sel], 'Muchos más en Limón: enlace en el perfil 🍋' + (' ' + TAGS[z]['hoy'] if TAGS.get(z, {}).get('hoy') else ''))
+    return junta(f"Planes para hoy en {NOMBRE.get(z, {}).get('hoy', c['name'])} ({DIAS[HOY.weekday()]} {HOY.day}):", [linea(e, g) for e, g in sel], 'Muchos más en Limón: enlace en el perfil 🍋' + (' ' + TAGS[z]['hoy'] if TAGS.get(z, {}).get('hoy') else ''))
 
 
 def finde(z):
@@ -121,7 +124,7 @@ def finde(z):
         return None
     tag = TAGS.get(z, {}).get('finde')
     url = f"https://limonplanes.com/planes/{z}/este-finde/" + (f' {tag}' if tag else '')  # el enlace cuenta como 23 caracteres en X
-    cab = f"Este finde en {c['name']} 🍋"
+    cab = f"Este finde en {NOMBRE.get(z, {}).get('finde', c['name'])} 🍋"
     out = cab
     for e, g in sel:
         if len(out) + 1 + len(linea(e, g, True, vie)) + 2 + 23 + (len(tag) + 1 if tag else 0) > MAX:
