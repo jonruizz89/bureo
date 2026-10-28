@@ -2683,7 +2683,8 @@ function startApp(DATA, TAX, sync) {
     });
   }
   // apartados del Perfil plegados por defecto; se recuerda cuáles abre cada persona en este navegador
-  const FOLDS = store.get('folds', {});
+  // apartados abiertos del Perfil: solo mientras la app sigue abierta (al volver a entrar, todos cerrados)
+  let FOLDS = {}; try { FOLDS = JSON.parse(sessionStorage.getItem('bureo.folds') || '{}'); localStorage.removeItem('bureo.folds'); } catch (e) { }
   function setupFolds() {
     document.querySelectorAll('#v-intereses .panel').forEach(p => {
       if (!p.id) return;
@@ -2693,7 +2694,7 @@ function startApp(DATA, TAX, sync) {
   }
   function openFold(id, on) {
     const p = $(id); if (!p) return;
-    FOLDS[id] = on === undefined ? !FOLDS[id] : on; store.set('folds', FOLDS);
+    FOLDS[id] = on === undefined ? !FOLDS[id] : on; try { sessionStorage.setItem('bureo.folds', JSON.stringify(FOLDS)); } catch (e) { }
     p.classList.toggle('open', !!FOLDS[id]); const h = p.querySelector('h2'); if (h) h.setAttribute('aria-expanded', !!FOLDS[id]);
   }
   const foldHead = t => { const p = t.closest('#v-intereses .panel.fold'); if (!p) return null; const head = p.firstElementChild; return head && head.contains(t) && !t.closest('button:not([role]), a, input, select, textarea, label') ? p : null; };
