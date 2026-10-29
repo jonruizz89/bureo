@@ -21,6 +21,9 @@ on:
       prueba:
         description: "1 = solo enseñar el texto, sin publicar"
         default: "1"
+      auto:
+        description: "1 = lanzado por el reloj de Supabase: como una tarea programada (no repite si ya se publicó hoy)"
+        default: "0"
 
 permissions:
   contents: read
@@ -44,17 +47,30 @@ jobs:
       - name: Elegir qué toca
         id: m
         run: |
+          h=$(TZ=Europe/Madrid date +%H); h=$((10#$h)); dow=$(TZ=Europe/Madrid date +%u)
           case "${{ github.event.schedule }}" in
             "17 6 * * *"|"47 6 * * *") m=cortes ;;
-            "37 10 * * *"|"7 11 * * *") [ "$(date -u +%u)" -le 4 ] && m=hoy || m=none ;;
+            "37 10 * * *"|"7 11 * * *") [ "$dow" -le 4 ] && m=hoy || m=none ;;
             "13 17 * * 4"|"43 17 * * 4") m=finde ;;
             *) m="${{ inputs.modo }}" ;;
           esac
+          auto=0
+          if [ "${{ github.event_name }}" = schedule ] || [ "${{ inputs.auto }}" = 1 ]; then
+            auto=1
+            # GitHub a veces lanza las tareas horas tarde: fuera de su franja ya no tiene sentido publicar
+            case "$m" in
+              cortes) [ "$h" -lt 11 ] || m=none ;;
+              hoy) { [ "$dow" -le 4 ] && [ "$h" -lt 15 ]; } || m=none ;;
+              finde) { [ "$dow" -eq 4 ] && [ "$h" -lt 22 ]; } || m=none ;;
+            esac
+          fi
+          echo "Toca: $m (automático: $auto, hora en Madrid: $h)"
           echo "modo=$m" >> "$GITHUB_OUTPUT"
+          echo "auto=$auto" >> "$GITHUB_OUTPUT"
           echo "dia=$(TZ=Europe/Madrid date +%F)" >> "$GITHUB_OUTPUT"
       - name: ¿Ya publicado hoy?
         id: hecho
-        if: github.event_name == 'schedule' && steps.m.outputs.modo != 'none'
+        if: steps.m.outputs.auto == '1' && steps.m.outputs.modo != 'none'
         uses: actions/cache/restore@v4
         with:
           path: engine/.x-hecho
@@ -64,7 +80,7 @@ jobs:
         if: steps.m.outputs.modo != 'none' && steps.hecho.outputs.cache-hit != 'true'
         env:
           TZ: Europe/Madrid
-          X_DRY: ${{ inputs.prueba || '0' }}
+          X_DRY: ${{ inputs.auto == '1' && '0' || inputs.prueba || '0' }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_MADRID_TOKEN: ${{ secrets.X_MADRID_TOKEN }}
@@ -73,9 +89,9 @@ jobs:
           X_BIZKAIA_SECRET: ${{ secrets.X_BILBAO_SECRET }}
         run: python3 src/x_post.py ${{ matrix.zona }} ${{ steps.m.outputs.modo }}
       - name: Marcar como publicado hoy
-        if: github.event_name == 'schedule' && steps.m.outputs.modo != 'none' && steps.hecho.outputs.cache-hit != 'true' && success()
+        if: steps.m.outputs.auto == '1' && steps.m.outputs.modo != 'none' && steps.hecho.outputs.cache-hit != 'true' && success()
         run: echo ok > .x-hecho
-      - if: github.event_name == 'schedule' && steps.m.outputs.modo != 'none' && steps.hecho.outputs.cache-hit != 'true' && success()
+      - if: steps.m.outputs.auto == '1' && steps.m.outputs.modo != 'none' && steps.hecho.outputs.cache-hit != 'true' && success()
         uses: actions/cache/save@v4
         with:
           path: engine/.x-hecho
