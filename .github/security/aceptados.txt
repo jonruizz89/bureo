@@ -40,3 +40,6 @@ authenticated_security_definer_function_executable:unfollow_user
 
 # Pendiente: solo disponible en el plan de pago de Supabase. Quitar esta línea al activarlo.
 auth_leaked_password_protection:Auth
+
+# pg_net (llamadas HTTP desde la base, para lanzar la publicación en X a su hora): Supabase lo instala en public y no se puede mover sin borrarlo; sus funciones viven en el esquema net, no en la API
+extension_in_public:pg_net
