@@ -83,6 +83,14 @@
     return r.data;
   }
 
+  // avisos naranja y rojo de AEMET para la zona (se actualizan cada media hora en Supabase)
+  window.limonAvisos = async function () {
+    try {
+      const r = await sb.from('weather_alerts').select('level,phenomenon,zone,starts,ends').in('city_id', C.scope || [C.city]).gte('ends', new Date().toISOString()).order('starts');
+      return r.error ? [] : r.data;
+    } catch (e) { return []; }
+  };
+
   async function loadAudit() {
     const r = await sb.from('coverage_runs').select('run_at,group_id,found,missing,pct_missing').eq('city_id', C.city).order('run_at', { ascending: false }).limit(40);
     if (r.error || !r.data.length) return null;

@@ -551,7 +551,7 @@ table.cov td.n, table.cov th.n { text-align: right }
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js?v=sri" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
 <!-- ?v=: cambia con cada versión del código para que ningún móvil se quede con una copia vieja (súbelo al tocar estos ficheros) -->
 <script src="config.js?v=20261027a"></script>
-<script src="data.js?v=20261027a"></script>
+<script src="data.js?v=20261031a"></script>
 <script>
 function startApp(DATA, TAX, sync) {
   const EV = DATA.eventos;
@@ -1177,7 +1177,25 @@ function startApp(DATA, TAX, sync) {
       j.hourly.time.forEach((t, i) => { const d = t.slice(0, 10); (R.hourly[d] = R.hourly[d] || [])[+t.slice(11, 13)] = j.hourly.precipitation_probability[i] || 0; });
       RAIN = R; renderAll();
     }).catch(() => { });
+  // avisos meteorológicos naranja/rojo de AEMET: en los planes al aire libre y, si hay uno hoy o mañana, una línea en Para ti
+  let AVISOS = [];
+  if (window.limonAvisos) window.limonAvisos().then(a => { AVISOS = a || []; if (AVISOS.length) renderAll(); });
+  const fen = a => a.phenomenon.toLowerCase().replace(/^temperaturas /, 'temperaturas ').replace(/^vientos$/, 'viento');
+  function avisoDe(d) {  // el aviso más grave que toca ese día
+    const a0 = new Date(d); a0.setHours(0, 0, 0, 0); const a1 = new Date(a0); a1.setDate(a1.getDate() + 1);
+    return AVISOS.filter(a => new Date(a.starts) < a1 && new Date(a.ends) > a0).sort((x, y) => (y.level === 'rojo') - (x.level === 'rojo'))[0];
+  }
+  function avisoHoy() {
+    const t = new Date(today), m = new Date(today); m.setDate(m.getDate() + 1);
+    const a = avisoDe(t) || avisoDe(m); if (!a) return '';
+    const cuando = avisoDe(t) ? 'hoy' : 'mañana';
+    return `<div class="rainwarn" style="margin-bottom:8px">${a.level === 'rojo' ? '🟥' : '🟧'} Aviso ${a.level} de AEMET por ${esc(fen(a))} ${cuando} (${esc(a.zone)}). Ojo con los planes al aire libre.</div>`;
+  }
   function rainWarn(e, occ) {
+    if (occ && isOutdoor(e) && AVISOS.length) {
+      const a = avisoDe(occ.ongoing ? today : occ.date);
+      if (a) return `<div class="rainwarn">${a.level === 'rojo' ? '🟥' : '🟧'} Aviso ${a.level} de AEMET por ${esc(fen(a))} ese día</div>`;
+    }
     if (!RAIN || !occ || !isOutdoor(e)) return '';
     const d = occ.ongoing ? today : occ.date, k = ymd(d);
     if (!(k in RAIN.daily)) return '';
@@ -2279,7 +2297,7 @@ function startApp(DATA, TAX, sync) {
       $('pt-h').textContent = 'Lo más destacado ' + ({ semana: 'esta semana', finde: 'este finde', mes: 'en los próximos 30 días' })[state.when];
       $('pt-lead').textContent = 'Aún no sabemos qué te gusta. Marca tus intereses y esta lista pasa a ser solo para ti.';
       logList(items.slice(0, state.ptShown).map(x => x.e.id));
-      $('pt-list').innerHTML = shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
+      $('pt-list').innerHTML = avisoHoy() + shareFindeBtn() + zoneNote() + streetBanner() + (fuiCard() || consentCard()) + `<button class="btn" data-goto="intereses" data-fold="in-panel">Elegir mis intereses</button>` + friendsBlock(a, b) +
         items.slice(0, state.ptShown).map(x => card(x.e, { occ: x.occ })).join('');
       $('pt-more').hidden = items.length <= state.ptShown;
       document.querySelectorAll('[data-when]').forEach(b => b.setAttribute('aria-pressed', b.dataset.when === state.when));
