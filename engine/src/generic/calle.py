@@ -1,7 +1,8 @@
 """Pestaña «Calle» en ciudades del motor genérico: cortes, obras y eventos en la vía pública.
 
 Fuentes: Tráfico Euskadi (api.euskadi.eus/traffic), que publica las incidencias de cada ayuntamiento con fechas y coordenadas
-(Bilbao = 5, Vitoria-Gasteiz = 6, Donostia = 7), y la web del Ayuntamiento de Gijón (cortes de tráfico y cambios de autobús). Se queda con lo vigente o próximo (30 días) que afecta a la calle y reemplaza las filas
+(Bilbao = 5, Vitoria-Gasteiz = 6, Donostia = 7), la web del Ayuntamiento de Gijón (cortes de tráfico y cambios de autobús)
+y los avisos de Renfe Cercanías de cada núcleo (Bilbao, San Sebastián, Asturias). Se queda con lo vigente o próximo (30 días) que afecta a la calle y reemplaza las filas
 de `closures` de esa ciudad. Las ocupaciones menores (contenedores, andamios, aleros, toldos…) se descartan.
 """
 import datetime as dt, html, json, re, sys
@@ -188,10 +189,69 @@ def main(cid):
     save(cid, rows, city)
 
 
+# Avisos de Renfe Cercanías (GTFS-RT público y sin clave). Madrid ya los recibe por el Consorcio (closures.py).
+RENFE = 'https://gtfsrt.renfe.com/alerts.json'
+NUCLEO = {'bilbao': '60', 'donostia': '61', 'gijon': '20'}
+SOLO_ACCESIBILIDAD = re.compile(r'ascensor|escaleras? mec[aá]nica', re.I)
+
+
+def renfe_rows(cid):
+    nuc = NUCLEO.get(cid)
+    if not nuc:
+        return []
+    st, _, txt, _ = fetch(RENFE, accept='application/json', ua=UA_API)
+    if st != 200:
+        print('Renfe', st); return []
+    today = dt.date.today()
+    out, vistos = [], set()
+    for e in (json.loads(txt) or {}).get('entity') or []:
+        a = e.get('alert') or {}
+        rutas = [x.get('routeId') or '' for x in a.get('informedEntity') or []]
+        if not any(r.startswith(nuc + 'T') for r in rutas):
+            continue
+        tr = ((a.get('descriptionText') or {}).get('translation') or [{}])
+        t = next((x['text'] for x in tr if x.get('language') == 'es'), tr[0].get('text', ''))
+        t = t.split('//')[-1].strip() if '//' in t else t  # en Euskadi viene «euskera // castellano»
+        t = re.sub(r'#\w+\s*', '', t).strip()
+        if not t or SOLO_ACCESIBILIDAD.search(t) and not re.search(r'interrump|suprim|cerrad|no efect|sin servicio|autob[uú]s', t, re.I):
+            continue  # un ascensor o una escalera fuera de servicio: útil para pocos y llenaría la lista
+        p = (a.get('activePeriod') or [{}])[0]
+        ini = dt.datetime.fromtimestamp(int(p['start'])).date() if p.get('start') else today
+        fin = dt.datetime.fromtimestamp(int(p['end'])).date() if p.get('end') else today + dt.timedelta(days=7)
+        if fin < today:
+            continue
+        lineas = sorted({m.group(1) for r in rutas if r.startswith(nuc + 'T') for m in [re.search(r'(C\d+[a-z]?)$', r)] if m})
+        if len(lineas) >= 4:
+            lineas = []  # el aviso va a todas las líneas del núcleo: es de una estación o general, no de una línea
+        m = re.match(r'([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ \-/]{2,40})[:.]\s*(.*)', t)
+        estacion, cuerpo = (titlecase(m.group(1).strip()), m.group(2)) if m else (None, t)
+        if estacion:
+            estacion = re.sub(r'-(\w)', lambda x: '-' + x.group(1).upper(), estacion)
+        else:
+            m2 = re.search(r'estaci[oó]n de ([A-ZÁÉÍÓÚÑ][\w\-]+(?: [A-ZÁÉÍÓÚÑ][\w\-]+)?)', t)
+            estacion = m2.group(1) if m2 else None
+        frase = re.split(r'(?<=[.;])\s', cuerpo, 1)[0].rstrip('.;')
+        titulo = ('Cercanías ' + '/'.join(lineas[:3]) + ' · ' if lineas else 'Cercanías · ') + (estacion + ': ' if estacion and estacion not in frase else '') + frase
+        titulo = titulo if len(titulo) <= 110 else titulo[:107].rsplit(' ', 1)[0] + '…'
+        if titulo.lower() in vistos:
+            continue
+        vistos.add(titulo.lower())
+        out.append({'city_id': cid, 'title': titulo, 'kind': 'cercanias', 'summary': t[:600], 'streets': [], 'lines': lineas,
+                    'stations': [estacion] if estacion else [], 'district': None,
+                    'ranges': [{'from': max(ini, today).isoformat(), 'to': fin.isoformat(), 'start': None, 'end': None, 'holidays': True, 'weekdays': []}],
+                    'source_url': 'https://www.renfe.com/es/es/cercanias', 'source_name': 'Renfe Cercanías', 'geom': None})
+    print(f'{len(out)} avisos de Renfe Cercanías')
+    return out
+
+
 def save(cid, rows, city):
     if os.environ.get('ANTHROPIC_API_KEY') and rows:
         rows = polish(rows, city)
         print(f'{len(rows)} tras revisarlos con IA · {round(usd(), 3)} $')
+    try:
+        rows = rows + renfe_rows(cid)
+    except Exception as e:  # noqa: BLE001  — si Renfe falla, los cortes de calle se guardan igual
+        print('Renfe no disponible:', str(e)[:200])
     if '--dry' in sys.argv:
         for r in rows[:15]:
             print(' ·', r['kind'], r['ranges'][0]['from'], '→', r['ranges'][0]['to'], '|', r['title'][:90], '|', r['streets'])
