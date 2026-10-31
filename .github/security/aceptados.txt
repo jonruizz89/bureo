@@ -43,3 +43,7 @@ auth_leaked_password_protection:Auth
 
 # pg_net (llamadas HTTP desde la base, para lanzar la publicación en X a su hora): Supabase lo instala en public y no se puede mover sin borrarlo; sus funciones viven en el esquema net, no en la API
 extension_in_public:pg_net
+
+# AEMET: tablas internas del lector de avisos (solo las usa el servidor)
+rls_enabled_no_policy:aemet_zonas
+rls_enabled_no_policy:aemet_peticiones
